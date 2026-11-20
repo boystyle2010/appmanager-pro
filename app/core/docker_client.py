@@ -259,6 +259,7 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
                 "has_update": has_update,
                 "is_skipped": is_skipped,
                 "remote_version": cached.get("remote_version") or "",
+                "target_tag": cached.get("target_tag") or "",
                 "remote_digest": remote_digest,
                 "local_digest": local_digests[0] if local_digests else (cached.get("local_digest") or ""),
                 "checked_at": cached.get("checked_at") or "",
