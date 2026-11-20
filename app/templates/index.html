@@ -466,6 +466,17 @@
 
         <template x-if="!updateModal.loading && !updateModal.updating && !updateModal.updateLogs">
           <div class="space-y-3.5">
+            <!-- Dải thông báo khi App đang ghim tag cứng -->
+            <div x-show="updateModal.app?.target_tag"
+                 class="rounded-2xl px-3.5 py-2.5 bg-amber-500/12 border border-amber-400/30 text-[11px] text-amber-300 flex items-center gap-2">
+              <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"/>
+              </svg>
+              <span x-text="lang === 'vi'
+                ? `App đang ghim tag cứng — khi cập nhật sẽ tự nâng tag trong docker-compose.yml lên ${updateModal.app?.target_tag} (có sao lưu .bak).`
+                : `Pinned tag detected — updating will bump docker-compose.yml to ${updateModal.app?.target_tag} (with .bak backup).`"></span>
+            </div>
+
             <div class="glass-inset rounded-2xl p-3.5 flex items-center justify-between gap-3">
               <div class="min-w-0">
                 <p class="text-xs font-semibold" x-text="t('autoUpdateApp')"></p>
