@@ -41,10 +41,10 @@
           </div>
           <div class="min-w-0">
             <div class="flex items-center gap-1.5">
-              <h1 class="font-bold text-[15px] tracking-tight truncate">App Manager</h1>
+              <h1 class="font-bold text-[15px] leading-none tracking-tight truncate">App Manager</h1>
               <span class="pro-badge">PRO</span>
             </div>
-            <p class="text-[11px] text-muted flex items-center gap-1.5 leading-none mt-0.5">
+            <p class="text-[11px] text-muted flex items-center gap-1.5 leading-none mt-1.5">
               <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]"></span>
               <span x-text="`${summary.running}/${summary.total} ${t('running')}`"></span>
               <span x-show="lastChecked" class="hidden sm:inline text-subtle" x-text="`• ${formatRelativeTime(lastChecked)}`"></span>
