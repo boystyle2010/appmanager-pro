@@ -11,7 +11,7 @@ from ruamel.yaml import YAML
 
 from app.core.database import get_all_app_prefs, get_all_update_cache
 
-APP_VERSION = "0.3.1"
+APP_VERSION = "0.3.2"
 CASAOS_APPS_DIR = Path(os.getenv("CASAOS_APPS_DIR", "/var/lib/casaos/apps"))
 APPDATA_DIR = Path(os.getenv("APPDATA_DIR", "/DATA/AppData"))
 yaml_parser = YAML(typ="safe")
@@ -282,7 +282,13 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
         remote_digest = cached.get("remote_digest") or ""
         target_tag = cached.get("target_tag") or ""
         skip_token = remote_digest or target_tag
-        raw_has_update = bool(cached.get("has_update"))
+        cached_local_digest = cached.get("local_digest") or ""
+        current_local_digest = local_digests[0] if local_digests else ""
+        already_updated = bool(
+            (remote_digest and remote_digest in local_digests)
+            or (cached_local_digest and current_local_digest and cached_local_digest != current_local_digest)
+        )
+        raw_has_update = bool(cached.get("has_update")) and not already_updated
         is_skipped = bool(raw_has_update and skip_token and pref.get("skipped_digest") == skip_token)
         has_update = raw_has_update and not is_skipped
 
