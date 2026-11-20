@@ -48,6 +48,7 @@ def init_db() -> None:
                 remote_digest TEXT,
                 current_version TEXT,
                 remote_version TEXT,
+                target_tag TEXT DEFAULT '',
                 has_update INTEGER DEFAULT 0,
                 source_url TEXT DEFAULT '',
                 changelog TEXT DEFAULT '',
@@ -78,6 +79,14 @@ def init_db() -> None:
             );
             """
         )
+
+        # Tự động thêm cột target_tag cho database cũ mà không mất tài khoản Admin
+        cols = {
+            r["name"]
+            for r in conn.execute("PRAGMA table_info(update_cache)").fetchall()
+        }
+        if "target_tag" not in cols:
+            conn.execute("ALTER TABLE update_cache ADD COLUMN target_tag TEXT DEFAULT ''")
 
         row = conn.execute(
             "SELECT value FROM settings WHERE key = 'session_secret'"
