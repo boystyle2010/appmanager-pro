@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AppManager Pro</title>
+  <link rel="icon" type="image/png" href="/assets/icon.png" />
+  <link rel="apple-touch-icon" href="/assets/icon.png" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+  <link rel="stylesheet" href="/static/css/glass.css" />
+  <script>
+    if (localStorage.getItem('amp_theme') === 'light') {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.classList.add('light');
+    }
+  </script>
+</head>
+<body class="pb-12" x-data="dashboardApp()" x-init="init()" @keydown.window="handleShortcut($event)">
+  <div class="ambient-bg">
+    <div class="ambient-orb orb-1"></div>
+    <div class="ambient-orb orb-2"></div>
+    <div class="ambient-orb orb-3"></div>
+  </div>
+
+  <!-- Floating Glass Header -->
+  <header class="sticky top-3 z-30 max-w-7xl mx-auto px-4">
+    <div class="glass-panel rounded-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-400/30 to-indigo-500/30 border border-white/20 flex items-center justify-center overflow-hidden shrink-0">
+          <img src="/assets/icon.png" alt="Logo" class="w-8 h-8 object-contain"
+               onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
+          <span style="display:none" class="font-bold text-sky-400 text-sm">AP</span>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-bold text-base leading-tight">AppManager Pro</h1>
+            <span class="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-400 border border-sky-400/30 font-semibold"
+                  x-text="envMode"></span>
+          </div>
+          <p class="text-xs text-muted" x-text="`${summary.running} ${t('running')} • ${summary.total} ${t('apps')}`"></p>
+        </div>
+      </div>
+
+      <!-- Search Bar -->
+      <div class="flex-1 min-w-[200px] max-w-md order-3 sm:order-2">
+        <div class="relative">
+          <input x-ref="searchInput" type="text" x-model="search"
+                 :placeholder="t('searchPlaceholder')"
+                 class="glass-input w-full rounded-xl pl-4 pr-10 py-2 text-sm" />
+          <kbd class="hidden sm:inline-block absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-muted">/</kbd>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="flex items-center gap-2 order-2 sm:order-3">
+        <button @click="loadApps()" :disabled="loading" class="glass-btn px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-1.5">
+          <span :class="loading ? 'animate-spin inline-block' : ''">↻</span>
+          <span class="hidden md:inline" x-text="t('refresh')"></span>
+        </button>
+        <button @click="toggleLang()" class="glass-btn px-2.5 py-2 rounded-xl text-xs font-semibold">
+          <span x-text="lang === 'vi' ? 'VN' : 'EN'"></span>
+        </button>
+        <button @click="toggleTheme()" class="glass-btn px-2.5 py-2 rounded-xl text-xs">
+          <span x-text="theme === 'dark' ? '☀️' : '🌙'"></span>
+        </button>
+        <button @click="logout()" class="glass-btn px-3 py-2 rounded-xl text-xs font-medium text-rose-400 hover:border-rose-400/40"
+                :title="t('logout')">
+          <span x-text="t('logout')"></span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 mt-6">
+    <!-- Filter Tabs -->
+    <div class="flex flex-wrap items-center gap-2 mb-6">
+      <template x-for="tab in filterTabs" :key="tab.id">
+        <button @click="filter = tab.id"
+                class="px-4 py-2 rounded-xl text-xs font-semibold transition-all border"
+                :class="filter === tab.id
+                  ? 'glass-btn-primary border-transparent'
+                  : 'glass-btn text-muted'">
+          <span x-text="t(tab.labelKey)"></span>
+          <span class="ml-1.5 opacity-80" x-text="`(${countForTab(tab.id)})`"></span>
+        </button>
+      </template>
+    </div>
+
+    <!-- Error Banner -->
+    <div x-show="error" x-cloak class="glass-panel rounded-2xl p-4 mb-6 border-rose-400/40 bg-rose-500/15 text-sm text-rose-200 flex justify-between items-center">
+      <span x-text="error"></span>
+      <button @click="error = ''" class="text-xs underline ml-4">OK</button>
+    </div>
+
+    <!-- Loading Skeleton -->
+    <div x-show="loading && apps.length === 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      <template x-for="n in 8" :key="n">
+        <div class="glass-card rounded-3xl p-5 h-44 animate-pulse"></div>
+      </template>
+    </div>
+
+    <!-- App Grid -->
+    <div x-show="filteredApps.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      <template x-for="app in filteredApps" :key="app.full_id">
+        <div class="glass-card rounded-3xl p-5 flex flex-col justify-between gap-4">
+          <!-- Top Row: Icon + Name + Status -->
+          <div class="flex items-start gap-3.5">
+            <div class="w-12 h-12 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-center shrink-0 overflow-hidden">
+              <template x-if="app.icon">
+                <img :src="app.icon" :alt="app.title" class="w-9 h-9 object-contain"
+                     @error="app.icon = ''" />
+              </template>
+              <template x-if="!app.icon">
+                <span class="text-sm font-bold text-sky-400 uppercase" x-text="app.title.slice(0, 2)"></span>
+              </template>
+            </div>
+
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2">
+                <h2 class="font-semibold text-sm truncate" :title="app.title" x-text="app.title"></h2>
+              </div>
+              <div class="flex items-center gap-1.5 mt-1 flex-wrap">
+                <span class="inline-flex items-center gap-1 text-[11px] font-medium"
+                      :class="app.status === 'running' ? 'text-emerald-400' : 'text-slate-400'">
+                  <span class="w-2 h-2 rounded-full"
+                        :class="app.status === 'running' ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-slate-500'"></span>
+                  <span x-text="app.status"></span>
+                </span>
+                <span x-show="app.uptime" class="text-[11px] text-muted" x-text="`• ${app.uptime}`"></span>
+              </div>
+            </div>
+
+            <span class="text-[10px] px-2 py-0.5 rounded-lg border shrink-0 font-medium uppercase"
+                  :class="app.source === 'casaos'
+                    ? 'bg-indigo-500/15 text-indigo-300 border-indigo-400/30'
+                    : 'bg-sky-500/15 text-sky-300 border-sky-400/30'"
+                  x-text="app.source"></span>
+          </div>
+
+          <!-- Meta Info: Image & Real Version -->
+          <div class="rounded-2xl bg-black/15 border border-white/5 px-3 py-2 text-[11px] space-y-1">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-muted shrink-0" x-text="t('version')"></span>
+              <span class="font-mono font-medium truncate text-sky-300" :title="app.version" x-text="app.version"></span>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-muted shrink-0">Image</span>
+              <span class="font-mono text-muted truncate" :title="app.image" x-text="app.image"></span>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="flex items-center gap-1.5 pt-1">
+            <a x-show="app.port_map && app.status === 'running'"
+               :href="buildWebUrl(app)" target="_blank" rel="noopener"
+               class="glass-btn-primary flex-1 text-center py-2 px-2.5 rounded-xl text-xs font-semibold">
+              <span x-text="t('open')"></span> ↗
+            </a>
+
+            <button @click="runAction(app, app.status === 'running' ? 'stop' : 'start')"
+                    :disabled="busyId === app.id"
+                    class="glass-btn py-2 px-2.5 rounded-xl text-xs font-medium disabled:opacity-50"
+                    :class="(!app.port_map || app.status !== 'running') ? 'flex-1' : ''"
+                    :title="app.status === 'running' ? t('stop') : t('start')">
+              <span x-show="busyId !== app.id" x-text="app.status === 'running' ? '⏹' : '▶ ' + t('start')"></span>
+              <span x-show="busyId === app.id" class="animate-spin inline-block">↻</span>
+            </button>
+
+            <button @click="runAction(app, 'restart')"
+                    :disabled="busyId === app.id"
+                    class="glass-btn py-2 px-2.5 rounded-xl text-xs font-medium disabled:opacity-50"
+                    :title="t('restart')">↻</button>
+
+            <button @click="openLogs(app)"
+                    class="glass-btn py-2 px-2.5 rounded-xl text-xs font-medium"
+                    :title="t('logs')">Logs</button>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- Empty State -->
+    <div x-show="!loading && filteredApps.length === 0" x-cloak
+         class="glass-panel rounded-3xl p-12 text-center text-muted text-sm"
+         x-text="t('noApps')"></div>
+  </main>
+
+  <!-- Live Logs Glass Modal -->
+  <div x-show="logModal.open" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+       @keydown.escape.window="closeLogs()">
+    <div class="glass-panel w-full max-w-4xl rounded-3xl p-5 flex flex-col max-h-[85vh]">
+      <div class="flex items-center justify-between gap-3 pb-3 border-b border-white/10">
+        <div class="min-w-0">
+          <h3 class="font-bold text-base truncate" x-text="`Live Logs — ${logModal.title}`"></h3>
+          <p class="text-xs text-muted font-mono" x-text="logModal.containerName"></p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button @click="logModal.lines = ''" class="glass-btn px-3 py-1.5 rounded-xl text-xs" x-text="t('clear')"></button>
+          <button @click="closeLogs()" class="glass-btn px-3 py-1.5 rounded-xl text-xs text-rose-400">✕</button>
+        </div>
+      </div>
+
+      <pre x-ref="logBox"
+           class="glass-terminal rounded-2xl p-4 mt-4 flex-1 overflow-auto text-xs text-emerald-300/95 leading-relaxed whitespace-pre-wrap break-all"
+           x-text="logModal.lines || t('connectingLogs')"></pre>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div x-show="toast.show" x-cloak x-transition
+       class="fixed bottom-5 right-5 z-50 glass-panel px-4 py-3 rounded-2xl text-xs font-medium border-sky-400/40">
+    <span x-text="toast.message"></span>
+  </div>
+
+  <script>
+    function dashboardApp() {
+      const dict = {
+        en: {
+          apps: 'apps', running: 'running', refresh: 'Refresh', logout: 'Logout',
+          searchPlaceholder: 'Search apps, images, containers...',
+          all: 'All', tabRunning: 'Running', tabStopped: 'Stopped', tabCasaos: 'CasaOS', tabDocker: 'Docker',
+          version: 'Version', open: 'Open', start: 'Start', stop: 'Stop', restart: 'Restart', logs: 'Logs',
+          noApps: 'No matching containers found.', clear: 'Clear', connectingLogs: 'Connecting to log stream...'
+        },
+        vi: {
+          apps: 'ứng dụng', running: 'đang chạy', refresh: 'Làm mới', logout: 'Thoát',
+          searchPlaceholder: 'Tìm theo tên app, image, container...',
+          all: 'Tất cả', tabRunning: 'Đang chạy', tabStopped: 'Đã dừng', tabCasaos: 'CasaOS', tabDocker: 'Docker thuần',
+          version: 'Phiên bản', open: 'Mở Web', start: 'Chạy', stop: 'Dừng', restart: 'Khởi động lại', logs: 'Xem Logs',
+          noApps: 'Không tìm thấy container nào phù hợp.', clear: 'Xoá màn hình', connectingLogs: 'Đang kết nối luồng log...'
+        }
+      };
+
+      return {
+        lang: localStorage.getItem('amp_lang') || 'vi',
+        theme: localStorage.getItem('amp_theme') || 'dark',
+        envMode: 'docker',
+        apps: [],
+        summary: { total: 0, running: 0, stopped: 0, casaos: 0, docker: 0 },
+        search: '',
+        filter: 'all',
+        loading: true,
+        busyId: null,
+        error: '',
+        toast: { show: false, message: '' },
+        logModal: { open: false, title: '', containerName: '', lines: '', ws: null },
+        filterTabs: [
+          { id: 'all', labelKey: 'all' },
+          { id: 'running', labelKey: 'tabRunning' },
+          { id: 'stopped', labelKey: 'tabStopped' },
+          { id: 'casaos', labelKey: 'tabCasaos' },
+          { id: 'docker', labelKey: 'tabDocker' },
+        ],
+
+        t(key) { return (dict[this.lang] || dict.en)[key] || key; },
+
+        init() { this.loadApps(); },
+
+        handleShortcut(e) {
+          if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
+            e.preventDefault();
+            this.$refs.searchInput.focus();
+          }
+        },
+
+        toggleLang() {
+          this.lang = this.lang === 'vi' ? 'en' : 'vi';
+          localStorage.setItem('amp_lang', this.lang);
+        },
+
+        toggleTheme() {
+          this.theme = this.theme === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('amp_theme', this.theme);
+          document.documentElement.classList.toggle('light', this.theme === 'light');
+          document.documentElement.classList.toggle('dark', this.theme === 'dark');
+        },
+
+        showToast(msg) {
+          this.toast.message = msg;
+          this.toast.show = true;
+          setTimeout(() => { this.toast.show = false; }, 2600);
+        },
+
+        countForTab(tabId) {
+          if (tabId === 'all') return this.summary.total;
+          return this.summary[tabId] || 0;
+        },
+
+        get filteredApps() {
+          const q = this.search.trim().toLowerCase();
+          return this.apps.filter(a => {
+            if (this.filter === 'running' && a.status !== 'running') return false;
+            if (this.filter === 'stopped' && a.status === 'running') return false;
+            if (this.filter === 'casaos' && a.source !== 'casaos') return false;
+            if (this.filter === 'docker' && a.source !== 'docker') return false;
+            if (!q) return true;
+            return (
+              a.title.toLowerCase().includes(q) ||
+              a.name.toLowerCase().includes(q) ||
+              a.image.toLowerCase().includes(q)
+            );
+          });
+        },
+
+        buildWebUrl(app) {
+          const idx = app.index && app.index.startsWith('/') ? app.index : `/${app.index || ''}`;
+          return `${app.scheme || 'http'}://${window.location.hostname}:${app.port_map}${idx}`;
+        },
+
+        async loadApps() {
+          this.loading = true;
+          this.error = '';
+          try {
+            const res = await fetch('/api/apps');
+            if (res.status === 401) { window.location.href = '/login'; return; }
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Failed to load apps');
+            this.envMode = data.environment;
+            this.summary = data.summary;
+            this.apps = data.apps;
+          } catch (err) {
+            this.error = err.message;
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        async runAction(app, action) {
+          this.busyId = app.id;
+          try {
+            const res = await fetch(`/api/apps/${app.id}/${action}`, { method: 'POST' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Action failed');
+            this.showToast(`${app.title}: ${action} OK`);
+            await this.loadApps();
+          } catch (err) {
+            this.error = err.message;
+          } finally {
+            this.busyId = null;
+          }
+        },
+
+        openLogs(app) {
+          this.closeLogs();
+          this.logModal.open = true;
+          this.logModal.title = app.title;
+          this.logModal.containerName = app.name;
+          this.logModal.lines = '';
+
+          const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const ws = new WebSocket(`${proto}//${window.location.host}/ws/logs/${app.id}`);
+          this.logModal.ws = ws;
+
+          ws.onmessage = (event) => {
+            this.logModal.lines += event.data;
+            this.$nextTick(() => {
+              const box = this.$refs.logBox;
+              if (box) box.scrollTop = box.scrollHeight;
+            });
+          };
+        },
+
+        closeLogs() {
+          if (this.logModal.ws) {
+            this.logModal.ws.close();
+            this.logModal.ws = null;
+          }
+          this.logModal.open = false;
+        },
+
+        async logout() {
+          await fetch('/api/auth/logout', { method: 'POST' });
+          window.location.href = '/login';
+        }
+      };
+    }
+  </script>
+</body>
+</html>
