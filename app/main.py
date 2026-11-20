@@ -245,6 +245,7 @@ async def api_app_details(
     return {
         "app": app_info,
         "changelog": cache.get("changelog") or "",
+        "changelog_error": cache.get("error") or "",
         "release_tag": cache.get("release_tag") or "",
         "release_url": cache.get("release_url") or "",
         "published_at": cache.get("published_at") or "",
