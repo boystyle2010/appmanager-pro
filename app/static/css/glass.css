@@ -359,6 +359,26 @@ html.light .pro-badge {
   white-space: pre;
 }
 .changelog-md a { color: #38bdf8; text-decoration: underline; }
+.changelog-md table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-collapse: collapse;
+  margin: 0.5rem 0 0.75rem;
+  font-size: 0.74rem;
+}
+.changelog-md th, .changelog-md td {
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--glass-border);
+  text-align: left;
+  vertical-align: top;
+}
+.changelog-md th {
+  color: var(--text-secondary);
+  font-weight: 600;
+  white-space: nowrap;
+}
 
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
