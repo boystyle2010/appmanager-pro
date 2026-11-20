@@ -30,6 +30,9 @@ SINGLE_MANIFEST_ACCEPT = ", ".join(
     ]
 )
 
+PINNED_TAG_RE = re.compile(r"^(v?)(\d+(?:\.\d+)+)(-[a-zA-Z0-9._-]+)?$")
+PRERELEASE_RE = re.compile(r"(alpha|beta|rc\d*|dev|nightly|canary|pre|test|snapshot)", re.I)
+
 _check_lock = asyncio.Lock()
 _is_checking = False
 
@@ -50,12 +53,10 @@ def _host_arch() -> str:
 
 
 def parse_image_ref(image_ref: str) -> tuple[str, str, str]:
-    """Tách image string thành (registry, repository, tag)."""
     ref = image_ref.strip()
     if "@sha256:" in ref:
         ref = ref.split("@sha256:", 1)[0]
 
-    # Tách tag cẩn thận (tránh nhầm với port registry kiểu localhost:5000/app)
     last_slash = ref.rfind("/")
     last_colon = ref.rfind(":")
     if last_colon > last_slash:
@@ -78,6 +79,22 @@ def parse_image_ref(image_ref: str) -> tuple[str, str, str]:
         return registry, repo, tag
 
     return "registry-1.docker.io", name_part, tag
+
+
+def _parse_pinned_tag(tag: str) -> Optional[dict[str, Any]]:
+    """Nhận diện tag số phiên bản cố định (vd: 2026.10.7, v1.2.3, 2.42.0-alpine)."""
+    m = PINNED_TAG_RE.match(tag.strip())
+    if not m:
+        return None
+    prefix, ver_str, suffix = m.group(1), m.group(2), m.group(3) or ""
+    nums = tuple(int(p) for p in ver_str.split("."))
+    return {
+        "prefix": prefix,
+        "ver_str": ver_str,
+        "nums": nums,
+        "suffix": suffix,
+        "is_pre": bool(PRERELEASE_RE.search(suffix)),
+    }
 
 
 def _parse_www_authenticate(header_val: str) -> dict[str, str]:
@@ -110,32 +127,29 @@ async def _registry_request(
     accept: str,
     token_cache: dict[str, str],
     scope_key: str,
+    method: str = "GET",
 ) -> httpx.Response:
     headers = {"Accept": accept}
     if scope_key in token_cache:
         headers["Authorization"] = f"Bearer {token_cache[scope_key]}"
 
-    resp = await client.get(url, headers=headers, follow_redirects=True)
+    req_fn = client.head if method == "HEAD" else client.get
+    resp = await req_fn(url, headers=headers, follow_redirects=True)
     if resp.status_code == 401 and "www-authenticate" in resp.headers:
         token = await _fetch_bearer_token(client, resp.headers["www-authenticate"])
         if token:
             token_cache[scope_key] = token
             headers["Authorization"] = f"Bearer {token}"
-            resp = await client.get(url, headers=headers, follow_redirects=True)
+            resp = await req_fn(url, headers=headers, follow_redirects=True)
     return resp
 
 
 def extract_github_slug(source_url: str, image_ref: str) -> Optional[str]:
-    """Trích xuất 'owner/repo' từ OCI source URL, custom repo, hoặc ghcr.io image."""
-    for candidate in (source_url,):
-        if not candidate:
-            continue
-        m = re.search(r"github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)", candidate)
+    if source_url:
+        m = re.search(r"github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)", source_url)
         if m:
-            slug = m.group(1).removesuffix(".git").rstrip("/")
-            return slug
+            return m.group(1).removesuffix(".git").rstrip("/")
 
-    # Fallback thông minh cho image lưu trên ghcr.io
     if image_ref.startswith("ghcr.io/"):
         path = image_ref[len("ghcr.io/") :].split(":")[0].split("@")[0]
         parts = path.split("/")
@@ -144,12 +158,10 @@ def extract_github_slug(source_url: str, image_ref: str) -> Optional[str]:
     return None
 
 
-async def fetch_github_release(
-    client: httpx.AsyncClient, slug: str
-) -> dict[str, str]:
+async def fetch_github_release(client: httpx.AsyncClient, slug: str) -> dict[str, str]:
     headers = {
         "Accept": "application/vnd.github+json",
-        "User-Agent": "AppManager-Pro/0.2.0",
+        "User-Agent": "AppManager-Pro/0.2.2",
     }
     gh_token = get_setting("github_token", "").strip()
     if gh_token:
@@ -164,7 +176,6 @@ async def fetch_github_release(
         if resp.status_code == 200:
             data = resp.json()
         elif resp.status_code == 404:
-            # Nếu repo chỉ dùng pre-release hoặc không đánh dấu latest
             resp2 = await client.get(
                 f"https://api.github.com/repos/{slug}/releases?per_page=1",
                 headers=headers,
@@ -194,7 +205,6 @@ async def _fetch_remote_oci_labels(
     token_cache: dict[str, str],
     scope_key: str,
 ) -> dict[str, str]:
-    """Đọc config blob của image trên Registry để lấy phiên bản thực và link GitHub."""
     try:
         single_manifest = manifest_data
         if "manifests" in manifest_data and arch_digest:
@@ -211,9 +221,7 @@ async def _fetch_remote_oci_labels(
             return {}
 
         b_url = f"https://{registry}/v2/{repo}/blobs/{config_digest}"
-        b_resp = await _registry_request(
-            client, b_url, "*/*", token_cache, scope_key
-        )
+        b_resp = await _registry_request(client, b_url, "*/*", token_cache, scope_key)
         if b_resp.status_code != 200:
             return {}
 
@@ -221,6 +229,88 @@ async def _fetch_remote_oci_labels(
         return (blob.get("config") or {}).get("Labels") or {}
     except Exception:
         return {}
+
+
+async def _discover_newer_pinned_tag(
+    client: httpx.AsyncClient,
+    registry: str,
+    repo: str,
+    cur_parsed: dict[str, Any],
+    github_release_tag: str,
+    token_cache: dict[str, str],
+    scope_key: str,
+) -> Optional[tuple[str, str]]:
+    """
+    Tìm tag mới hơn trên Registry cho các container đang ghim cứng phiên bản.
+    Trả về (tag_mới, remote_digest) sau khi xác thực tag thực sự tồn tại trên Registry.
+    """
+    cur_nums = cur_parsed["nums"]
+    cur_prefix = cur_parsed["prefix"]
+    cur_suffix = cur_parsed["suffix"]
+    allow_pre = cur_parsed["is_pre"]
+
+    candidates: list[tuple[tuple[int, ...], str]] = []
+
+    # 1. Thử khớp từ GitHub Release Tag trước (nhanh và rất chuẩn cho cloudflared, portainer...)
+    if github_release_tag:
+        gh_p = _parse_pinned_tag(github_release_tag)
+        if gh_p and gh_p["nums"] > cur_nums and (allow_pre or not gh_p["is_pre"]):
+            reconstructed = f"{cur_prefix}{gh_p['ver_str']}{cur_suffix}"
+            candidates.append((gh_p["nums"], reconstructed))
+            alt = f"{gh_p['prefix']}{gh_p['ver_str']}{cur_suffix}"
+            if alt != reconstructed:
+                candidates.append((gh_p["nums"], alt))
+
+    # 2. Quét danh sách tag trực tiếp trên Docker Hub hoặc OCI Registry
+    tag_names: list[str] = []
+    try:
+        if registry == "registry-1.docker.io":
+            hub_url = f"https://hub.docker.com/v2/repositories/{repo}/tags?page_size=60&ordering=last_updated"
+            r = await client.get(hub_url)
+            if r.status_code == 200:
+                tag_names = [t.get("name", "") for t in (r.json().get("results") or [])]
+        else:
+            t_url = f"https://{registry}/v2/{repo}/tags/list?n=100"
+            r = await _registry_request(client, t_url, "application/json", token_cache, scope_key)
+            if r.status_code == 200:
+                tag_names = r.json().get("tags") or []
+    except Exception:
+        pass
+
+    for tname in tag_names:
+        tp = _parse_pinned_tag(tname)
+        if not tp:
+            continue
+        if tp["suffix"].lower() != cur_suffix.lower():
+            continue
+        if tp["prefix"] != cur_prefix:
+            continue
+        if not allow_pre and tp["is_pre"]:
+            continue
+        if len(tp["nums"]) != len(cur_nums):
+            continue
+        if tp["nums"] > cur_nums:
+            candidates.append((tp["nums"], tname))
+
+    if not candidates:
+        return None
+
+    # Sắp xếp phiên bản cao nhất trước và xác thực tồn tại thật trên Registry
+    seen: set[str] = set()
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    for _, cand_tag in candidates:
+        if cand_tag in seen:
+            continue
+        seen.add(cand_tag)
+        m_url = f"https://{registry}/v2/{repo}/manifests/{cand_tag}"
+        check_resp = await _registry_request(
+            client, m_url, MANIFEST_ACCEPT, token_cache, scope_key, method="HEAD"
+        )
+        if check_resp.status_code == 200:
+            digest = check_resp.headers.get("docker-content-digest", "").strip()
+            return cand_tag, digest
+
+    return None
 
 
 async def check_single_app(
@@ -245,6 +335,7 @@ async def check_single_app(
         "remote_digest": "",
         "current_version": current_version,
         "remote_version": current_version,
+        "target_tag": "",
         "has_update": 0,
         "source_url": source_url,
         "changelog": prev_cache.get("changelog") or "",
@@ -261,10 +352,12 @@ async def check_single_app(
         return result
 
     registry, repo, tag = parse_image_ref(image_ref)
+    pinned_info = _parse_pinned_tag(tag)
     scope_key = f"{registry}/{repo}"
     token_cache: dict[str, str] = {}
 
     try:
+        # Bước 1: Kiểm tra Digest của tag hiện tại
         manifest_url = f"https://{registry}/v2/{repo}/manifests/{tag}"
         resp = await _registry_request(
             client, manifest_url, MANIFEST_ACCEPT, token_cache, scope_key
@@ -277,7 +370,6 @@ async def check_single_app(
         top_digest = resp.headers.get("docker-content-digest", "").strip()
         manifest_data = resp.json() if resp.content else {}
 
-        # Tìm digest khớp kiến trúc máy nếu là multi-arch manifest list
         arch = _host_arch()
         arch_digest = None
         if isinstance(manifest_data.get("manifests"), list):
@@ -291,14 +383,52 @@ async def check_single_app(
         remote_digest = top_digest or arch_digest or ""
         result["remote_digest"] = remote_digest
 
-        has_update = bool(remote_candidates) and not any(
+        has_digest_update = bool(remote_candidates) and not any(
             d in remote_candidates for d in local_digests
         )
-        result["has_update"] = 1 if has_update else 0
 
-        # Nếu có bản cập nhật mới, đọc OCI Labels trên server để lấy phiên bản thực
-        remote_labels: dict[str, str] = {}
-        if has_update:
+        # Lấy GitHub Release sớm để vừa có Changelog vừa dùng kiểm tra tag mới cho Pinned Tag
+        slug = extract_github_slug(source_url, image_ref)
+        if slug:
+            if not result["source_url"]:
+                result["source_url"] = f"https://github.com/{slug}"
+            need_gh = (
+                fetch_changelog_always
+                or has_digest_update
+                or bool(pinned_info)
+                or not result["changelog"]
+                or bool(pref.get("custom_repo"))
+            )
+            if need_gh:
+                gh_info = await fetch_github_release(client, slug)
+                if gh_info["release_tag"]:
+                    result["release_tag"] = gh_info["release_tag"]
+                    result["release_url"] = gh_info["release_url"]
+                    result["published_at"] = gh_info["published_at"]
+                    result["changelog"] = gh_info["changelog"]
+
+        # Bước 2: Nếu container đang ghim cứng phiên bản (vd: cloudflared:2026.10.7), tìm tag mới hơn trên Server
+        newer_tag_match = None
+        if pinned_info:
+            newer_tag_match = await _discover_newer_pinned_tag(
+                client,
+                registry,
+                repo,
+                pinned_info,
+                result["release_tag"],
+                token_cache,
+                scope_key,
+            )
+
+        if newer_tag_match:
+            new_tag, new_digest = newer_tag_match
+            result["has_update"] = 1
+            result["target_tag"] = new_tag
+            result["remote_version"] = new_tag
+            if new_digest:
+                result["remote_digest"] = new_digest
+        elif has_digest_update:
+            result["has_update"] = 1
             remote_labels = await _fetch_remote_oci_labels(
                 client, registry, repo, manifest_data, arch_digest, token_cache, scope_key
             )
@@ -321,31 +451,11 @@ async def check_single_app(
                 )
                 result["source_url"] = source_url
 
-        # Lấy Changelog từ GitHub khi có update hoặc khi mở chi tiết app
-        slug = extract_github_slug(source_url, image_ref)
-        if slug:
-            if not result["source_url"]:
-                result["source_url"] = f"https://github.com/{slug}"
-            need_gh = (
-                fetch_changelog_always
-                or has_update
-                or not result["changelog"]
-                or pref.get("custom_repo")
-            )
-            if need_gh:
-                gh_info = await fetch_github_release(client, slug)
-                if gh_info["release_tag"]:
-                    result["release_tag"] = gh_info["release_tag"]
-                    result["release_url"] = gh_info["release_url"]
-                    result["published_at"] = gh_info["published_at"]
-                    result["changelog"] = gh_info["changelog"]
-
-        # Nếu image có digest mới nhưng không gắn OCI version label -> dùng GitHub tag hoặc short digest
-        if has_update and result["remote_version"] == current_version:
-            if result["release_tag"] and result["release_tag"].lstrip("v") != current_version.lstrip("v"):
-                result["remote_version"] = result["release_tag"]
-            elif remote_digest:
-                result["remote_version"] = f"{tag} ({remote_digest[7:14]})"
+            if result["remote_version"] == current_version:
+                if result["release_tag"] and result["release_tag"].lstrip("v") != current_version.lstrip("v"):
+                    result["remote_version"] = result["release_tag"]
+                elif remote_digest:
+                    result["remote_version"] = f"{tag} ({remote_digest[7:14]})"
 
     except Exception as exc:
         result["error"] = str(exc)[:180]
