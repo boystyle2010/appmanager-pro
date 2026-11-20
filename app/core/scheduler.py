@@ -40,7 +40,14 @@ async def run_auto_update_job() -> None:
 
 
 async def _startup_check_if_stale() -> None:
-    await asyncio.sleep(5)
+    await asyncio.sleep(4)
+    # Luôn làm mới lại cache của chính AppManager Pro ngay khi vừa restart/self-update
+    from app.core.registry_checker import check_one_app_by_name
+    try:
+        await check_one_app_by_name("appmanager-pro")
+    except Exception:
+        pass
+
     cache = get_all_update_cache()
     if not cache:
         await check_all_updates()
