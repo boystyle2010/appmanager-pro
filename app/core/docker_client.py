@@ -1,4 +1,5 @@
 import os
+import re
 import socket
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,7 +11,7 @@ from ruamel.yaml import YAML
 
 from app.core.database import get_all_app_prefs, get_all_update_cache
 
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.3.1"
 CASAOS_APPS_DIR = Path(os.getenv("CASAOS_APPS_DIR", "/var/lib/casaos/apps"))
 APPDATA_DIR = Path(os.getenv("APPDATA_DIR", "/DATA/AppData"))
 yaml_parser = YAML(typ="safe")
@@ -31,6 +32,18 @@ def _extract_localized_str(val: Any, fallback: str = "") -> str:
             or next(iter(val.values()), fallback)
         )
     return fallback
+
+
+def _github_from_icon_or_meta(x_casaos: dict[str, Any]) -> str:
+    for key in ("project_url", "source", "repository", "homepage"):
+        val = str(x_casaos.get(key) or "").strip()
+        if "github.com/" in val:
+            return val
+    icon_url = str(x_casaos.get("icon") or "")
+    m = re.search(r"raw\.githubusercontent\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)", icon_url)
+    if m:
+        return f"https://github.com/{m.group(1)}"
+    return ""
 
 
 def load_casaos_metadata() -> dict[str, dict[str, Any]]:
@@ -64,6 +77,7 @@ def load_casaos_metadata() -> dict[str, dict[str, Any]]:
             "compose_path": str(compose_file),
             "title": _extract_localized_str(x_casaos.get("title"), app_dir.name),
             "icon": x_casaos.get("icon") or "",
+            "source_hint": _github_from_icon_or_meta(x_casaos),
             "port_map": str(x_casaos.get("port_map") or ""),
             "scheme": str(x_casaos.get("scheme") or "http"),
             "index": str(x_casaos.get("index") or "/"),
@@ -108,7 +122,6 @@ def _extract_first_host_port(ports_dict: dict[str, Any]) -> str:
 
 
 def _detect_appdata_path(mounts: list[dict[str, Any]], project: str, cname: str) -> str:
-    """Tìm thư mục dữ liệu gốc của app bên trong /DATA/AppData (dùng cho Smart Uninstall)."""
     try:
         base = APPDATA_DIR.resolve()
     except Exception:
@@ -224,7 +237,6 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
         )
         icon = meta["icon"] if meta else ""
 
-        # Tự đồng bộ logo & tên đẹp cho chính AppManager Pro dù chạy ở chế độ Docker thuần
         if is_self:
             if not icon:
                 icon = "/assets/icon.png"
@@ -255,6 +267,7 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
             image_labels.get("org.opencontainers.image.source")
             or image_labels.get("org.opencontainers.image.url")
             or labels.get("org.opencontainers.image.source")
+            or (meta.get("source_hint") if meta else "")
             or ""
         )
 
