@@ -2,6 +2,8 @@ import asyncio
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
+from ruamel.yaml import YAML
+
 from app.core.database import add_update_history, get_setting
 from app.core.docker_client import get_app_by_name, get_docker_client, list_all_apps
 from app.core.registry_checker import check_one_app_by_name
@@ -64,6 +66,69 @@ def _trigger_self_update_helper(compose_path: str) -> None:
     )
 
 
+def _bump_compose_image_tag(
+    compose_path: str,
+    service_name: str,
+    container_name: str,
+    old_image: str,
+    new_tag: str,
+) -> tuple[bool, str, str, str]:
+    """
+    Nâng tag mới vào docker-compose.yml bằng ruamel.yaml (bảo toàn comment & x-casaos).
+    Trả về: (đã_đổi, image_mới, đường_dẫn_backup, thông_báo_lỗi)
+    """
+    path = Path(compose_path)
+    backup_path = path.with_name(path.name + ".bak")
+    original_text = path.read_text(encoding="utf-8")
+
+    ryaml = YAML()
+    ryaml.preserve_quotes = True
+    data = ryaml.load(original_text) or {}
+    services = data.get("services") or {}
+
+    target_svc = None
+    if service_name and service_name in services:
+        target_svc = services[service_name]
+    else:
+        for svc_cfg in services.values():
+            if isinstance(svc_cfg, dict) and (
+                svc_cfg.get("container_name") == container_name
+                or svc_cfg.get("image") == old_image
+            ):
+                target_svc = svc_cfg
+                break
+
+    if not isinstance(target_svc, dict) or "image" not in target_svc:
+        return False, "", "", "Could not locate service image in docker-compose.yml"
+
+    cur_img = str(target_svc["image"]).strip()
+    if "$" in cur_img:
+        return False, cur_img, "", "Image tag uses an env variable; please edit compose manually."
+
+    base_img = cur_img.split("@sha256:", 1)[0]
+    last_slash = base_img.rfind("/")
+    last_colon = base_img.rfind(":")
+    repo_part = base_img[:last_colon] if last_colon > last_slash else base_img
+    new_img = f"{repo_part}:{new_tag}"
+
+    if new_img == cur_img:
+        return False, cur_img, "", ""
+
+    backup_path.write_text(original_text, encoding="utf-8")
+    target_svc["image"] = new_img
+    with path.open("w", encoding="utf-8") as f:
+        ryaml.dump(data, f)
+
+    return True, new_img, str(backup_path), ""
+
+
+def _restore_compose_backup(compose_path: str, backup_path: str) -> None:
+    if backup_path and Path(backup_path).exists():
+        Path(compose_path).write_text(
+            Path(backup_path).read_text(encoding="utf-8"), encoding="utf-8"
+        )
+
+
 async def update_app_stream(
     container_name: str,
     send_log: LogCallback,
@@ -82,11 +147,32 @@ async def update_app_stream(
 
     title = app_info["title"]
     from_ver = app_info.get("version") or ""
-    target_ver = app_info.get("remote_version") or "latest"
+    target_tag = app_info.get("target_tag") or ""
+    target_ver = app_info.get("remote_version") or target_tag or "latest"
     old_image_id = app_info.get("image_id") or ""
     compose_dir = str(Path(compose_path).parent)
     service = app_info.get("service") or ""
 
+    # Nếu app đang ghim cứng tag -> sao lưu .bak và nâng tag trong docker-compose.yml
+    bumped = False
+    backup_path = ""
+    if target_tag:
+        bumped, new_img, backup_path, bump_err = await asyncio.to_thread(
+            _bump_compose_image_tag,
+            compose_path,
+            service,
+            container_name,
+            app_info["image"],
+            target_tag,
+        )
+        if bump_err:
+            await send_log(f"[ERROR] {bump_err}\n")
+            return {"ok": False, "error": bump_err}
+        if bumped:
+            await send_log(f"==> Backup created: {backup_path}\n")
+            await send_log(f"==> Updated compose image: {app_info['image']} -> {new_img}\n\n")
+
+    # Xử lý riêng nếu đang tự cập nhật chính AppManager Pro
     if app_info.get("is_self"):
         await send_log(f"==> Detected self-update for {title}.\n")
         await send_log("==> Launching detached helper container to pull & recreate...\n")
@@ -99,6 +185,9 @@ async def update_app_stream(
             await send_log("__SELF_UPDATE_RELOAD__\n")
             return {"ok": True, "self_update": True, "to_version": target_ver}
         except Exception as exc:
+            if bumped and backup_path:
+                await asyncio.to_thread(_restore_compose_backup, compose_path, backup_path)
+                await send_log("==> Rolled back docker-compose.yml from backup.\n")
             await send_log(f"[ERROR] Self-update failed: {exc}\n")
             add_update_history(
                 container_name, title, from_ver, target_ver, mode, "failed", str(exc)
@@ -108,30 +197,39 @@ async def update_app_stream(
     await send_log(f"==> Updating {title} ({container_name})\n")
     await send_log(f"==> Compose file: {compose_path}\n\n")
 
+    # Bước 1: docker compose pull
     pull_cmd = ["docker", "compose", "-f", compose_path, "pull"]
     if service:
         pull_cmd.append(service)
     await send_log(f"$ {' '.join(pull_cmd)}\n")
     rc = await _run_cmd_stream(pull_cmd, compose_dir, send_log)
     if rc != 0:
+        if bumped and backup_path:
+            await asyncio.to_thread(_restore_compose_backup, compose_path, backup_path)
+            await send_log("==> Rolled back docker-compose.yml from backup.\n")
         await send_log(f"\n[ERROR] docker compose pull failed (exit {rc}).\n")
         add_update_history(
             container_name, title, from_ver, target_ver, mode, "failed", f"Pull exit {rc}"
         )
         return {"ok": False, "error": f"Pull failed (exit {rc})"}
 
+    # Bước 2: docker compose up -d
     up_cmd = ["docker", "compose", "-f", compose_path, "up", "-d", "--remove-orphans"]
     if service:
         up_cmd.append(service)
     await send_log(f"\n$ {' '.join(up_cmd)}\n")
     rc2 = await _run_cmd_stream(up_cmd, compose_dir, send_log)
     if rc2 != 0:
+        if bumped and backup_path:
+            await asyncio.to_thread(_restore_compose_backup, compose_path, backup_path)
+            await send_log("==> Rolled back docker-compose.yml from backup.\n")
         await send_log(f"\n[ERROR] docker compose up failed (exit {rc2}).\n")
         add_update_history(
             container_name, title, from_ver, target_ver, mode, "failed", f"Up exit {rc2}"
         )
         return {"ok": False, "error": f"Recreate failed (exit {rc2})"}
 
+    # Bước 3: Kiểm tra trạng thái & dọn image cũ
     await asyncio.sleep(3)
     refreshed = await asyncio.to_thread(get_app_by_name, container_name)
     new_ver = refreshed["version"] if refreshed else target_ver
@@ -143,6 +241,7 @@ async def update_app_stream(
         if prune_msg:
             await send_log(f"\n==> {prune_msg}\n")
 
+    # Bước 4: Cập nhật lại cache digest
     await send_log("==> Refreshing update status...\n")
     await check_one_app_by_name(container_name)
 
