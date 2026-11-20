@@ -2,100 +2,176 @@
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#050814" id="meta-theme-color" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>AppManager Pro — Sign In</title>
   <link rel="icon" type="image/png" href="/assets/icon.png" />
   <link rel="apple-touch-icon" href="/assets/icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
   <link rel="stylesheet" href="/static/css/glass.css" />
   <script>
-    if (localStorage.getItem('amp_theme') === 'light') {
-      document.documentElement.classList.remove('dark');
-      document.documentElement.classList.add('light');
-    }
+    (function () {
+      const saved = localStorage.getItem('amp_theme') || 'dark';
+      const isLight = saved === 'light';
+      document.documentElement.classList.toggle('light', isLight);
+      document.documentElement.classList.toggle('dark', !isLight);
+      document.getElementById('meta-theme-color').setAttribute('content', isLight ? '#e6effb' : '#050814');
+    })();
   </script>
 </head>
-<body class="flex items-center justify-center p-4" x-data="authApp({{ 'true' if is_setup else 'false' }})">
-  <div class="ambient-bg">
-    <div class="ambient-orb orb-1"></div>
-    <div class="ambient-orb orb-2"></div>
-    <div class="ambient-orb orb-3"></div>
-  </div>
+<body class="flex flex-col items-center justify-center px-5 py-10 safe-bottom" x-data="authApp({{ 'true' if is_setup else 'false' }})">
+  <div class="ambient-bg"></div>
+  <div class="ambient-grid"></div>
 
-  <!-- Thanh đổi Theme & Ngôn ngữ góc phải -->
-  <div class="fixed top-4 right-4 flex items-center gap-2">
-    <button @click="toggleLang()" class="glass-btn px-3 py-1.5 rounded-xl text-xs font-semibold">
+  <!-- Thanh điều khiển góc phải tôn trọng vùng Dynamic Island -->
+  <div class="fixed right-4 z-20 flex items-center gap-1 p-1 rounded-2xl glass-panel"
+       style="top: calc(0.75rem + env(safe-area-inset-top));">
+    <button @click="toggleLang()" type="button"
+            class="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-muted hover:text-[var(--text-primary)] hover:bg-[var(--glass-surface-hover)] transition">
       <span x-text="lang === 'vi' ? 'VN' : 'EN'"></span>
     </button>
-    <button @click="toggleTheme()" class="glass-btn px-3 py-1.5 rounded-xl text-xs font-semibold">
-      <span x-text="theme === 'dark' ? '☀️' : '🌙'"></span>
+    <div class="w-px h-4 bg-[var(--glass-border)]"></div>
+    <button @click="toggleTheme()" type="button" aria-label="Toggle theme"
+            class="p-1.5 rounded-xl text-muted hover:text-[var(--text-primary)] hover:bg-[var(--glass-surface-hover)] transition">
+      <svg x-show="theme === 'dark'" class="w-4 h-4 text-amber-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="4"/><path stroke-linecap="round" d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41"/>
+      </svg>
+      <svg x-show="theme === 'light'" x-cloak class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+      </svg>
     </button>
   </div>
 
-  <div class="glass-panel w-full max-w-md rounded-3xl p-8">
-    <div class="flex flex-col items-center text-center mb-7">
-      <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-sky-400/30 to-indigo-500/30 border border-white/25 flex items-center justify-center mb-4 shadow-lg overflow-hidden">
-        <img src="/assets/icon.png" alt="AppManager Pro" class="w-12 h-12 object-contain"
-             onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
-        <svg style="display:none" class="w-9 h-9 text-sky-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/>
+  <!-- Auth Glass Card -->
+  <div class="w-full max-w-[400px] relative mt-6">
+    <!-- Hào quang nền phía sau card -->
+    <div class="absolute -inset-1 rounded-[32px] bg-gradient-to-br from-sky-500/25 via-indigo-500/15 to-purple-500/25 blur-2xl opacity-70 pointer-events-none"></div>
+
+    <div class="glass-panel relative rounded-[28px] p-7 sm:p-8">
+      <!-- Brand Header -->
+      <div class="flex flex-col items-center text-center mb-7">
+        <div class="relative mb-4">
+          <div class="absolute -inset-2 rounded-3xl bg-sky-500/30 blur-xl opacity-60"></div>
+          <div class="brand-squircle relative w-[68px] h-[68px]">
+            <img src="/assets/icon.png" alt="AppManager Pro" />
+          </div>
+        </div>
+
+        <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-sky-500/15 text-sky-400 border border-sky-400/25 mb-2">
+          <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+          <span x-text="isSetup ? t('firstRunBadge') : t('secureBadge')"></span>
+        </div>
+
+        <h1 class="text-2xl font-bold tracking-tight">AppManager Pro</h1>
+        <p class="text-xs sm:text-sm text-muted mt-1.5 leading-relaxed max-w-[280px]"
+           x-text="isSetup ? t('setupSubtitle') : t('loginSubtitle')"></p>
+      </div>
+
+      <!-- Error Alert -->
+      <div x-show="error" x-cloak x-transition
+           class="mb-5 px-3.5 py-3 rounded-2xl bg-rose-500/15 border border-rose-500/35 text-rose-400 text-xs font-medium flex items-start gap-2.5">
+        <svg class="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10"/><path stroke-linecap="round" d="M12 8v4m0 4h.01"/>
         </svg>
-      </div>
-      <h1 class="text-2xl font-bold tracking-tight">AppManager Pro</h1>
-      <p class="text-sm text-muted mt-1" x-text="isSetup ? t('setupSubtitle') : t('loginSubtitle')"></p>
-    </div>
-
-    <div x-show="error" x-cloak class="mb-4 px-4 py-3 rounded-2xl bg-rose-500/20 border border-rose-400/40 text-rose-200 text-sm">
-      <span x-text="error"></span>
-    </div>
-
-    <form @submit.prevent="submit()" class="space-y-4">
-      <div>
-        <label class="block text-xs font-medium text-muted mb-1.5" x-text="t('username')"></label>
-        <input type="text" x-model="username" required autocomplete="username" minlength="3"
-               class="glass-input w-full rounded-2xl px-4 py-3 text-sm" placeholder="admin" />
+        <span x-text="error"></span>
       </div>
 
-      <div>
-        <label class="block text-xs font-medium text-muted mb-1.5" x-text="t('password')"></label>
-        <div class="relative">
-          <input :type="showPw ? 'text' : 'password'" x-model="password" required
-                 :autocomplete="isSetup ? 'new-password' : 'current-password'"
-                 :minlength="isSetup ? 8 : 1"
-                 class="glass-input w-full rounded-2xl px-4 py-3 pr-12 text-sm" placeholder="••••••••" />
-          <button type="button" @click="showPw = !showPw"
-                  class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted hover:text-sky-400 px-1.5 py-1">
-            <span x-text="showPw ? t('hide') : t('show')"></span>
-          </button>
-        </div>
-      </div>
-
-      <template x-if="isSetup">
+      <!-- Form -->
+      <form @submit.prevent="submit()" class="space-y-4">
         <div>
-          <label class="block text-xs font-medium text-muted mb-1.5" x-text="t('confirmPassword')"></label>
-          <input :type="showPw ? 'text' : 'password'" x-model="confirmPassword" required
-                 autocomplete="new-password" minlength="8"
-                 class="glass-input w-full rounded-2xl px-4 py-3 text-sm" placeholder="••••••••" />
+          <label class="block text-xs font-semibold text-muted mb-1.5 ml-1" x-text="t('username')"></label>
+          <div class="relative">
+            <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-subtle pointer-events-none">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 20.118a7.5 7.5 0 0115 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.5-1.632z"/>
+              </svg>
+            </span>
+            <input type="text" x-model="username" required autocomplete="username" minlength="3"
+                   class="glass-input w-full rounded-2xl pl-10 pr-4 py-3 text-sm" placeholder="admin" />
+          </div>
         </div>
-      </template>
 
-      <template x-if="!isSetup">
-        <label class="flex items-center gap-2.5 text-sm text-muted cursor-pointer select-none pt-1">
-          <input type="checkbox" x-model="remember" class="w-4 h-4 rounded accent-sky-500" />
-          <span x-text="t('remember')"></span>
-        </label>
-      </template>
+        <div>
+          <label class="block text-xs font-semibold text-muted mb-1.5 ml-1" x-text="t('password')"></label>
+          <div class="relative">
+            <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-subtle pointer-events-none">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                <rect x="4" y="11" width="16" height="10" rx="2"/><path stroke-linecap="round" d="M8 11V7a4 4 0 118 0v4"/>
+              </svg>
+            </span>
+            <input :type="showPw ? 'text' : 'password'" x-model="password" required
+                   :autocomplete="isSetup ? 'new-password' : 'current-password'"
+                   :minlength="isSetup ? 8 : 1"
+                   class="glass-input w-full rounded-2xl pl-10 pr-11 py-3 text-sm" placeholder="••••••••" />
+            <button type="button" @click="showPw = !showPw" :aria-label="showPw ? 'Hide' : 'Show'"
+                    class="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-subtle hover:text-[var(--text-primary)] transition">
+              <svg x-show="!showPw" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+              <svg x-show="showPw" x-cloak class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88"/>
+              </svg>
+            </button>
+          </div>
 
-      <button type="submit" :disabled="loading"
-              class="glass-btn-primary w-full rounded-2xl py-3.5 text-sm font-semibold mt-2 disabled:opacity-60">
-        <span x-show="!loading" x-text="isSetup ? t('createAdmin') : t('signIn')"></span>
-        <span x-show="loading" x-cloak x-text="t('processing')"></span>
-      </button>
-    </form>
+          <!-- Thanh đo độ dài mật khẩu khi Setup -->
+          <template x-if="isSetup && password.length > 0">
+            <div class="mt-2 px-1 flex items-center gap-2">
+              <div class="flex-1 h-1 rounded-full bg-[var(--glass-surface)] overflow-hidden">
+                <div class="h-full rounded-full transition-all duration-300"
+                     :class="password.length >= 12 ? 'w-full bg-emerald-400' : (password.length >= 8 ? 'w-2/3 bg-sky-400' : 'w-1/3 bg-amber-400')"></div>
+              </div>
+              <span class="text-[11px] font-medium"
+                    :class="password.length >= 8 ? 'text-emerald-400' : 'text-amber-400'"
+                    x-text="password.length >= 8 ? t('pwGood') : t('pwMin')"></span>
+            </div>
+          </template>
+        </div>
 
-    <div class="text-center text-xs text-muted mt-6">
-      AppManager Pro v{{ version }}
+        <template x-if="isSetup">
+          <div>
+            <label class="block text-xs font-semibold text-muted mb-1.5 ml-1" x-text="t('confirmPassword')"></label>
+            <div class="relative">
+              <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-subtle pointer-events-none">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/>
+                </svg>
+              </span>
+              <input :type="showPw ? 'text' : 'password'" x-model="confirmPassword" required
+                     autocomplete="new-password" minlength="8"
+                     class="glass-input w-full rounded-2xl pl-10 pr-4 py-3 text-sm" placeholder="••••••••" />
+            </div>
+          </div>
+        </template>
+
+        <template x-if="!isSetup">
+          <label class="flex items-center gap-2.5 text-xs font-medium text-muted cursor-pointer select-none pt-1 ml-1">
+            <input type="checkbox" x-model="remember" class="w-4 h-4 rounded accent-sky-500" />
+            <span x-text="t('remember')"></span>
+          </label>
+        </template>
+
+        <button type="submit" :disabled="loading"
+                class="glass-btn-primary w-full rounded-2xl py-3.5 text-sm font-semibold mt-2 flex items-center justify-center gap-2 disabled:opacity-60">
+          <svg x-show="loading" x-cloak class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+            <path class="opacity-85" fill="currentColor" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"></path>
+          </svg>
+          <span x-text="loading ? t('processing') : (isSetup ? t('createAdmin') : t('signIn'))"></span>
+        </button>
+      </form>
+
+      <div class="mt-6 pt-4 border-t border-[var(--glass-border)] flex items-center justify-between text-[11px] text-subtle">
+        <span>Argon2id Protected</span>
+        <span>v{{ version }}</span>
+      </div>
     </div>
   </div>
 
@@ -103,32 +179,36 @@
     function authApp(isSetup) {
       const dict = {
         en: {
-          setupSubtitle: 'Create your administrator account to secure Docker access',
-          loginSubtitle: 'Sign in to manage your Docker & CasaOS apps',
+          firstRunBadge: 'First-Time Setup',
+          secureBadge: 'Docker Control Center',
+          setupSubtitle: 'Create an administrator account to protect your Docker engine',
+          loginSubtitle: 'Sign in to manage containers, compose files & updates',
           username: 'Username',
           password: 'Password',
           confirmPassword: 'Confirm Password',
           remember: 'Keep me signed in for 30 days',
           createAdmin: 'Create Admin Account',
           signIn: 'Sign In',
-          processing: 'Please wait...',
-          show: 'Show',
-          hide: 'Hide',
-          mismatch: 'Passwords do not match'
+          processing: 'Authenticating...',
+          mismatch: 'Passwords do not match',
+          pwMin: 'Min 8 chars',
+          pwGood: 'Strong'
         },
         vi: {
-          setupSubtitle: 'Tạo tài khoản Quản trị viên cho lần chạy đầu tiên',
-          loginSubtitle: 'Đăng nhập để quản lý ứng dụng Docker & CasaOS',
+          firstRunBadge: 'Thiết lập lần đầu',
+          secureBadge: 'Trung tâm điều khiển Docker',
+          setupSubtitle: 'Tạo tài khoản Quản trị viên để bảo vệ quyền truy cập Docker',
+          loginSubtitle: 'Đăng nhập để quản lý ứng dụng, Compose và cập nhật',
           username: 'Tên đăng nhập',
           password: 'Mật khẩu',
           confirmPassword: 'Xác nhận mật khẩu',
-          remember: 'Ghi nhớ đăng nhập 30 ngày',
+          remember: 'Ghi nhớ đăng nhập trong 30 ngày',
           createAdmin: 'Tạo tài khoản Admin',
           signIn: 'Đăng nhập',
-          processing: 'Đang xử lý...',
-          show: 'Hiện',
-          hide: 'Ẩn',
-          mismatch: 'Mật khẩu xác nhận không khớp'
+          processing: 'Đang xác thực...',
+          mismatch: 'Mật khẩu xác nhận không khớp',
+          pwMin: 'Tối thiểu 8 ký tự',
+          pwGood: 'Hợp lệ'
         }
       };
 
@@ -152,8 +232,10 @@
         toggleTheme() {
           this.theme = this.theme === 'dark' ? 'light' : 'dark';
           localStorage.setItem('amp_theme', this.theme);
-          document.documentElement.classList.toggle('light', this.theme === 'light');
-          document.documentElement.classList.toggle('dark', this.theme === 'dark');
+          const isLight = this.theme === 'light';
+          document.documentElement.classList.toggle('light', isLight);
+          document.documentElement.classList.toggle('dark', !isLight);
+          document.getElementById('meta-theme-color').setAttribute('content', isLight ? '#e6effb' : '#050814');
         },
         async submit() {
           this.error = '';
