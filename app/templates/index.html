@@ -32,10 +32,9 @@
   <div class="ambient-bg"></div>
 
   <div class="page-layer safe-bottom">
-    <!-- Clean, Airy Sticky Glass Header (chỉ 3 cụm điều khiển gọn gàng) -->
+    <!-- Slim Sticky Glass Header -->
     <header class="glass-header sticky top-0 z-40">
       <div class="max-w-7xl mx-auto px-4 h-[60px] flex items-center justify-between gap-3">
-        <!-- Brand -->
         <div class="flex items-center gap-2.5 min-w-0">
           <div class="brand-squircle w-9 h-9 shrink-0">
             <img src="/assets/icon.png" alt="AppManager Pro" />
@@ -54,7 +53,6 @@
           </div>
         </div>
 
-        <!-- Desktop Search -->
         <div class="hidden md:block flex-1 max-w-md mx-3">
           <div class="relative">
             <svg class="w-4 h-4 text-subtle absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -66,11 +64,9 @@
           </div>
         </div>
 
-        <!-- Compact Right Controls: Check + Segmented (Settings | Logout) -->
         <div class="flex items-center gap-2 shrink-0">
           <button @click="checkUpdates()" :disabled="checkingUpdates"
-                  class="glass-btn h-9 px-3 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 text-sky-400 border-sky-400/25 disabled:opacity-70"
-                  :title="t('checkUpdates')">
+                  class="glass-btn h-9 px-3 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 text-sky-400 border-sky-400/25 disabled:opacity-70">
             <svg class="w-3.5 h-3.5" :class="checkingUpdates ? 'animate-spin' : ''" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M20.49 9A9 9 0 005.64 5.64L4 9m16 6l-1.64 3.36A9 9 0 013.51 15"/>
             </svg>
@@ -97,7 +93,7 @@
     </header>
 
     <main class="max-w-7xl mx-auto px-4 pt-4">
-      <!-- Balanced Update Notification Banner + Update All CTA -->
+      <!-- Update Notification Banner + Update All -->
       <div x-show="summary.updates > 0" x-cloak x-transition
            class="glass-panel rounded-[22px] p-4 mb-4 border-amber-400/35 bg-gradient-to-r from-amber-500/12 via-orange-500/8 to-transparent flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
         <div class="flex items-center gap-3 min-w-0">
@@ -129,7 +125,7 @@
         </div>
       </div>
 
-      <!-- Mobile Search Bar -->
+      <!-- Mobile Search -->
       <div class="md:hidden mb-3">
         <div class="relative">
           <svg class="w-4 h-4 text-subtle absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -167,18 +163,18 @@
         <button @click="error = ''" class="glass-btn px-2.5 py-1 rounded-lg text-xs">OK</button>
       </div>
 
-      <!-- Refined Compact Liquid Glass App Grid -->
+      <!-- Option 1 Ultra-Clean Liquid Glass App Grid (1 Primary CTA + 1 ••• Menu) -->
       <div x-show="filteredApps.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
         <template x-for="app in filteredApps" :key="app.full_id">
           <div class="glass-card rounded-[22px] p-4 flex flex-col justify-between gap-3"
                :class="app.has_update ? 'glass-card-update' : ''">
 
-            <!-- Top Section (Chạm để xem Chi tiết & Changelog) -->
+            <!-- Clickable Top Info -> Opens Update & Changelog -->
             <div @click="openUpdateModal(app)" class="cursor-pointer group space-y-3">
               <div class="flex items-center gap-3">
                 <template x-if="app.icon">
                   <div class="w-11 h-11 rounded-[14px] shrink-0 overflow-hidden flex items-center justify-center shadow-sm"
-                       :class="app.is_self ? 'brand-squircle' : 'glass-inset p-1.5'">
+                       :class="app.is_self ? 'brand-squircle' : 'glass-icon-box p-1.5'">
                     <img :src="app.icon" :alt="app.title"
                          :class="app.is_self ? '' : 'w-full h-full object-contain rounded-lg'"
                          @error="app.icon = ''" />
@@ -214,10 +210,9 @@
                 </div>
               </div>
 
-              <!-- Smart Compact Version Strip (Không còn lặp 2 dòng giống nhau) -->
+              <!-- Smart Compact Version Strip (có mũi tên > gợi ý bấm trên MỌI thẻ) -->
               <div class="glass-inset rounded-2xl px-3 py-2.5 space-y-1.5">
                 <div class="flex items-center justify-between gap-2 text-[11px]">
-                  <!-- Trường hợp có bản Update mới: hiện rõ Cũ -> Mới -->
                   <template x-if="app.has_update">
                     <div class="flex items-center gap-1.5 min-w-0 flex-1">
                       <span class="font-mono-code text-muted truncate" x-text="app.version"></span>
@@ -229,11 +224,13 @@
                     </div>
                   </template>
 
-                  <!-- Trường hợp đã mới nhất: 1 dòng gọn gàng -->
                   <template x-if="!app.has_update">
-                    <div class="flex items-center justify-between gap-2 w-full">
+                    <div class="flex items-center justify-between gap-2 min-w-0 flex-1">
                       <span class="font-mono-code font-medium text-sky-400 truncate" x-text="app.version"></span>
-                      <span x-show="app.checked_at && !app.update_error"
+                      <span x-show="app.is_skipped"
+                            class="text-[10px] px-1.5 py-0.5 rounded bg-slate-500/20 text-muted shrink-0"
+                            x-text="t('skippedBadge')"></span>
+                      <span x-show="!app.is_skipped && app.checked_at && !app.update_error"
                             class="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400/90 shrink-0">
                         <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
@@ -241,12 +238,12 @@
                         <span x-text="t('upToDate')"></span>
                       </span>
                       <span x-show="!app.checked_at" class="text-[10px] text-subtle italic shrink-0" x-text="t('notChecked')"></span>
-                      <span x-show="app.checked_at && app.update_error" class="text-[10px] text-subtle truncate max-w-[50%]"
-                            :title="app.update_error" x-text="app.update_error"></span>
+                      <span x-show="app.checked_at && app.update_error && !app.is_skipped"
+                            class="text-[10px] text-subtle truncate max-w-[45%]" :title="app.update_error" x-text="app.update_error"></span>
                     </div>
                   </template>
 
-                  <svg x-show="app.has_update" class="w-3.5 h-3.5 text-subtle shrink-0 group-hover:translate-x-0.5 transition"
+                  <svg class="w-3.5 h-3.5 text-subtle shrink-0 group-hover:translate-x-0.5 group-hover:text-sky-400 transition"
                        fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
                   </svg>
@@ -256,12 +253,11 @@
               </div>
             </div>
 
-            <!-- Action Footer: Primary CTA + Unified Segmented Control Dock -->
+            <!-- Option 1 Footer: 1 Primary CTA + 1 Clean ••• Button -->
             <div class="flex items-center gap-2 pt-0.5">
-              <!-- Primary Action Button -->
               <template x-if="app.has_update">
                 <button @click="openUpdateModal(app)"
-                        class="glass-btn-update flex-1 h-9 px-3 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5">
+                        class="glass-btn-update flex-1 h-9 px-3.5 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
                   </svg>
@@ -271,7 +267,7 @@
 
               <template x-if="!app.has_update && app.port_map && app.status === 'running'">
                 <a :href="buildWebUrl(app)" target="_blank" rel="noopener"
-                   class="glass-btn-primary flex-1 h-9 px-3 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5">
+                   class="glass-btn-primary flex-1 h-9 px-3.5 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5">
                   <span x-text="t('open')"></span>
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>
@@ -280,78 +276,141 @@
               </template>
 
               <template x-if="!app.has_update && (!app.port_map || app.status !== 'running')">
-                <button @click="runAction(app, app.status === 'running' ? 'stop' : 'start')"
+                <button @click="app.status === 'running' ? openLogs(app) : runAction(app, 'start')"
                         :disabled="busyId === app.id"
-                        class="flex-1 h-9 px-3 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
-                        :class="app.status === 'running' ? 'glass-btn text-rose-400' : 'glass-btn-primary'">
+                        class="flex-1 h-9 px-3.5 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
+                        :class="app.status === 'running' ? 'glass-btn text-sky-400' : 'glass-btn-primary'">
                   <svg x-show="app.status !== 'running'" class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5.14v14l11-7-11-7z"/></svg>
-                  <svg x-show="app.status === 'running'" class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg>
-                  <span x-text="app.status === 'running' ? t('stop') : t('start')"></span>
+                  <svg x-show="app.status === 'running'" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z"/>
+                  </svg>
+                  <span x-text="app.status === 'running' ? t('logs') : t('start')"></span>
                 </button>
               </template>
 
-              <!-- Unified Glass Segmented Action Dock (Đầy đủ Mở Web / Stop / Restart / Logs) -->
-              <div class="glass-dock h-9 rounded-xl flex items-center overflow-hidden divide-x divide-[var(--glass-border)] shrink-0">
-                <!-- Nếu đang hiện nút Update thì vẫn giữ nút Mở Web gọn ở đây -->
-                <a x-show="app.has_update && app.port_map && app.status === 'running'"
-                   :href="buildWebUrl(app)" target="_blank" rel="noopener" :title="t('open')"
-                   class="w-9 h-full flex items-center justify-center text-sky-400 hover:bg-[var(--glass-surface-hover)] transition">
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>
-                  </svg>
-                </a>
-
-                <!-- Stop / Start (hiện khi nút chính không phải Stop/Start) -->
-                <button x-show="app.has_update || (app.port_map && app.status === 'running')"
-                        @click="runAction(app, app.status === 'running' ? 'stop' : 'start')"
-                        :disabled="busyId === app.id"
-                        :title="app.status === 'running' ? t('stop') : t('start')"
-                        class="w-9 h-full flex items-center justify-center hover:bg-[var(--glass-surface-hover)] transition disabled:opacity-50"
-                        :class="app.status === 'running' ? 'text-rose-400' : 'text-emerald-400'">
-                  <svg x-show="app.status === 'running'" class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                    <rect x="6" y="6" width="12" height="12" rx="2.5"/>
-                  </svg>
-                  <svg x-show="app.status !== 'running'" class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M8 5.14v14l11-7-11-7z"/>
-                  </svg>
-                </button>
-
-                <!-- Restart -->
-                <button @click="runAction(app, 'restart')" :disabled="busyId === app.id" :title="t('restart')"
-                        class="w-9 h-full flex items-center justify-center text-sky-400 hover:bg-[var(--glass-surface-hover)] transition disabled:opacity-50">
-                  <svg class="w-3.5 h-3.5" :class="busyId === app.id ? 'animate-spin' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M20.49 9A9 9 0 005.64 5.64L4 9m16 6l-1.64 3.36A9 9 0 013.51 15"/>
-                  </svg>
-                </button>
-
-                <!-- Logs -->
-                <button @click="openLogs(app)" :title="t('logs')"
-                        class="w-9 h-full flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:bg-[var(--glass-surface-hover)] transition">
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z"/>
-                  </svg>
-                </button>
-              </div>
+              <!-- Single Sleek ••• Options Button -->
+              <button @click="openActionSheet(app)" :aria-label="t('moreActions')"
+                      class="glass-btn w-10 h-9 rounded-xl flex items-center justify-center text-muted hover:text-[var(--text-primary)] shrink-0">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <circle cx="5" cy="12" r="1.75"/><circle cx="12" cy="12" r="1.75"/><circle cx="19" cy="12" r="1.75"/>
+                </svg>
+              </button>
             </div>
           </div>
         </template>
       </div>
 
-      <!-- Empty State -->
       <div x-show="!loading && filteredApps.length === 0" x-cloak
            class="glass-panel rounded-[22px] p-12 text-center text-sm text-muted"
            x-text="t('noApps')"></div>
     </main>
   </div>
 
-  <!-- MODAL 1: Batch Update All Modal -->
+  <!-- GLASS ACTION SHEET (••• Menu kiểu iOS native) -->
+  <div x-show="actionSheet.open" x-cloak x-transition.opacity
+       class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/60 backdrop-blur-sm"
+       @click.self="closeActionSheet()" @keydown.escape.window="closeActionSheet()">
+    <div class="glass-panel w-full max-w-sm rounded-t-[28px] sm:rounded-[28px] p-5 space-y-3"
+         style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
+      <div class="sheet-handle sm:hidden"></div>
+
+      <!-- App Header -->
+      <div class="flex items-center gap-3 pb-3 border-b border-[var(--glass-border)]" x-show="actionSheet.app">
+        <template x-if="actionSheet.app?.icon">
+          <div class="w-10 h-10 rounded-xl shrink-0 overflow-hidden flex items-center justify-center"
+               :class="actionSheet.app.is_self ? 'brand-squircle' : 'glass-icon-box p-1'">
+            <img :src="actionSheet.app.icon" class="w-full h-full object-contain rounded-lg" />
+          </div>
+        </template>
+        <div class="min-w-0 flex-1">
+          <h3 class="font-bold text-sm truncate" x-text="actionSheet.app?.title"></h3>
+          <p class="text-[11px] text-muted font-mono-code truncate" x-text="actionSheet.app?.name"></p>
+        </div>
+        <button @click="closeActionSheet()" class="glass-btn w-8 h-8 rounded-xl flex items-center justify-center text-muted">✕</button>
+      </div>
+
+      <!-- Menu Actions -->
+      <div class="space-y-1.5 text-xs font-semibold">
+        <a x-show="actionSheet.app?.port_map && actionSheet.app?.status === 'running'"
+           :href="actionSheet.app ? buildWebUrl(actionSheet.app) : '#'" target="_blank" rel="noopener"
+           @click="closeActionSheet()"
+           class="glass-btn w-full px-3.5 py-3 rounded-2xl flex items-center gap-3 text-sky-400">
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>
+          </svg>
+          <span x-text="t('open')"></span>
+        </a>
+
+        <button @click="const a = actionSheet.app; closeActionSheet(); openUpdateModal(a)"
+                class="glass-btn w-full px-3.5 py-3 rounded-2xl flex items-center justify-between gap-3">
+          <span class="flex items-center gap-3">
+            <svg class="w-4 h-4 text-amber-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+            </svg>
+            <span x-text="t('updateAndChangelog')"></span>
+          </span>
+          <span x-show="actionSheet.app?.has_update" class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300">NEW</span>
+        </button>
+
+        <button x-show="actionSheet.app?.can_update"
+                @click="const a = actionSheet.app; closeActionSheet(); openEditModal(a)"
+                class="glass-btn w-full px-3.5 py-3 rounded-2xl flex items-center gap-3">
+          <svg class="w-4 h-4 text-indigo-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/>
+          </svg>
+          <span x-text="t('editCompose')"></span>
+        </button>
+
+        <button @click="const a = actionSheet.app; closeActionSheet(); openLogs(a)"
+                class="glass-btn w-full px-3.5 py-3 rounded-2xl flex items-center gap-3">
+          <svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z"/>
+          </svg>
+          <span x-text="t('liveLogs')"></span>
+        </button>
+
+        <!-- Power Controls: Restart & 2-Tap Safe Stop/Start -->
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <button @click="const a = actionSheet.app; closeActionSheet(); runAction(a, 'restart')"
+                  class="glass-btn py-2.5 px-3 rounded-2xl flex items-center justify-center gap-2 text-sky-400">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M20.49 9A9 9 0 005.64 5.64L4 9m16 6l-1.64 3.36A9 9 0 013.51 15"/>
+            </svg>
+            <span x-text="t('restart')"></span>
+          </button>
+
+          <button @click="handleSheetStopStart()"
+                  class="py-2.5 px-3 rounded-2xl flex items-center justify-center gap-2 transition"
+                  :class="actionSheet.app?.status === 'running'
+                    ? (actionSheet.confirmStop ? 'glass-btn-danger' : 'glass-btn text-amber-400')
+                    : 'glass-btn text-emerald-400'">
+            <span x-text="actionSheet.app?.status === 'running'
+              ? (actionSheet.confirmStop ? t('confirmStopTap') : t('stop'))
+              : t('start')"></span>
+          </button>
+        </div>
+
+        <!-- Danger Zone: Uninstall -->
+        <div x-show="!actionSheet.app?.is_self" class="pt-2 mt-2 border-t border-[var(--glass-border)]">
+          <button @click="const a = actionSheet.app; closeActionSheet(); openUninstallModal(a)"
+                  class="w-full px-3.5 py-3 rounded-2xl flex items-center justify-center gap-2 bg-rose-500/12 border border-rose-500/30 text-rose-400 hover:bg-rose-500/20 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/>
+            </svg>
+            <span x-text="t('uninstallApp')"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 1: Batch Update All -->
   <div x-show="batchModal.open" x-cloak x-transition.opacity
        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/65 backdrop-blur-md"
        @click.self="closeBatchModal()">
     <div class="glass-panel w-full max-w-2xl rounded-t-[28px] sm:rounded-[28px] p-5 sm:p-6 flex flex-col max-h-[90dvh]"
          style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
       <div class="sheet-handle sm:hidden"></div>
-
       <div class="flex items-center justify-between gap-3 pb-3.5 border-b border-[var(--glass-border)]">
         <div>
           <h3 class="font-bold text-base" x-text="t('batchTitle')"></h3>
@@ -363,16 +422,10 @@
         <button @click="closeBatchModal()" :disabled="batchModal.running"
                 class="glass-btn w-8 h-8 rounded-xl flex items-center justify-center text-rose-400 disabled:opacity-40">✕</button>
       </div>
-
-      <!-- Overall Progress Bar -->
-      <div class="mt-4">
-        <div class="h-2 rounded-full bg-[var(--glass-surface)] overflow-hidden">
-          <div class="h-full rounded-full bg-gradient-to-r from-sky-400 to-indigo-500 transition-all duration-300"
-               :style="`width: ${batchModal.items.length ? Math.round((batchModal.doneCount / batchModal.items.length) * 100) : 0}%`"></div>
-        </div>
+      <div class="mt-4 h-2 rounded-full bg-[var(--glass-surface)] overflow-hidden">
+        <div class="h-full rounded-full bg-gradient-to-r from-sky-400 to-indigo-500 transition-all duration-300"
+             :style="`width: ${batchModal.items.length ? Math.round((batchModal.doneCount / batchModal.items.length) * 100) : 0}%`"></div>
       </div>
-
-      <!-- Queue List + Live Terminal -->
       <div class="flex-1 overflow-y-auto py-4 space-y-3">
         <div class="space-y-2">
           <template x-for="item in batchModal.items" :key="item.name">
@@ -383,35 +436,23 @@
                 </template>
                 <div class="min-w-0">
                   <p class="font-semibold truncate" x-text="item.title"></p>
-                  <p class="font-mono-code text-[10.5px] text-muted truncate"
-                     x-text="`${item.from_version} → ${item.to_version}`"></p>
+                  <p class="font-mono-code text-[10.5px] text-muted truncate" x-text="`${item.from_version} → ${item.to_version}`"></p>
                 </div>
               </div>
-
               <span class="text-[11px] font-semibold shrink-0"
-                    :class="{
-                      'text-subtle': item.status === 'pending',
-                      'text-sky-400': item.status === 'running',
-                      'text-emerald-400': item.status === 'success',
-                      'text-rose-400': item.status === 'failed'
-                    }">
+                    :class="{'text-subtle': item.status === 'pending', 'text-sky-400': item.status === 'running', 'text-emerald-400': item.status === 'success', 'text-rose-400': item.status === 'failed'}">
                 <span x-show="item.status === 'pending'" x-text="t('statusPending')"></span>
-                <span x-show="item.status === 'running'" class="inline-flex items-center gap-1">
-                  <span class="w-2 h-2 rounded-full bg-sky-400 animate-ping"></span>
-                  <span x-text="t('statusUpdating')"></span>
-                </span>
+                <span x-show="item.status === 'running'" x-text="t('statusUpdating')"></span>
                 <span x-show="item.status === 'success'">✓ OK</span>
                 <span x-show="item.status === 'failed'">✕ Error</span>
               </span>
             </div>
           </template>
         </div>
-
         <pre x-ref="batchLogBox"
              class="glass-terminal font-mono-code rounded-2xl p-3.5 h-52 overflow-auto text-[11px] text-emerald-300/95 leading-relaxed whitespace-pre-wrap break-all"
              x-text="batchModal.logs || t('connectingLogs')"></pre>
       </div>
-
       <div class="pt-3 border-t border-[var(--glass-border)]">
         <button @click="closeBatchModal()" :disabled="batchModal.running"
                 class="glass-btn-primary w-full py-3 rounded-2xl text-xs font-semibold disabled:opacity-50"
@@ -420,7 +461,7 @@
     </div>
   </div>
 
-  <!-- MODAL 2: Single App Update Details + Changelog + Live Terminal -->
+  <!-- MODAL 2: Single App Update Details + Changelog + Skip Update -->
   <div x-show="updateModal.open" x-cloak x-transition.opacity
        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/65 backdrop-blur-md"
        @click.self="closeUpdateModal()" @keydown.escape.window="closeUpdateModal()">
@@ -431,15 +472,14 @@
       <div class="flex items-start justify-between gap-3 pb-4 border-b border-[var(--glass-border)]">
         <div class="flex items-center gap-3.5 min-w-0">
           <template x-if="updateModal.app && updateModal.app.icon">
-            <div class="w-13 h-13 w-12 h-12 rounded-2xl shrink-0 overflow-hidden flex items-center justify-center shadow-md"
-                 :class="updateModal.app.is_self ? 'brand-squircle' : 'glass-inset p-1.5'">
+            <div class="w-12 h-12 rounded-2xl shrink-0 overflow-hidden flex items-center justify-center shadow-md"
+                 :class="updateModal.app.is_self ? 'brand-squircle' : 'glass-icon-box p-1.5'">
               <img :src="updateModal.app.icon" class="w-full h-full object-contain rounded-xl" />
             </div>
           </template>
           <template x-if="updateModal.app && !updateModal.app.icon">
             <div class="w-12 h-12 rounded-2xl shrink-0 flex items-center justify-center text-white font-bold text-base uppercase"
-                 :class="avatarGradient(updateModal.app.title)"
-                 x-text="updateModal.app.title.slice(0, 2)"></div>
+                 :class="avatarGradient(updateModal.app.title)" x-text="updateModal.app.title.slice(0, 2)"></div>
           </template>
 
           <div class="min-w-0">
@@ -450,7 +490,7 @@
                     x-text="updateModal.app?.version"></span>
               <span class="text-subtle text-xs">→</span>
               <span class="font-mono-code text-[11px] px-2 py-0.5 rounded-lg border font-semibold"
-                    :class="updateModal.app?.has_update
+                    :class="updateModal.app?.raw_has_update
                       ? 'bg-amber-500/20 text-amber-300 border-amber-400/40'
                       : 'bg-emerald-500/15 text-emerald-400 border-emerald-400/30'"
                     x-text="updateModal.app?.remote_version || updateModal.app?.version"></span>
@@ -466,17 +506,18 @@
 
         <template x-if="!updateModal.loading && !updateModal.updating && !updateModal.updateLogs">
           <div class="space-y-3.5">
-            <!-- Dải thông báo khi App đang ghim tag cứng -->
+            <!-- Pinned tag notice -->
             <div x-show="updateModal.app?.target_tag"
                  class="rounded-2xl px-3.5 py-2.5 bg-amber-500/12 border border-amber-400/30 text-[11px] text-amber-300 flex items-center gap-2">
               <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"/>
               </svg>
               <span x-text="lang === 'vi'
-                ? `App đang ghim tag cứng — khi cập nhật sẽ tự nâng tag trong docker-compose.yml lên ${updateModal.app?.target_tag} (có sao lưu .bak).`
-                : `Pinned tag detected — updating will bump docker-compose.yml to ${updateModal.app?.target_tag} (with .bak backup).`"></span>
+                ? `App đang ghim tag cứng — khi cập nhật sẽ tự nâng tag trong docker-compose.yml lên ${updateModal.app?.target_tag} (có sao lưu tự động).`
+                : `Pinned tag detected — updating will bump docker-compose.yml to ${updateModal.app?.target_tag} (with automatic backup).`"></span>
             </div>
 
+            <!-- Auto-Update Toggle -->
             <div class="glass-inset rounded-2xl p-3.5 flex items-center justify-between gap-3">
               <div class="min-w-0">
                 <p class="text-xs font-semibold" x-text="t('autoUpdateApp')"></p>
@@ -488,6 +529,7 @@
               </label>
             </div>
 
+            <!-- Changelog -->
             <div class="glass-inset rounded-2xl p-4">
               <div class="flex items-center justify-between gap-2 mb-3">
                 <div class="flex items-center gap-2">
@@ -508,22 +550,10 @@
               <div x-show="!updateModal.changelogHtml" class="text-xs text-muted space-y-3">
                 <p x-text="t('noChangelog')"></p>
                 <div class="flex gap-2">
-                  <input type="text" x-model="updateModal.customRepo"
-                         placeholder="https://github.com/owner/repo"
+                  <input type="text" x-model="updateModal.customRepo" placeholder="https://github.com/owner/repo"
                          class="glass-input flex-1 rounded-xl px-3 py-2 text-xs" />
                   <button @click="saveCustomRepo()" class="glass-btn px-3 py-2 rounded-xl text-xs font-semibold" x-text="t('save')"></button>
                 </div>
-              </div>
-            </div>
-
-            <div class="glass-inset rounded-2xl p-3 text-[11px] font-mono-code text-muted space-y-1">
-              <div class="flex justify-between gap-2">
-                <span>Local Digest</span>
-                <span class="truncate" x-text="(updateModal.app?.local_digest || 'N/A').slice(0, 22)"></span>
-              </div>
-              <div class="flex justify-between gap-2">
-                <span>Server Digest</span>
-                <span class="truncate" x-text="(updateModal.app?.remote_digest || 'N/A').slice(0, 22)"></span>
               </div>
             </div>
           </div>
@@ -534,15 +564,22 @@
              x-text="updateModal.updateLogs"></pre>
       </div>
 
-      <div class="pt-3 border-t border-[var(--glass-border)] flex items-center justify-between gap-2">
+      <!-- Footer: Skip Update + Update Now -->
+      <div class="pt-3 border-t border-[var(--glass-border)] flex items-center gap-2">
+        <button x-show="!updateModal.updating && updateModal.app?.raw_has_update && updateModal.app?.skip_token"
+                @click="toggleSkipUpdate()"
+                class="glass-btn py-3 px-3.5 rounded-2xl text-xs font-semibold shrink-0"
+                :class="updateModal.app?.is_skipped ? 'text-sky-400' : 'text-muted'"
+                x-text="updateModal.app?.is_skipped ? t('unskipVersion') : t('skipVersion')"></button>
+
         <button x-show="!updateModal.updating && updateModal.app?.can_update"
                 @click="startAppUpdate()"
                 class="flex-1 py-3 px-4 rounded-2xl text-xs sm:text-sm font-semibold inline-flex items-center justify-center gap-2"
-                :class="updateModal.app?.has_update ? 'glass-btn-update' : 'glass-btn-primary'">
+                :class="updateModal.app?.raw_has_update ? 'glass-btn-update' : 'glass-btn-primary'">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
           </svg>
-          <span x-text="updateModal.app?.has_update ? t('updateNow') : t('forcePull')"></span>
+          <span x-text="updateModal.app?.raw_has_update ? t('updateNow') : t('forcePull')"></span>
         </button>
 
         <div x-show="!updateModal.app?.can_update" class="text-xs text-amber-400" x-text="t('noComposeWarning')"></div>
@@ -554,35 +591,374 @@
     </div>
   </div>
 
-  <!-- MODAL 3: Settings (Appearance + Language + Auto-Update Schedule + History) -->
+  <!-- MODAL 3: Compose Editor (Home Assistant Style: Visual UI ↔ YAML Code + Rollback) -->
+  <div x-show="editModal.open" x-cloak x-transition.opacity
+       class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/70 backdrop-blur-md"
+       @click.self="closeEditModal()">
+    <div class="glass-panel w-full max-w-3xl rounded-t-[28px] sm:rounded-[28px] p-5 sm:p-6 flex flex-col h-[92dvh] sm:max-h-[90vh]"
+         style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
+      <div class="sheet-handle sm:hidden"></div>
+
+      <!-- Header -->
+      <div class="flex items-center justify-between gap-3 pb-3.5 border-b border-[var(--glass-border)]">
+        <div class="min-w-0">
+          <h3 class="font-bold text-base truncate" x-text="`${t('editTitle')} — ${editModal.app?.title || ''}`"></h3>
+          <p class="text-[11px] text-muted font-mono-code truncate" x-text="editModal.composePath"></p>
+        </div>
+        <button @click="closeEditModal()" :disabled="editModal.saving"
+                class="glass-btn w-8 h-8 rounded-xl flex items-center justify-center text-rose-400">✕</button>
+      </div>
+
+      <!-- Segmented Mode Switcher: Visual UI | YAML Code | Backups -->
+      <div class="glass-dock p-1 rounded-2xl grid grid-cols-3 gap-1 mt-3.5 mb-3.5 shrink-0">
+        <button @click="switchEditTab('ui')"
+                class="py-2 rounded-xl text-xs font-semibold transition"
+                :class="editModal.tab === 'ui' ? 'glass-btn-primary' : 'text-muted'"
+                x-text="t('tabVisualUi')"></button>
+        <button @click="switchEditTab('yaml')"
+                class="py-2 rounded-xl text-xs font-semibold transition"
+                :class="editModal.tab === 'yaml' ? 'glass-btn-primary' : 'text-muted'"
+                x-text="t('tabYamlCode')"></button>
+        <button @click="switchEditTab('backups')"
+                class="py-2 rounded-xl text-xs font-semibold transition"
+                :class="editModal.tab === 'backups' ? 'glass-btn-primary' : 'text-muted'"
+                x-text="`${t('tabBackups')} (${editModal.backups.length})`"></button>
+      </div>
+
+      <!-- Validation / Status Feedback -->
+      <div x-show="editModal.feedback" x-cloak
+           class="mb-3 px-3.5 py-2.5 rounded-2xl text-xs font-medium shrink-0 border"
+           :class="editModal.feedbackOk
+             ? 'bg-emerald-500/15 border-emerald-400/35 text-emerald-300'
+             : 'bg-rose-500/15 border-rose-500/35 text-rose-300'">
+        <span x-text="editModal.feedback"></span>
+      </div>
+
+      <!-- Body -->
+      <div class="flex-1 overflow-y-auto space-y-3.5 pr-0.5">
+        <div x-show="editModal.loading" class="py-12 text-center text-xs text-muted" x-text="t('loadingCompose')"></div>
+
+        <!-- TAB A: VISUAL UI EDITOR -->
+        <template x-if="!editModal.loading && editModal.tab === 'ui' && editModal.ui">
+          <div class="space-y-4">
+            <!-- Service selector (if multi-service compose) -->
+            <div x-show="editModal.ui.services.length > 1" class="glass-inset rounded-2xl p-3.5">
+              <label class="block text-[11px] font-semibold text-muted mb-1.5" x-text="t('selectService')"></label>
+              <select x-model="editModal.ui.selected_service" @change="reloadServiceUi()"
+                      class="glass-input rounded-xl px-3 py-2 text-xs font-mono-code">
+                <template x-for="svc in editModal.ui.services" :key="svc">
+                  <option :value="svc" x-text="svc"></option>
+                </template>
+              </select>
+            </div>
+
+            <!-- 1. Core Container Settings -->
+            <div class="glass-inset rounded-2xl p-4 space-y-3">
+              <p class="text-xs font-bold uppercase tracking-wider text-sky-400" x-text="t('secContainer')"></p>
+
+              <div>
+                <label class="block text-[11px] font-semibold text-muted mb-1">Image & Tag</label>
+                <input type="text" x-model="editModal.ui.service.image"
+                       class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[11px] font-semibold text-muted mb-1">Container Name</label>
+                  <input type="text" x-model="editModal.ui.service.container_name"
+                         class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-semibold text-muted mb-1">Restart Policy</label>
+                  <select x-model="editModal.ui.service.restart" class="glass-input rounded-xl px-3 py-2 text-xs">
+                    <option value="unless-stopped">unless-stopped</option>
+                    <option value="always">always</option>
+                    <option value="on-failure">on-failure</option>
+                    <option value="no">no</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                <div>
+                  <label class="block text-[11px] font-semibold text-muted mb-1">Network Mode</label>
+                  <select x-model="editModal.ui.service.network_mode" class="glass-input rounded-xl px-3 py-2 text-xs">
+                    <option value="">Default (Bridge)</option>
+                    <option value="host">host</option>
+                    <option value="bridge">bridge</option>
+                    <option value="none">none</option>
+                  </select>
+                </div>
+                <div class="flex items-center justify-between pt-3 sm:pt-4 px-1">
+                  <div>
+                    <p class="text-xs font-semibold">Privileged Mode</p>
+                    <p class="text-[10.5px] text-muted" x-text="t('privilegedDesc')"></p>
+                  </div>
+                  <label class="inline-flex items-center cursor-pointer">
+                    <input type="checkbox" x-model="editModal.ui.service.privileged" class="sr-only peer" />
+                    <div class="w-11 h-6 bg-slate-600/60 rounded-full peer peer-checked:bg-amber-500 relative transition after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5"></div>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. Ports -->
+            <div class="glass-inset rounded-2xl p-4 space-y-2.5">
+              <div class="flex items-center justify-between">
+                <p class="text-xs font-bold uppercase tracking-wider text-sky-400">Ports</p>
+                <button type="button" @click="editModal.ui.service.ports.push({host:'', container:'', protocol:'tcp'})"
+                        class="glass-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-sky-400">+ Add Port</button>
+              </div>
+              <div x-show="editModal.ui.service.ports.length === 0" class="text-[11px] text-subtle italic" x-text="t('noPorts')"></div>
+              <template x-for="(p, idx) in editModal.ui.service.ports" :key="idx">
+                <div class="flex items-center gap-2">
+                  <input type="text" x-model="p.host" placeholder="Host (8098)"
+                         class="glass-input flex-1 rounded-xl px-2.5 py-2 text-xs font-mono-code" />
+                  <span class="text-subtle text-xs">:</span>
+                  <input type="text" x-model="p.container" placeholder="Container (8000)"
+                         class="glass-input flex-1 rounded-xl px-2.5 py-2 text-xs font-mono-code" />
+                  <select x-model="p.protocol" class="glass-input w-20 rounded-xl px-2 py-2 text-xs font-mono-code">
+                    <option value="tcp">tcp</option>
+                    <option value="udp">udp</option>
+                  </select>
+                  <button type="button" @click="editModal.ui.service.ports.splice(idx, 1)"
+                          class="glass-btn w-8 h-9 rounded-xl text-rose-400 shrink-0">✕</button>
+                </div>
+              </template>
+            </div>
+
+            <!-- 3. Volumes -->
+            <div class="glass-inset rounded-2xl p-4 space-y-2.5">
+              <div class="flex items-center justify-between">
+                <p class="text-xs font-bold uppercase tracking-wider text-sky-400">Volumes</p>
+                <button type="button" @click="editModal.ui.service.volumes.push({source:'', target:'', read_only:false})"
+                        class="glass-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-sky-400">+ Add Volume</button>
+              </div>
+              <template x-for="(v, idx) in editModal.ui.service.volumes" :key="idx">
+                <div class="space-y-1.5 pb-2 border-b border-[var(--glass-border)] last:border-0 last:pb-0">
+                  <div class="flex items-center gap-2">
+                    <input type="text" x-model="v.source" placeholder="/DATA/AppData/..."
+                           class="glass-input flex-1 rounded-xl px-2.5 py-2 text-xs font-mono-code" />
+                    <button type="button" @click="v.read_only = !v.read_only"
+                            class="px-2.5 h-9 rounded-xl text-[11px] font-bold border shrink-0"
+                            :class="v.read_only ? 'bg-amber-500/20 border-amber-400/40 text-amber-300' : 'glass-btn text-subtle'">RO</button>
+                    <button type="button" @click="editModal.ui.service.volumes.splice(idx, 1)"
+                            class="glass-btn w-8 h-9 rounded-xl text-rose-400 shrink-0">✕</button>
+                  </div>
+                  <input type="text" x-model="v.target" placeholder="Container path (e.g. /config)"
+                         class="glass-input w-full rounded-xl px-2.5 py-2 text-xs font-mono-code" />
+                </div>
+              </template>
+            </div>
+
+            <!-- 4. Environment Variables (Tự nhận diện biến True/False thành nút gạt!) -->
+            <div class="glass-inset rounded-2xl p-4 space-y-2.5">
+              <div class="flex items-center justify-between">
+                <p class="text-xs font-bold uppercase tracking-wider text-sky-400">Environment Variables</p>
+                <button type="button" @click="editModal.ui.service.environment.push({key:'', value:'', is_bool:false, bool_val:false, description:''})"
+                        class="glass-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-sky-400">+ Add Env</button>
+              </div>
+              <template x-for="(e, idx) in editModal.ui.service.environment" :key="idx">
+                <div class="space-y-1 pb-2 border-b border-[var(--glass-border)] last:border-0 last:pb-0">
+                  <div class="flex items-center gap-2">
+                    <input type="text" x-model="e.key" placeholder="KEY"
+                           class="glass-input w-[42%] rounded-xl px-2.5 py-2 text-xs font-mono-code" />
+
+                    <!-- Smart Boolean Toggle Switch -->
+                    <template x-if="e.is_bool">
+                      <div class="flex-1 flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-[var(--input-bg)] border border-[var(--glass-border)]">
+                        <span class="font-mono-code text-xs" :class="e.bool_val ? 'text-emerald-400' : 'text-subtle'"
+                              x-text="e.bool_val ? 'true' : 'false'"></span>
+                        <div class="flex items-center gap-2">
+                          <label class="inline-flex items-center cursor-pointer">
+                            <input type="checkbox" x-model="e.bool_val" class="sr-only peer" />
+                            <div class="w-9 h-5 bg-slate-600/60 rounded-full peer peer-checked:bg-emerald-500 relative transition after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+                          </label>
+                          <button type="button" @click="e.is_bool = false; e.value = e.bool_val ? 'true' : 'false'"
+                                  title="Switch to text" class="text-[10px] text-subtle hover:text-sky-400">Aa</button>
+                        </div>
+                      </div>
+                    </template>
+
+                    <!-- Standard Text Input -->
+                    <template x-if="!e.is_bool">
+                      <input type="text" x-model="e.value" placeholder="Value"
+                             class="glass-input flex-1 rounded-xl px-2.5 py-2 text-xs font-mono-code" />
+                    </template>
+
+                    <button type="button" @click="editModal.ui.service.environment.splice(idx, 1)"
+                            class="glass-btn w-8 h-9 rounded-xl text-rose-400 shrink-0">✕</button>
+                  </div>
+                  <p x-show="e.description" class="text-[10.5px] text-subtle pl-1" x-text="e.description"></p>
+                </div>
+              </template>
+            </div>
+
+            <!-- 5. CasaOS Card Metadata -->
+            <div class="glass-inset rounded-2xl p-4 space-y-3">
+              <p class="text-xs font-bold uppercase tracking-wider text-indigo-400">CasaOS Dashboard Card</p>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[11px] font-semibold text-muted mb-1" x-text="t('displayTitle')"></label>
+                  <input type="text" x-model="editModal.ui.casaos.title"
+                         class="glass-input w-full rounded-xl px-3 py-2 text-xs" />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-semibold text-muted mb-1">WebUI Port</label>
+                  <input type="text" x-model="editModal.ui.casaos.port_map"
+                         class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
+                </div>
+              </div>
+              <div class="flex items-end gap-2.5">
+                <div class="flex-1">
+                  <label class="block text-[11px] font-semibold text-muted mb-1">Icon URL</label>
+                  <input type="text" x-model="editModal.ui.casaos.icon"
+                         class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
+                </div>
+                <div x-show="editModal.ui.casaos.icon" class="w-9 h-9 rounded-xl glass-icon-box p-1 shrink-0 overflow-hidden">
+                  <img :src="editModal.ui.casaos.icon" class="w-full h-full object-contain rounded" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- TAB B: RAW YAML CODE EDITOR -->
+        <template x-if="!editModal.loading && editModal.tab === 'yaml'">
+          <textarea x-model="editModal.rawYaml" spellcheck="false"
+                    class="yaml-editor w-full h-full min-h-[380px] rounded-2xl p-4"></textarea>
+        </template>
+
+        <!-- TAB C: BACKUPS & 1-CLICK ROLLBACK -->
+        <template x-if="!editModal.loading && editModal.tab === 'backups'">
+          <div class="space-y-2.5">
+            <div x-show="editModal.backups.length === 0" class="py-10 text-center text-xs text-muted" x-text="t('noBackups')"></div>
+            <template x-for="b in editModal.backups" :key="b.filename">
+              <div class="glass-inset rounded-2xl p-3.5 flex items-center justify-between gap-3">
+                <div class="min-w-0">
+                  <p class="font-mono-code text-xs font-semibold truncate" x-text="b.filename"></p>
+                  <p class="text-[11px] text-muted mt-0.5" x-text="`${b.created_at} • ${(b.size / 1024).toFixed(1)} KB`"></p>
+                </div>
+                <button @click="rollbackCompose(b.filename)" :disabled="editModal.saving"
+                        class="glass-btn px-3 py-2 rounded-xl text-xs font-semibold text-amber-300 shrink-0">
+                  <span x-text="t('rollbackBtn')"></span>
+                </button>
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
+
+      <!-- Footer -->
+      <div x-show="editModal.tab !== 'backups'" class="pt-3 border-t border-[var(--glass-border)] flex items-center gap-2 shrink-0">
+        <button @click="validateCompose()" :disabled="editModal.saving"
+                class="glass-btn py-3 px-4 rounded-2xl text-xs font-semibold shrink-0"
+                x-text="t('validateBtn')"></button>
+        <button @click="applyCompose()" :disabled="editModal.saving"
+                class="glass-btn-primary flex-1 py-3 px-4 rounded-2xl text-xs sm:text-sm font-semibold disabled:opacity-60"
+                x-text="editModal.saving ? t('applyingCompose') : t('saveAndApply')"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 4: Smart Uninstall (4 tầng an toàn) -->
+  <div x-show="uninstallModal.open" x-cloak x-transition.opacity
+       class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/70 backdrop-blur-md"
+       @click.self="if (!uninstallModal.running) uninstallModal.open = false">
+    <div class="glass-panel w-full max-w-md rounded-t-[28px] sm:rounded-[28px] p-5 sm:p-6 space-y-4"
+         style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
+      <div class="sheet-handle sm:hidden"></div>
+
+      <div class="flex items-center justify-between gap-3 pb-3 border-b border-[var(--glass-border)]">
+        <div class="min-w-0">
+          <h3 class="font-bold text-base text-rose-400" x-text="t('uninstallTitle')"></h3>
+          <p class="text-xs text-muted truncate mt-0.5" x-text="uninstallModal.app?.title"></p>
+        </div>
+        <button @click="uninstallModal.open = false" :disabled="uninstallModal.running"
+                class="glass-btn w-8 h-8 rounded-xl flex items-center justify-center text-muted">✕</button>
+      </div>
+
+      <div class="space-y-2.5 text-xs">
+        <label class="glass-inset rounded-2xl p-3.5 flex items-center justify-between gap-3 opacity-80">
+          <div>
+            <p class="font-semibold" x-text="t('unStepContainer')"></p>
+            <p class="text-[11px] text-muted font-mono-code" x-text="uninstallModal.app?.name"></p>
+          </div>
+          <input type="checkbox" checked disabled class="w-4 h-4 accent-rose-500" />
+        </label>
+
+        <label x-show="uninstallModal.app?.source === 'casaos'"
+               class="glass-inset rounded-2xl p-3.5 flex items-center justify-between gap-3 cursor-pointer">
+          <div class="min-w-0">
+            <p class="font-semibold" x-text="t('unStepCompose')"></p>
+            <p class="text-[10.5px] text-muted font-mono-code truncate" x-text="uninstallModal.app?.compose_path"></p>
+          </div>
+          <input type="checkbox" x-model="uninstallModal.removeCompose" class="w-4 h-4 accent-rose-500 shrink-0" />
+        </label>
+
+        <label class="glass-inset rounded-2xl p-3.5 flex items-center justify-between gap-3 cursor-pointer">
+          <div>
+            <p class="font-semibold" x-text="t('unStepImage')"></p>
+            <p class="text-[11px] text-muted" x-text="t('unStepImageDesc')"></p>
+          </div>
+          <input type="checkbox" x-model="uninstallModal.removeImages" class="w-4 h-4 accent-rose-500 shrink-0" />
+        </label>
+
+        <div x-show="uninstallModal.app?.appdata_path"
+             class="rounded-2xl p-3.5 border space-y-2.5 transition"
+             :class="uninstallModal.removeAppdata ? 'bg-rose-500/12 border-rose-500/40' : 'glass-inset'">
+          <label class="flex items-center justify-between gap-3 cursor-pointer">
+            <div class="min-w-0">
+              <p class="font-semibold text-rose-400" x-text="t('unStepAppdata')"></p>
+              <p class="text-[10.5px] text-muted font-mono-code truncate" x-text="uninstallModal.app?.appdata_path"></p>
+            </div>
+            <input type="checkbox" x-model="uninstallModal.removeAppdata" class="w-4 h-4 accent-rose-500 shrink-0" />
+          </label>
+
+          <div x-show="uninstallModal.removeAppdata" x-cloak class="pt-1">
+            <p class="text-[11px] text-rose-300 mb-1.5"
+               x-text="`${t('typeToConfirm')}: ${uninstallModal.app?.name}`"></p>
+            <input type="text" x-model="uninstallModal.confirmName" :placeholder="uninstallModal.app?.name"
+                   class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
+          </div>
+        </div>
+      </div>
+
+      <div x-show="uninstallModal.error" x-cloak class="text-xs text-rose-400 px-1" x-text="uninstallModal.error"></div>
+
+      <div class="flex gap-2 pt-1">
+        <button @click="uninstallModal.open = false" :disabled="uninstallModal.running"
+                class="glass-btn flex-1 py-3 rounded-2xl text-xs font-semibold" x-text="t('cancel')"></button>
+        <button @click="confirmUninstall()"
+                :disabled="uninstallModal.running || (uninstallModal.removeAppdata && uninstallModal.confirmName.trim().toLowerCase() !== (uninstallModal.app?.name || '').toLowerCase())"
+                class="glass-btn-danger flex-1 py-3 rounded-2xl text-xs font-semibold disabled:opacity-45"
+                x-text="uninstallModal.running ? t('uninstalling') : t('confirmUninstall')"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 5: Settings & History -->
   <div x-show="settingsModal.open" x-cloak x-transition.opacity
        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/65 backdrop-blur-md"
        @click.self="settingsModal.open = false" @keydown.escape.window="settingsModal.open = false">
     <div class="glass-panel w-full max-w-xl rounded-t-[28px] sm:rounded-[28px] p-5 sm:p-6 flex flex-col max-h-[90dvh]"
          style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
       <div class="sheet-handle sm:hidden"></div>
-
       <div class="flex items-center justify-between pb-3.5 border-b border-[var(--glass-border)]">
         <h3 class="font-bold text-base" x-text="t('settingsTitle')"></h3>
         <button @click="settingsModal.open = false" class="glass-btn w-8 h-8 rounded-xl flex items-center justify-center text-rose-400">✕</button>
       </div>
 
-      <!-- Tabs -->
       <div class="glass-dock p-1 rounded-2xl grid grid-cols-2 gap-1 mt-4 mb-4">
-        <button @click="settingsModal.tab = 'schedule'"
-                class="py-2 rounded-xl text-xs font-semibold transition"
-                :class="settingsModal.tab === 'schedule' ? 'glass-btn-primary' : 'text-muted'"
-                x-text="t('tabSchedule')"></button>
-        <button @click="settingsModal.tab = 'history'"
-                class="py-2 rounded-xl text-xs font-semibold transition"
-                :class="settingsModal.tab === 'history' ? 'glass-btn-primary' : 'text-muted'"
-                x-text="t('tabHistory')"></button>
+        <button @click="settingsModal.tab = 'schedule'" class="py-2 rounded-xl text-xs font-semibold transition"
+                :class="settingsModal.tab === 'schedule' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabSchedule')"></button>
+        <button @click="settingsModal.tab = 'history'" class="py-2 rounded-xl text-xs font-semibold transition"
+                :class="settingsModal.tab === 'history' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabHistory')"></button>
       </div>
 
       <div class="flex-1 overflow-y-auto space-y-3.5">
         <template x-if="settingsModal.tab === 'schedule'">
           <div class="space-y-3.5">
-            <!-- Quick Appearance & Language Controls (đưa vào Settings để Header sạch thoáng) -->
             <div class="grid grid-cols-2 gap-3">
               <div class="glass-inset rounded-2xl p-3">
                 <p class="text-[11px] font-semibold text-muted mb-2" x-text="t('appearance')"></p>
@@ -593,7 +969,6 @@
                           :class="theme === 'light' ? 'bg-sky-500/20 text-sky-600' : 'text-muted'" x-text="t('light')"></button>
                 </div>
               </div>
-
               <div class="glass-inset rounded-2xl p-3">
                 <p class="text-[11px] font-semibold text-muted mb-2" x-text="t('language')"></p>
                 <div class="glass-dock p-0.5 rounded-xl grid grid-cols-2 gap-0.5 text-[11px] font-semibold">
@@ -616,17 +991,16 @@
               </label>
             </div>
 
-            <!-- Fixed iOS Grid (min-w-0 & overflow-hidden để ô giờ không bao giờ tràn viền) -->
             <div class="grid grid-cols-2 gap-3">
               <div class="glass-inset rounded-2xl p-3.5 min-w-0 overflow-hidden">
                 <label class="block text-[11px] font-semibold text-muted mb-1.5 truncate" x-text="t('autoUpdateTime')"></label>
                 <input type="time" x-model="settingsForm.auto_update_time"
-                       class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
+                       class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code text-center" />
               </div>
               <div class="glass-inset rounded-2xl p-3.5 min-w-0 overflow-hidden">
                 <label class="block text-[11px] font-semibold text-muted mb-1.5 truncate" x-text="t('checkInterval')"></label>
                 <input type="number" min="1" max="168" x-model.number="settingsForm.check_interval_hours"
-                       class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
+                       class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code text-center" />
               </div>
             </div>
 
@@ -666,8 +1040,7 @@
                           x-text="h.status"></span>
                     <span class="text-[10px] text-subtle uppercase" x-text="h.mode"></span>
                   </div>
-                  <p class="font-mono-code text-[11px] text-muted mt-1"
-                     x-text="`${h.from_version || '?'} → ${h.to_version || '?'}`"></p>
+                  <p class="font-mono-code text-[11px] text-muted mt-1" x-text="`${h.from_version || '?'} → ${h.to_version || '?'}`"></p>
                 </div>
                 <span class="text-[10px] text-subtle shrink-0" x-text="h.created_at"></span>
               </div>
@@ -678,7 +1051,7 @@
     </div>
   </div>
 
-  <!-- MODAL 4: Live Logs -->
+  <!-- MODAL 6: Live Logs -->
   <div x-show="logModal.open" x-cloak x-transition.opacity
        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/65 backdrop-blur-md"
        @click.self="closeLogs()" @keydown.escape.window="closeLogs()">
@@ -714,19 +1087,33 @@
       const dict = {
         en: {
           running: 'running', statusRunning: 'Running',
-          checkUpdates: 'Check for Updates', checkShort: 'Check', checkingShort: 'Scanning...',
-          settings: 'Settings', logout: 'Logout', searchPlaceholder: 'Search apps, images, containers...',
+          checkShort: 'Check', checkingShort: 'Scanning...', settings: 'Settings', logout: 'Logout',
+          searchPlaceholder: 'Search apps, images, containers...',
           all: 'All', tabUpdates: 'Updates', tabRunning: 'Running', tabStopped: 'Stopped', tabCasaos: 'CasaOS', tabDocker: 'Docker',
-          upToDate: 'Up to date', notChecked: 'Not checked', newBuild: 'New build',
+          upToDate: 'Up to date', notChecked: 'Not checked', newBuild: 'New build', skippedBadge: 'Skipped',
           updatesAvailable: 'app(s) have updates ready', lastChecked: 'Checked',
           viewUpdates: 'Filter Updates', showAll: 'Show All', updateAll: 'Update All',
           batchTitle: 'Updating All Apps', batchProgress: 'processed...', batchDone: 'succeeded', batchFailed: 'failed',
           statusPending: 'Queued', statusUpdating: 'Updating', close: 'Done',
-          open: 'Open Web', start: 'Start', stop: 'Stop', restart: 'Restart', logs: 'Logs',
-          updateNow: 'Update App', forcePull: 'Pull & Recreate',
+          open: 'Open Web', start: 'Start', stop: 'Stop', confirmStopTap: 'Tap to Stop', restart: 'Restart',
+          logs: 'Live Logs', liveLogs: 'View Live Logs', moreActions: 'More options',
+          updateNow: 'Update App', forcePull: 'Pull & Recreate', updateAndChangelog: 'Update & Changelog',
+          skipVersion: 'Skip Version', unskipVersion: 'Unskip Version',
+          editCompose: 'Edit App (UI / YAML)', editTitle: 'Edit App',
+          tabVisualUi: 'Visual UI', tabYamlCode: 'YAML Code', tabBackups: 'Backups',
+          loadingCompose: 'Loading docker-compose.yml...', selectService: 'Service to edit',
+          secContainer: 'Container Configuration', privilegedDesc: 'Grant extended host privileges',
+          noPorts: 'No ports published.', displayTitle: 'Display Title',
+          noBackups: 'No backups created yet. Backups are auto-saved before every edit.',
+          rollbackBtn: 'Rollback', validateBtn: 'Validate', saveAndApply: 'Save & Apply', applyingCompose: 'Applying changes...',
+          uninstallApp: 'Uninstall App', uninstallTitle: 'Uninstall Application',
+          unStepContainer: 'Stop & remove container', unStepCompose: 'Remove CasaOS app config (cleans Dashboard)',
+          unStepImage: 'Remove Docker image', unStepImageDesc: 'Free SSD storage used by this image',
+          unStepAppdata: 'Permanently delete AppData folder', typeToConfirm: 'Type container name to confirm',
+          cancel: 'Cancel', confirmUninstall: 'Uninstall Now', uninstalling: 'Uninstalling...',
           loadingDetails: 'Fetching version & changelog...', recheck: 'Re-check',
           autoUpdateApp: 'Auto-Update this app', autoUpdateAppDesc: 'Update automatically on your daily schedule',
-          noChangelog: 'No GitHub Release notes detected automatically. Paste the GitHub repository URL once to enable changelog:',
+          noChangelog: 'No GitHub Release notes detected automatically. Paste the GitHub repository URL once:',
           save: 'Save', noComposeWarning: 'No docker-compose.yml detected for safe recreate.',
           updatingWait: 'Updating... Please keep this window open',
           settingsTitle: 'Settings & Automation', tabSchedule: 'Preferences & Schedule', tabHistory: 'History',
@@ -740,19 +1127,33 @@
         },
         vi: {
           running: 'đang chạy', statusRunning: 'Đang chạy',
-          checkUpdates: 'Kiểm tra bản cập nhật', checkShort: 'Quét mới', checkingShort: 'Đang quét...',
-          settings: 'Cài đặt', logout: 'Đăng xuất', searchPlaceholder: 'Tìm theo tên app, image, container...',
+          checkShort: 'Quét mới', checkingShort: 'Đang quét...', settings: 'Cài đặt', logout: 'Đăng xuất',
+          searchPlaceholder: 'Tìm theo tên app, image, container...',
           all: 'Tất cả', tabUpdates: 'Có Update', tabRunning: 'Đang chạy', tabStopped: 'Đã dừng', tabCasaos: 'CasaOS', tabDocker: 'Docker thuần',
-          upToDate: 'Mới nhất', notChecked: 'Chưa quét', newBuild: 'Bản mới',
+          upToDate: 'Mới nhất', notChecked: 'Chưa quét', newBuild: 'Bản mới', skippedBadge: 'Đã bỏ qua',
           updatesAvailable: 'ứng dụng có bản cập nhật mới', lastChecked: 'Quét lúc',
           viewUpdates: 'Lọc xem', showAll: 'Hiện tất cả', updateAll: 'Cập nhật tất cả',
           batchTitle: 'Đang cập nhật hàng loạt', batchProgress: 'đã xử lý...', batchDone: 'thành công', batchFailed: 'lỗi',
           statusPending: 'Đang chờ', statusUpdating: 'Đang chạy', close: 'Hoàn tất',
-          open: 'Mở Web', start: 'Chạy', stop: 'Dừng', restart: 'Khởi động lại', logs: 'Xem Logs',
-          updateNow: 'Cập nhật ngay', forcePull: 'Tải lại & Tạo mới',
+          open: 'Mở Web', start: 'Chạy', stop: 'Dừng', confirmStopTap: 'Chạm xác nhận', restart: 'Khởi động lại',
+          logs: 'Xem Logs', liveLogs: 'Xem Live Logs', moreActions: 'Tuỳ chọn',
+          updateNow: 'Cập nhật ngay', forcePull: 'Tải lại & Tạo mới', updateAndChangelog: 'Cập nhật & Changelog',
+          skipVersion: 'Bỏ qua bản này', unskipVersion: 'Bỏ ẩn bản này',
+          editCompose: 'Chỉnh sửa App (UI / YAML)', editTitle: 'Chỉnh sửa App',
+          tabVisualUi: 'Tuỳ chỉnh UI', tabYamlCode: 'Sửa YAML', tabBackups: 'Sao lưu',
+          loadingCompose: 'Đang đọc docker-compose.yml...', selectService: 'Chọn service cần sửa',
+          secContainer: 'Cấu hình Container', privilegedDesc: 'Cấp quyền cao nhất trên máy chủ',
+          noPorts: 'Chưa mở port nào.', displayTitle: 'Tên hiển thị',
+          noBackups: 'Chưa có bản sao lưu nào. Hệ thống tự sao lưu trước mỗi lần bấm Lưu.',
+          rollbackBtn: 'Khôi phục', validateBtn: 'Kiểm tra lỗi', saveAndApply: 'Lưu & Áp dụng', applyingCompose: 'Đang áp dụng...',
+          uninstallApp: 'Xoá ứng dụng', uninstallTitle: 'Gỡ cài đặt ứng dụng',
+          unStepContainer: 'Dừng & xoá container', unStepCompose: 'Xoá cấu hình CasaOS (sạch Dashboard)',
+          unStepImage: 'Xoá Docker image', unStepImageDesc: 'Giải phóng dung lượng SSD của image này',
+          unStepAppdata: 'Xoá vĩnh viễn thư mục dữ liệu AppData', typeToConfirm: 'Gõ tên container để xác nhận',
+          cancel: 'Huỷ', confirmUninstall: 'Xoá ngay', uninstalling: 'Đang gỡ bỏ...',
           loadingDetails: 'Đang tải phiên bản & Changelog...', recheck: 'Quét lại',
           autoUpdateApp: 'Tự động cập nhật app này', autoUpdateAppDesc: 'Chạy tự động theo khung giờ trong Cài đặt',
-          noChangelog: 'Chưa tự nhận diện được Changelog từ GitHub. Dán link GitHub repo 1 lần để tự động tải ghi chú phiên bản:',
+          noChangelog: 'Chưa tự nhận diện được Changelog từ GitHub. Dán link GitHub repo 1 lần:',
           save: 'Lưu', noComposeWarning: 'Container không có file docker-compose.yml để cập nhật an toàn.',
           updatingWait: 'Đang cập nhật... Vui lòng không đóng trang',
           settingsTitle: 'Cài đặt & Tự động hóa', tabSchedule: 'Tuỳ chỉnh & Lịch', tabHistory: 'Lịch sử',
@@ -787,15 +1188,24 @@
         busyId: null,
         error: '',
         toast: { show: false, message: '' },
+
+        actionSheet: { open: false, app: null, confirmStop: false },
         logModal: { open: false, title: '', containerName: '', lines: '', ws: null },
-        batchModal: {
-          open: false, running: false, items: [], doneCount: 0,
-          succeeded: 0, failed: 0, logs: '', ws: null
-        },
+        batchModal: { open: false, running: false, items: [], doneCount: 0, succeeded: 0, failed: 0, logs: '', ws: null },
         updateModal: {
           open: false, loading: false, updating: false, app: null,
           changelogHtml: '', releaseTag: '', releaseUrl: '',
           autoUpdate: false, customRepo: '', updateLogs: '', ws: null
+        },
+        editModal: {
+          open: false, loading: false, saving: false, tab: 'ui',
+          app: null, composePath: '', rawYaml: '', ui: null,
+          backups: [], feedback: '', feedbackOk: true
+        },
+        uninstallModal: {
+          open: false, running: false, app: null,
+          removeCompose: true, removeImages: false, removeAppdata: false,
+          confirmName: '', error: ''
         },
         settingsModal: { open: false, tab: 'schedule' },
         settingsForm: {
@@ -822,7 +1232,7 @@
         },
 
         handleShortcut(e) {
-          if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && this.$refs.searchInput) {
+          if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA' && this.$refs.searchInput) {
             e.preventDefault(); this.$refs.searchInput.focus();
           }
         },
@@ -844,14 +1254,10 @@
           return `${hrs}h ${mins % 60}m`;
         },
 
-        setLang(code) {
-          this.lang = code;
-          localStorage.setItem('amp_lang', code);
-        },
+        setLang(code) { this.lang = code; localStorage.setItem('amp_lang', code); },
 
         setTheme(mode) {
-          this.theme = mode;
-          localStorage.setItem('amp_theme', mode);
+          this.theme = mode; localStorage.setItem('amp_theme', mode);
           const isLight = mode === 'light';
           document.documentElement.classList.toggle('light', isLight);
           document.documentElement.classList.toggle('dark', !isLight);
@@ -859,16 +1265,12 @@
         },
 
         showToast(msg) {
-          this.toast.message = msg;
-          this.toast.show = true;
+          this.toast.message = msg; this.toast.show = true;
           clearTimeout(this._toastTimer);
-          this._toastTimer = setTimeout(() => { this.toast.show = false; }, 2600);
+          this._toastTimer = setTimeout(() => { this.toast.show = false; }, 2800);
         },
 
-        countForTab(tabId) {
-          if (tabId === 'all') return this.summary.total;
-          return this.summary[tabId] || 0;
-        },
+        countForTab(tabId) { return tabId === 'all' ? this.summary.total : (this.summary[tabId] || 0); },
 
         get filteredApps() {
           const q = this.search.trim().toLowerCase();
@@ -915,72 +1317,39 @@
                 ? `${found} ${this.t('updatesAvailable')}`
                 : (this.lang === 'vi' ? 'Tất cả ứng dụng đều đang ở bản mới nhất ✓' : 'All apps are up to date ✓'));
             }
-          } catch (err) {
-            if (!silent) this.error = err.message;
-          } finally {
-            this.checkingUpdates = false;
+          } catch (err) { if (!silent) this.error = err.message; }
+          finally { this.checkingUpdates = false; }
+        },
+
+        // ---------------- Action Sheet ----------------
+        openActionSheet(app) {
+          this.actionSheet.app = app;
+          this.actionSheet.confirmStop = false;
+          this.actionSheet.open = true;
+        },
+
+        closeActionSheet() {
+          this.actionSheet.open = false;
+          this.actionSheet.confirmStop = false;
+        },
+
+        handleSheetStopStart() {
+          const app = this.actionSheet.app;
+          if (!app) return;
+          if (app.status === 'running') {
+            if (!this.actionSheet.confirmStop) {
+              this.actionSheet.confirmStop = true;
+              return;
+            }
+            this.closeActionSheet();
+            this.runAction(app, 'stop');
+          } else {
+            this.closeActionSheet();
+            this.runAction(app, 'start');
           }
         },
 
-        startBatchUpdate() {
-          this.batchModal.open = true;
-          this.batchModal.running = true;
-          this.batchModal.items = [];
-          this.batchModal.doneCount = 0;
-          this.batchModal.succeeded = 0;
-          this.batchModal.failed = 0;
-          this.batchModal.logs = '';
-
-          const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-          const ws = new WebSocket(`${proto}//${window.location.host}/ws/update-all`);
-          this.batchModal.ws = ws;
-
-          ws.onmessage = (event) => {
-            try {
-              const msg = JSON.parse(event.data);
-              if (msg.type === 'init') {
-                this.batchModal.items = msg.apps || [];
-              } else if (msg.type === 'app_start') {
-                if (this.batchModal.items[msg.index]) {
-                  this.batchModal.items[msg.index].status = 'running';
-                }
-              } else if (msg.type === 'log') {
-                if (!msg.text.includes('__SELF_UPDATE_RELOAD__')) {
-                  this.batchModal.logs += msg.text;
-                  this.$nextTick(() => {
-                    const box = this.$refs.batchLogBox;
-                    if (box) box.scrollTop = box.scrollHeight;
-                  });
-                }
-              } else if (msg.type === 'app_done') {
-                if (this.batchModal.items[msg.index]) {
-                  this.batchModal.items[msg.index].status = msg.ok ? 'success' : 'failed';
-                }
-                this.batchModal.doneCount += 1;
-              } else if (msg.type === 'complete') {
-                this.batchModal.succeeded = msg.succeeded;
-                this.batchModal.failed = msg.failed;
-                this.batchModal.running = false;
-                if (msg.self_update) {
-                  setTimeout(() => window.location.reload(), 10000);
-                }
-              }
-            } catch (_) {}
-          };
-
-          ws.onclose = async () => {
-            this.batchModal.running = false;
-            this.batchModal.ws = null;
-            await this.loadApps();
-          };
-        },
-
-        closeBatchModal() {
-          if (this.batchModal.running) return;
-          if (this.batchModal.ws) this.batchModal.ws.close();
-          this.batchModal.open = false;
-        },
-
+        // ---------------- Update & Skip ----------------
         async openUpdateModal(app) {
           this.updateModal.open = true;
           this.updateModal.loading = true;
@@ -1001,9 +1370,7 @@
             this.updateModal.releaseUrl = data.release_url || '';
             this.updateModal.autoUpdate = !!data.pref?.auto_update;
             this.updateModal.customRepo = data.pref?.custom_repo || '';
-            this.updateModal.changelogHtml = data.changelog
-              ? DOMPurify.sanitize(marked.parse(data.changelog))
-              : '';
+            this.updateModal.changelogHtml = data.changelog ? DOMPurify.sanitize(marked.parse(data.changelog)) : '';
           } catch (err) { this.showToast(err.message); }
           finally { this.updateModal.loading = false; }
         },
@@ -1020,7 +1387,22 @@
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ auto_update: this.updateModal.autoUpdate })
           });
-          this.showToast(this.lang === 'vi' ? 'Đã lưu cấu hình Auto-Update' : 'Auto-Update saved');
+          this.showToast(this.lang === 'vi' ? 'Đã lưu Auto-Update' : 'Auto-Update saved');
+          await this.loadApps();
+        },
+
+        async toggleSkipUpdate() {
+          const app = this.updateModal.app;
+          if (!app) return;
+          const nextToken = app.is_skipped ? '' : (app.skip_token || '');
+          await fetch(`/api/apps/${encodeURIComponent(app.name)}/prefs`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ skipped_digest: nextToken })
+          });
+          this.showToast(nextToken
+            ? (this.lang === 'vi' ? 'Đã bỏ qua bản cập nhật này' : 'Version skipped')
+            : (this.lang === 'vi' ? 'Đã hiện lại thông báo cập nhật' : 'Version unskipped'));
+          await this._fetchAppDetails(app.name, false);
           await this.loadApps();
         },
 
@@ -1042,30 +1424,225 @@
           const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
           const ws = new WebSocket(`${proto}//${window.location.host}/ws/update/${encodeURIComponent(this.updateModal.app.name)}`);
           this.updateModal.ws = ws;
-
           ws.onmessage = (event) => {
-            if (event.data.includes('__SELF_UPDATE_RELOAD__')) {
-              setTimeout(() => window.location.reload(), 10000);
-              return;
-            }
+            if (event.data.includes('__SELF_UPDATE_RELOAD__')) { setTimeout(() => window.location.reload(), 10000); return; }
             this.updateModal.updateLogs += event.data;
-            this.$nextTick(() => {
-              const box = this.$refs.updateLogBox;
-              if (box) box.scrollTop = box.scrollHeight;
-            });
+            this.$nextTick(() => { const b = this.$refs.updateLogBox; if (b) b.scrollTop = b.scrollHeight; });
           };
-
-          ws.onclose = async () => {
-            this.updateModal.updating = false;
-            this.updateModal.ws = null;
-            await this.loadApps();
-          };
+          ws.onclose = async () => { this.updateModal.updating = false; this.updateModal.ws = null; await this.loadApps(); };
         },
 
         closeUpdateModal() {
           if (this.updateModal.updating) return;
           if (this.updateModal.ws) this.updateModal.ws.close();
           this.updateModal.open = false;
+        },
+
+        // ---------------- Compose Editor (Visual UI <-> YAML + Rollback) ----------------
+        async openEditModal(app) {
+          this.editModal.open = true;
+          this.editModal.loading = true;
+          this.editModal.saving = false;
+          this.editModal.tab = 'ui';
+          this.editModal.app = app;
+          this.editModal.feedback = '';
+          try {
+            const res = await fetch(`/api/apps/${encodeURIComponent(app.name)}/compose`);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Cannot load compose file');
+            this.editModal.composePath = data.compose_path;
+            this.editModal.rawYaml = data.raw_yaml;
+            this.editModal.ui = data.ui;
+            this.editModal.backups = data.backups || [];
+          } catch (err) {
+            this.editModal.feedbackOk = false;
+            this.editModal.feedback = err.message;
+          } finally {
+            this.editModal.loading = false;
+          }
+        },
+
+        async reloadServiceUi() {
+          if (!this.editModal.app) return;
+          const res = await fetch(`/api/apps/${encodeURIComponent(this.editModal.app.name)}/compose/to-ui`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ raw_yaml: this.editModal.rawYaml, selected_service: this.editModal.ui.selected_service })
+          });
+          if (res.ok) { const d = await res.json(); this.editModal.ui = d.ui; }
+        },
+
+        async _syncUiToYaml() {
+          if (!this.editModal.ui || !this.editModal.app) return true;
+          const res = await fetch(`/api/apps/${encodeURIComponent(this.editModal.app.name)}/compose/to-yaml`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ base_yaml: this.editModal.rawYaml, ui: this.editModal.ui })
+          });
+          const data = await res.json();
+          if (!res.ok) { this.editModal.feedbackOk = false; this.editModal.feedback = data.detail || 'Sync error'; return false; }
+          this.editModal.rawYaml = data.raw_yaml;
+          return true;
+        },
+
+        async switchEditTab(nextTab) {
+          if (nextTab === this.editModal.tab) return;
+          this.editModal.feedback = '';
+          if (this.editModal.tab === 'ui' && (nextTab === 'yaml' || nextTab === 'backups')) {
+            const ok = await this._syncUiToYaml();
+            if (!ok) return;
+          } else if (this.editModal.tab === 'yaml' && nextTab === 'ui') {
+            const res = await fetch(`/api/apps/${encodeURIComponent(this.editModal.app.name)}/compose/to-ui`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ raw_yaml: this.editModal.rawYaml, selected_service: this.editModal.ui?.selected_service })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+              this.editModal.feedbackOk = false;
+              this.editModal.feedback = `YAML Error: ${data.detail}`;
+              return;
+            }
+            this.editModal.ui = data.ui;
+          }
+          this.editModal.tab = nextTab;
+        },
+
+        async validateCompose() {
+          if (this.editModal.tab === 'ui') { const ok = await this._syncUiToYaml(); if (!ok) return; }
+          const res = await fetch(`/api/apps/${encodeURIComponent(this.editModal.app.name)}/compose/validate`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ raw_yaml: this.editModal.rawYaml })
+          });
+          const data = await res.json();
+          this.editModal.feedbackOk = !!data.ok;
+          this.editModal.feedback = data.message || data.detail || '';
+        },
+
+        async applyCompose() {
+          this.editModal.saving = true;
+          this.editModal.feedback = '';
+          try {
+            if (this.editModal.tab === 'ui') {
+              const ok = await this._syncUiToYaml();
+              if (!ok) { this.editModal.saving = false; return; }
+            }
+            const res = await fetch(`/api/apps/${encodeURIComponent(this.editModal.app.name)}/compose/apply`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ raw_yaml: this.editModal.rawYaml })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Apply failed');
+            this.editModal.backups = data.backups || this.editModal.backups;
+            this.showToast(this.lang === 'vi' ? 'Đã áp dụng cấu hình mới ✓' : 'Configuration applied ✓');
+            if (data.self_update) { setTimeout(() => window.location.reload(), 9000); }
+            this.editModal.open = false;
+            await this.loadApps();
+          } catch (err) {
+            this.editModal.feedbackOk = false;
+            this.editModal.feedback = err.message;
+          } finally {
+            this.editModal.saving = false;
+          }
+        },
+
+        async rollbackCompose(filename) {
+          this.editModal.saving = true;
+          this.editModal.feedback = '';
+          try {
+            const res = await fetch(`/api/apps/${encodeURIComponent(this.editModal.app.name)}/compose/rollback`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ filename })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Rollback failed');
+            this.showToast(this.lang === 'vi' ? 'Đã khôi phục bản sao lưu ✓' : 'Rolled back successfully ✓');
+            this.editModal.open = false;
+            await this.loadApps();
+          } catch (err) {
+            this.editModal.feedbackOk = false;
+            this.editModal.feedback = err.message;
+          } finally {
+            this.editModal.saving = false;
+          }
+        },
+
+        closeEditModal() {
+          if (this.editModal.saving) return;
+          this.editModal.open = false;
+        },
+
+        // ---------------- Smart Uninstall ----------------
+        openUninstallModal(app) {
+          this.uninstallModal.app = app;
+          this.uninstallModal.removeCompose = app.source === 'casaos';
+          this.uninstallModal.removeImages = false;
+          this.uninstallModal.removeAppdata = false;
+          this.uninstallModal.confirmName = '';
+          this.uninstallModal.error = '';
+          this.uninstallModal.running = false;
+          this.uninstallModal.open = true;
+        },
+
+        async confirmUninstall() {
+          const app = this.uninstallModal.app;
+          if (!app) return;
+          this.uninstallModal.running = true;
+          this.uninstallModal.error = '';
+          try {
+            const res = await fetch(`/api/apps/${encodeURIComponent(app.name)}/uninstall`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                remove_compose: this.uninstallModal.removeCompose,
+                remove_images: this.uninstallModal.removeImages,
+                remove_appdata: this.uninstallModal.removeAppdata,
+                confirm_name: this.uninstallModal.confirmName
+              })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Uninstall failed');
+            this.uninstallModal.open = false;
+            this.showToast(`${app.title}: ${this.lang === 'vi' ? 'Đã gỡ cài đặt ✓' : 'Uninstalled ✓'}`);
+            await this.loadApps();
+          } catch (err) {
+            this.uninstallModal.error = err.message;
+          } finally {
+            this.uninstallModal.running = false;
+          }
+        },
+
+        // ---------------- Batch Update, Settings, Actions, Logs ----------------
+        startBatchUpdate() {
+          this.batchModal.open = true; this.batchModal.running = true;
+          this.batchModal.items = []; this.batchModal.doneCount = 0;
+          this.batchModal.succeeded = 0; this.batchModal.failed = 0; this.batchModal.logs = '';
+          const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const ws = new WebSocket(`${proto}//${window.location.host}/ws/update-all`);
+          this.batchModal.ws = ws;
+          ws.onmessage = (event) => {
+            try {
+              const msg = JSON.parse(event.data);
+              if (msg.type === 'init') this.batchModal.items = msg.apps || [];
+              else if (msg.type === 'app_start' && this.batchModal.items[msg.index]) this.batchModal.items[msg.index].status = 'running';
+              else if (msg.type === 'log' && !msg.text.includes('__SELF_UPDATE_RELOAD__')) {
+                this.batchModal.logs += msg.text;
+                this.$nextTick(() => { const b = this.$refs.batchLogBox; if (b) b.scrollTop = b.scrollHeight; });
+              }
+              else if (msg.type === 'app_done') {
+                if (this.batchModal.items[msg.index]) this.batchModal.items[msg.index].status = msg.ok ? 'success' : 'failed';
+                this.batchModal.doneCount += 1;
+              }
+              else if (msg.type === 'complete') {
+                this.batchModal.succeeded = msg.succeeded; this.batchModal.failed = msg.failed;
+                this.batchModal.running = false;
+                if (msg.self_update) setTimeout(() => window.location.reload(), 10000);
+              }
+            } catch (_) {}
+          };
+          ws.onclose = async () => { this.batchModal.running = false; this.batchModal.ws = null; await this.loadApps(); };
+        },
+
+        closeBatchModal() {
+          if (this.batchModal.running) return;
+          if (this.batchModal.ws) this.batchModal.ws.close();
+          this.batchModal.open = false;
         },
 
         async openSettings() {
@@ -1085,9 +1662,7 @@
             auto_update_time: this.settingsForm.auto_update_time,
             prune_old_images: this.settingsForm.prune_old_images
           };
-          if (this.settingsForm.github_token.trim()) {
-            payload.github_token = this.settingsForm.github_token.trim();
-          }
+          if (this.settingsForm.github_token.trim()) payload.github_token = this.settingsForm.github_token.trim();
           const res = await fetch('/api/settings', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -1112,19 +1687,14 @@
 
         openLogs(app) {
           this.closeLogs();
-          this.logModal.open = true;
-          this.logModal.title = app.title;
-          this.logModal.containerName = app.name;
-          this.logModal.lines = '';
+          this.logModal.open = true; this.logModal.title = app.title;
+          this.logModal.containerName = app.name; this.logModal.lines = '';
           const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
           const ws = new WebSocket(`${proto}//${window.location.host}/ws/logs/${app.id}`);
           this.logModal.ws = ws;
           ws.onmessage = (event) => {
             this.logModal.lines += event.data;
-            this.$nextTick(() => {
-              const box = this.$refs.logBox;
-              if (box) box.scrollTop = box.scrollHeight;
-            });
+            this.$nextTick(() => { const b = this.$refs.logBox; if (b) b.scrollTop = b.scrollHeight; });
           };
         },
 
