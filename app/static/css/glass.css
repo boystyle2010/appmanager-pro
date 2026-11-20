@@ -5,9 +5,10 @@
   --text-tertiary: #64748b;
 
   --glass-bg: rgba(17, 25, 44, 0.56);
-  --glass-bg-elevated: rgba(14, 21, 38, 0.86);
+  --glass-bg-elevated: rgba(14, 21, 38, 0.88);
   --glass-bg-hover: rgba(24, 35, 60, 0.72);
-  --glass-inset: rgba(6, 10, 22, 0.42);
+  --glass-inset: rgba(6, 10, 22, 0.44);
+  --glass-subcard: rgba(255, 255, 255, 0.035);
   --glass-icon-bg: rgba(255, 255, 255, 0.11);
   --glass-surface: rgba(255, 255, 255, 0.055);
   --glass-surface-hover: rgba(255, 255, 255, 0.11);
@@ -17,8 +18,8 @@
   --glass-specular: rgba(255, 255, 255, 0.15);
   --glass-shadow: 0 18px 42px -14px rgba(0, 0, 0, 0.52), inset 0 1px 0 var(--glass-specular);
 
-  --header-bg: rgba(9, 15, 29, 0.80);
-  --input-bg: rgba(5, 9, 20, 0.52);
+  --header-bg: rgba(9, 15, 29, 0.82);
+  --input-bg: rgba(5, 9, 20, 0.56);
 
   --orb-1: rgba(56, 189, 248, 0.20);
   --orb-2: rgba(99, 102, 241, 0.20);
@@ -32,9 +33,10 @@ html.light {
   --text-tertiary: #64748b;
 
   --glass-bg: rgba(255, 255, 255, 0.66);
-  --glass-bg-elevated: rgba(255, 255, 255, 0.90);
+  --glass-bg-elevated: rgba(255, 255, 255, 0.92);
   --glass-bg-hover: rgba(255, 255, 255, 0.86);
   --glass-inset: rgba(15, 23, 42, 0.04);
+  --glass-subcard: rgba(255, 255, 255, 0.65);
   --glass-icon-bg: rgba(255, 255, 255, 0.85);
   --glass-surface: rgba(15, 23, 42, 0.045);
   --glass-surface-hover: rgba(15, 23, 42, 0.09);
@@ -45,7 +47,7 @@ html.light {
   --glass-shadow: 0 14px 36px -12px rgba(15, 23, 42, 0.10), inset 0 1px 0 var(--glass-specular);
 
   --header-bg: rgba(229, 238, 249, 0.84);
-  --input-bg: rgba(255, 255, 255, 0.78);
+  --input-bg: rgba(255, 255, 255, 0.82);
 
   --orb-1: rgba(56, 189, 248, 0.28);
   --orb-2: rgba(99, 102, 241, 0.20);
@@ -137,7 +139,37 @@ body {
   border: 1px solid var(--glass-border);
 }
 
-/* Nền sáng dịu cho hộp Icon giúp icon tối màu (scrutiny, v.v.) luôn nổi rõ */
+.glass-subcard {
+  background: var(--glass-subcard);
+  border: 1px solid var(--glass-border);
+}
+
+/* Danh sách gộp chuẩn iOS cho Action Sheet */
+.ios-group {
+  background: var(--glass-surface);
+  border: 1px solid var(--glass-border);
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.ios-row {
+  width: 100%;
+  padding: 13px 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  transition: background-color 0.15s ease;
+}
+
+.ios-row:hover {
+  background: var(--glass-surface-hover);
+}
+
+.ios-row + .ios-row {
+  border-top: 1px solid var(--glass-border);
+}
+
 .glass-icon-box {
   background: var(--glass-icon-bg);
   border: 1px solid rgba(255, 255, 255, 0.16);
@@ -157,9 +189,9 @@ body {
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
+/* Chỉ ép full width trên input time/number (KHÔNG ép lên select để tránh bể layout flex/grid) */
 input[type="time"].glass-input,
-input[type="number"].glass-input,
-select.glass-input {
+input[type="number"].glass-input {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
