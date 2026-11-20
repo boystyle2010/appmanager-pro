@@ -163,13 +163,12 @@
         <button @click="error = ''" class="glass-btn px-2.5 py-1 rounded-lg text-xs">OK</button>
       </div>
 
-      <!-- Option 1 Ultra-Clean Liquid Glass App Grid (1 Primary CTA + 1 ••• Menu) -->
+      <!-- App Grid -->
       <div x-show="filteredApps.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
         <template x-for="app in filteredApps" :key="app.full_id">
           <div class="glass-card rounded-[22px] p-4 flex flex-col justify-between gap-3"
                :class="app.has_update ? 'glass-card-update' : ''">
 
-            <!-- Clickable Top Info -> Opens Update & Changelog -->
             <div @click="openUpdateModal(app)" class="cursor-pointer group space-y-3">
               <div class="flex items-center gap-3">
                 <template x-if="app.icon">
@@ -182,8 +181,7 @@
                 </template>
                 <template x-if="!app.icon">
                   <div class="w-11 h-11 rounded-[14px] shrink-0 flex items-center justify-center text-white font-bold text-xs uppercase shadow-sm ring-1 ring-white/20"
-                       :class="avatarGradient(app.title)"
-                       x-text="app.title.slice(0, 2)"></div>
+                       :class="avatarGradient(app.title)" x-text="app.title.slice(0, 2)"></div>
                 </template>
 
                 <div class="min-w-0 flex-1">
@@ -210,7 +208,6 @@
                 </div>
               </div>
 
-              <!-- Smart Compact Version Strip (có mũi tên > gợi ý bấm trên MỌI thẻ) -->
               <div class="glass-inset rounded-2xl px-3 py-2.5 space-y-1.5">
                 <div class="flex items-center justify-between gap-2 text-[11px]">
                   <template x-if="app.has_update">
@@ -253,7 +250,6 @@
               </div>
             </div>
 
-            <!-- Option 1 Footer: 1 Primary CTA + 1 Clean ••• Button -->
             <div class="flex items-center gap-2 pt-0.5">
               <template x-if="app.has_update">
                 <button @click="openUpdateModal(app)"
@@ -288,7 +284,6 @@
                 </button>
               </template>
 
-              <!-- Single Sleek ••• Options Button -->
               <button @click="openActionSheet(app)" :aria-label="t('moreActions')"
                       class="glass-btn w-10 h-9 rounded-xl flex items-center justify-center text-muted hover:text-[var(--text-primary)] shrink-0">
                 <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -306,16 +301,16 @@
     </main>
   </div>
 
-  <!-- GLASS ACTION SHEET (••• Menu kiểu iOS native) -->
+  <!-- REFINED iOS GROUPED GLASS ACTION SHEET -->
   <div x-show="actionSheet.open" x-cloak x-transition.opacity
        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/60 backdrop-blur-sm"
        @click.self="closeActionSheet()" @keydown.escape.window="closeActionSheet()">
-    <div class="glass-panel w-full max-w-sm rounded-t-[28px] sm:rounded-[28px] p-5 space-y-3"
+    <div class="glass-panel w-full max-w-sm rounded-t-[28px] sm:rounded-[28px] p-5 space-y-3.5"
          style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
       <div class="sheet-handle sm:hidden"></div>
 
       <!-- App Header -->
-      <div class="flex items-center gap-3 pb-3 border-b border-[var(--glass-border)]" x-show="actionSheet.app">
+      <div class="flex items-center gap-3 pb-1" x-show="actionSheet.app">
         <template x-if="actionSheet.app?.icon">
           <div class="w-10 h-10 rounded-xl shrink-0 overflow-hidden flex items-center justify-center"
                :class="actionSheet.app.is_self ? 'brand-squircle' : 'glass-icon-box p-1'">
@@ -329,20 +324,21 @@
         <button @click="closeActionSheet()" class="glass-btn w-8 h-8 rounded-xl flex items-center justify-center text-muted">✕</button>
       </div>
 
-      <!-- Menu Actions -->
-      <div class="space-y-1.5 text-xs font-semibold">
+      <!-- Group 1: Primary App Actions (liền khối chuẩn iOS) -->
+      <div class="ios-group text-xs font-semibold">
         <a x-show="actionSheet.app?.port_map && actionSheet.app?.status === 'running'"
            :href="actionSheet.app ? buildWebUrl(actionSheet.app) : '#'" target="_blank" rel="noopener"
-           @click="closeActionSheet()"
-           class="glass-btn w-full px-3.5 py-3 rounded-2xl flex items-center gap-3 text-sky-400">
-          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>
-          </svg>
-          <span x-text="t('open')"></span>
+           @click="closeActionSheet()" class="ios-row text-sky-400">
+          <span class="flex items-center gap-3">
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>
+            </svg>
+            <span x-text="t('open')"></span>
+          </span>
+          <svg class="w-3.5 h-3.5 text-subtle" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
         </a>
 
-        <button @click="const a = actionSheet.app; closeActionSheet(); openUpdateModal(a)"
-                class="glass-btn w-full px-3.5 py-3 rounded-2xl flex items-center justify-between gap-3">
+        <button @click="const a = actionSheet.app; closeActionSheet(); openUpdateModal(a)" class="ios-row">
           <span class="flex items-center gap-3">
             <svg class="w-4 h-4 text-amber-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
@@ -353,54 +349,56 @@
         </button>
 
         <button x-show="actionSheet.app?.can_update"
-                @click="const a = actionSheet.app; closeActionSheet(); openEditModal(a)"
-                class="glass-btn w-full px-3.5 py-3 rounded-2xl flex items-center gap-3">
-          <svg class="w-4 h-4 text-indigo-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/>
-          </svg>
-          <span x-text="t('editCompose')"></span>
+                @click="const a = actionSheet.app; closeActionSheet(); openEditModal(a)" class="ios-row">
+          <span class="flex items-center gap-3">
+            <svg class="w-4 h-4 text-indigo-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/>
+            </svg>
+            <span x-text="t('editCompose')"></span>
+          </span>
+          <svg class="w-3.5 h-3.5 text-subtle" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
         </button>
 
-        <button @click="const a = actionSheet.app; closeActionSheet(); openLogs(a)"
-                class="glass-btn w-full px-3.5 py-3 rounded-2xl flex items-center gap-3">
-          <svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z"/>
-          </svg>
-          <span x-text="t('liveLogs')"></span>
+        <button @click="const a = actionSheet.app; closeActionSheet(); openLogs(a)" class="ios-row">
+          <span class="flex items-center gap-3">
+            <svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z"/>
+            </svg>
+            <span x-text="t('liveLogs')"></span>
+          </span>
+          <svg class="w-3.5 h-3.5 text-subtle" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
         </button>
-
-        <!-- Power Controls: Restart & 2-Tap Safe Stop/Start -->
-        <div class="grid grid-cols-2 gap-2 pt-1">
-          <button @click="const a = actionSheet.app; closeActionSheet(); runAction(a, 'restart')"
-                  class="glass-btn py-2.5 px-3 rounded-2xl flex items-center justify-center gap-2 text-sky-400">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M20.49 9A9 9 0 005.64 5.64L4 9m16 6l-1.64 3.36A9 9 0 013.51 15"/>
-            </svg>
-            <span x-text="t('restart')"></span>
-          </button>
-
-          <button @click="handleSheetStopStart()"
-                  class="py-2.5 px-3 rounded-2xl flex items-center justify-center gap-2 transition"
-                  :class="actionSheet.app?.status === 'running'
-                    ? (actionSheet.confirmStop ? 'glass-btn-danger' : 'glass-btn text-amber-400')
-                    : 'glass-btn text-emerald-400'">
-            <span x-text="actionSheet.app?.status === 'running'
-              ? (actionSheet.confirmStop ? t('confirmStopTap') : t('stop'))
-              : t('start')"></span>
-          </button>
-        </div>
-
-        <!-- Danger Zone: Uninstall -->
-        <div x-show="!actionSheet.app?.is_self" class="pt-2 mt-2 border-t border-[var(--glass-border)]">
-          <button @click="const a = actionSheet.app; closeActionSheet(); openUninstallModal(a)"
-                  class="w-full px-3.5 py-3 rounded-2xl flex items-center justify-center gap-2 bg-rose-500/12 border border-rose-500/30 text-rose-400 hover:bg-rose-500/20 transition">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/>
-            </svg>
-            <span x-text="t('uninstallApp')"></span>
-          </button>
-        </div>
       </div>
+
+      <!-- Group 2: Power & Uninstall -->
+      <div class="grid grid-cols-2 gap-2 text-xs font-semibold">
+        <button @click="const a = actionSheet.app; closeActionSheet(); runAction(a, 'restart')"
+                class="glass-btn py-2.5 px-3 rounded-2xl flex items-center justify-center gap-2 text-sky-400">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M20.49 9A9 9 0 005.64 5.64L4 9m16 6l-1.64 3.36A9 9 0 013.51 15"/>
+          </svg>
+          <span x-text="t('restart')"></span>
+        </button>
+
+        <button @click="handleSheetStopStart()"
+                class="py-2.5 px-3 rounded-2xl flex items-center justify-center gap-2 transition"
+                :class="actionSheet.app?.status === 'running'
+                  ? (actionSheet.confirmStop ? 'glass-btn-danger' : 'glass-btn text-amber-400')
+                  : 'glass-btn text-emerald-400'">
+          <span x-text="actionSheet.app?.status === 'running'
+            ? (actionSheet.confirmStop ? t('confirmStopTap') : t('stop'))
+            : t('start')"></span>
+        </button>
+      </div>
+
+      <button x-show="!actionSheet.app?.is_self"
+              @click="const a = actionSheet.app; closeActionSheet(); openUninstallModal(a)"
+              class="w-full py-3 rounded-2xl text-xs font-semibold flex items-center justify-center gap-2 bg-rose-500/12 border border-rose-500/30 text-rose-400 hover:bg-rose-500/20 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/>
+        </svg>
+        <span x-text="t('uninstallApp')"></span>
+      </button>
     </div>
   </div>
 
@@ -431,9 +429,7 @@
           <template x-for="item in batchModal.items" :key="item.name">
             <div class="glass-inset rounded-2xl px-3.5 py-2.5 flex items-center justify-between gap-3 text-xs">
               <div class="flex items-center gap-2.5 min-w-0">
-                <template x-if="item.icon">
-                  <img :src="item.icon" class="w-7 h-7 rounded-lg object-contain shrink-0" />
-                </template>
+                <template x-if="item.icon"><img :src="item.icon" class="w-7 h-7 rounded-lg object-contain shrink-0" /></template>
                 <div class="min-w-0">
                   <p class="font-semibold truncate" x-text="item.title"></p>
                   <p class="font-mono-code text-[10.5px] text-muted truncate" x-text="`${item.from_version} → ${item.to_version}`"></p>
@@ -461,7 +457,7 @@
     </div>
   </div>
 
-  <!-- MODAL 2: Single App Update Details + Changelog + Skip Update -->
+  <!-- MODAL 2: Update Details + 3-Tier Changelog + Custom Repo Editor -->
   <div x-show="updateModal.open" x-cloak x-transition.opacity
        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/65 backdrop-blur-md"
        @click.self="closeUpdateModal()" @keydown.escape.window="closeUpdateModal()">
@@ -506,7 +502,6 @@
 
         <template x-if="!updateModal.loading && !updateModal.updating && !updateModal.updateLogs">
           <div class="space-y-3.5">
-            <!-- Pinned tag notice -->
             <div x-show="updateModal.app?.target_tag"
                  class="rounded-2xl px-3.5 py-2.5 bg-amber-500/12 border border-amber-400/30 text-[11px] text-amber-300 flex items-center gap-2">
               <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -517,7 +512,6 @@
                 : `Pinned tag detected — updating will bump docker-compose.yml to ${updateModal.app?.target_tag} (with automatic backup).`"></span>
             </div>
 
-            <!-- Auto-Update Toggle -->
             <div class="glass-inset rounded-2xl p-3.5 flex items-center justify-between gap-3">
               <div class="min-w-0">
                 <p class="text-xs font-semibold" x-text="t('autoUpdateApp')"></p>
@@ -529,32 +523,40 @@
               </label>
             </div>
 
-            <!-- Changelog -->
-            <div class="glass-inset rounded-2xl p-4">
-              <div class="flex items-center justify-between gap-2 mb-3">
+            <!-- Changelog Box -->
+            <div class="glass-inset rounded-2xl p-4 space-y-3">
+              <div class="flex items-center justify-between gap-2 flex-wrap">
                 <div class="flex items-center gap-2">
                   <span class="text-xs font-bold uppercase tracking-wider text-sky-400">Changelog</span>
                   <span x-show="updateModal.releaseTag"
                         class="text-[11px] font-mono-code px-2 py-0.5 rounded-md bg-white/10 text-muted"
                         x-text="updateModal.releaseTag"></span>
                 </div>
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-1.5">
                   <a x-show="updateModal.releaseUrl" :href="updateModal.releaseUrl" target="_blank" rel="noopener"
-                     class="text-[11px] text-sky-400 hover:underline">GitHub ↗</a>
+                     class="glass-btn px-2.5 py-1 rounded-lg text-[11px] text-sky-400">GitHub ↗</a>
+                  <button @click="updateModal.showRepoInput = !updateModal.showRepoInput"
+                          class="glass-btn px-2.5 py-1 rounded-lg text-[11px] text-muted" x-text="t('repoSource')"></button>
                   <button @click="refreshSingleApp()" class="glass-btn px-2.5 py-1 rounded-lg text-[11px]" x-text="t('recheck')"></button>
                 </div>
               </div>
 
-              <div x-show="updateModal.changelogHtml" class="changelog-md" x-html="updateModal.changelogHtml"></div>
+              <!-- Báo lỗi rõ ràng nếu GitHub rate-limit hoặc repo private -->
+              <div x-show="updateModal.changelogError && !updateModal.changelogHtml" x-cloak
+                   class="rounded-xl px-3 py-2 bg-rose-500/12 border border-rose-500/30 text-[11px] text-rose-300"
+                   x-text="updateModal.changelogError"></div>
 
-              <div x-show="!updateModal.changelogHtml" class="text-xs text-muted space-y-3">
-                <p x-text="t('noChangelog')"></p>
+              <!-- Ô nhập / đổi link GitHub repo (hiện tự động nếu chưa có changelog hoặc khi bấm nút Nguồn) -->
+              <div x-show="!updateModal.changelogHtml || updateModal.showRepoInput" x-cloak class="space-y-2">
+                <p x-show="!updateModal.changelogHtml" class="text-xs text-muted" x-text="t('noChangelog')"></p>
                 <div class="flex gap-2">
-                  <input type="text" x-model="updateModal.customRepo" placeholder="https://github.com/owner/repo"
-                         class="glass-input flex-1 rounded-xl px-3 py-2 text-xs" />
-                  <button @click="saveCustomRepo()" class="glass-btn px-3 py-2 rounded-xl text-xs font-semibold" x-text="t('save')"></button>
+                  <input type="text" x-model="updateModal.customRepo" placeholder="owner/repo hoặc https://github.com/owner/repo"
+                         class="glass-input flex-1 rounded-xl px-3 py-2 text-xs font-mono-code" />
+                  <button @click="saveCustomRepo()" class="glass-btn-primary px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0" x-text="t('save')"></button>
                 </div>
               </div>
+
+              <div x-show="updateModal.changelogHtml" class="changelog-md" x-html="updateModal.changelogHtml"></div>
             </div>
           </div>
         </template>
@@ -564,7 +566,6 @@
              x-text="updateModal.updateLogs"></pre>
       </div>
 
-      <!-- Footer: Skip Update + Update Now -->
       <div class="pt-3 border-t border-[var(--glass-border)] flex items-center gap-2">
         <button x-show="!updateModal.updating && updateModal.app?.raw_has_update && updateModal.app?.skip_token"
                 @click="toggleSkipUpdate()"
@@ -591,7 +592,7 @@
     </div>
   </div>
 
-  <!-- MODAL 3: Compose Editor (Home Assistant Style: Visual UI ↔ YAML Code + Rollback) -->
+  <!-- MODAL 3: REDESIGNED HOME ASSISTANT-STYLE VISUAL COMPOSE EDITOR -->
   <div x-show="editModal.open" x-cloak x-transition.opacity
        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/70 backdrop-blur-md"
        @click.self="closeEditModal()">
@@ -599,8 +600,7 @@
          style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
       <div class="sheet-handle sm:hidden"></div>
 
-      <!-- Header -->
-      <div class="flex items-center justify-between gap-3 pb-3.5 border-b border-[var(--glass-border)]">
+      <div class="flex items-center justify-between gap-3 pb-3 border-b border-[var(--glass-border)]">
         <div class="min-w-0">
           <h3 class="font-bold text-base truncate" x-text="`${t('editTitle')} — ${editModal.app?.title || ''}`"></h3>
           <p class="text-[11px] text-muted font-mono-code truncate" x-text="editModal.composePath"></p>
@@ -609,23 +609,17 @@
                 class="glass-btn w-8 h-8 rounded-xl flex items-center justify-center text-rose-400">✕</button>
       </div>
 
-      <!-- Segmented Mode Switcher: Visual UI | YAML Code | Backups -->
-      <div class="glass-dock p-1 rounded-2xl grid grid-cols-3 gap-1 mt-3.5 mb-3.5 shrink-0">
-        <button @click="switchEditTab('ui')"
-                class="py-2 rounded-xl text-xs font-semibold transition"
-                :class="editModal.tab === 'ui' ? 'glass-btn-primary' : 'text-muted'"
-                x-text="t('tabVisualUi')"></button>
-        <button @click="switchEditTab('yaml')"
-                class="py-2 rounded-xl text-xs font-semibold transition"
-                :class="editModal.tab === 'yaml' ? 'glass-btn-primary' : 'text-muted'"
-                x-text="t('tabYamlCode')"></button>
-        <button @click="switchEditTab('backups')"
-                class="py-2 rounded-xl text-xs font-semibold transition"
+      <!-- Mode Switcher -->
+      <div class="glass-dock p-1 rounded-2xl grid grid-cols-3 gap-1 mt-3 mb-3 shrink-0">
+        <button @click="switchEditTab('ui')" class="py-2 rounded-xl text-xs font-semibold transition"
+                :class="editModal.tab === 'ui' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabVisualUi')"></button>
+        <button @click="switchEditTab('yaml')" class="py-2 rounded-xl text-xs font-semibold transition"
+                :class="editModal.tab === 'yaml' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabYamlCode')"></button>
+        <button @click="switchEditTab('backups')" class="py-2 rounded-xl text-xs font-semibold transition"
                 :class="editModal.tab === 'backups' ? 'glass-btn-primary' : 'text-muted'"
                 x-text="`${t('tabBackups')} (${editModal.backups.length})`"></button>
       </div>
 
-      <!-- Validation / Status Feedback -->
       <div x-show="editModal.feedback" x-cloak
            class="mb-3 px-3.5 py-2.5 rounded-2xl text-xs font-medium shrink-0 border"
            :class="editModal.feedbackOk
@@ -635,66 +629,86 @@
       </div>
 
       <!-- Body -->
-      <div class="flex-1 overflow-y-auto space-y-3.5 pr-0.5">
+      <div class="flex-1 overflow-y-auto space-y-2.5 pr-0.5">
         <div x-show="editModal.loading" class="py-12 text-center text-xs text-muted" x-text="t('loadingCompose')"></div>
 
-        <!-- TAB A: VISUAL UI EDITOR -->
+        <!-- TAB A: VISUAL UI (Accordion gọn gàng, nhãn rõ ràng, không bể layout) -->
         <template x-if="!editModal.loading && editModal.tab === 'ui' && editModal.ui">
-          <div class="space-y-4">
-            <!-- Service selector (if multi-service compose) -->
-            <div x-show="editModal.ui.services.length > 1" class="glass-inset rounded-2xl p-3.5">
-              <label class="block text-[11px] font-semibold text-muted mb-1.5" x-text="t('selectService')"></label>
-              <select x-model="editModal.ui.selected_service" @change="reloadServiceUi()"
-                      class="glass-input rounded-xl px-3 py-2 text-xs font-mono-code">
-                <template x-for="svc in editModal.ui.services" :key="svc">
-                  <option :value="svc" x-text="svc"></option>
-                </template>
-              </select>
+          <div class="space-y-2.5">
+            <!-- Service Switcher (multi-service) -->
+            <div x-show="editModal.ui.services.length > 1" class="glass-inset rounded-2xl p-3 flex items-center gap-2 overflow-x-auto no-scrollbar">
+              <span class="text-[11px] font-semibold text-muted shrink-0" x-text="t('selectService') + ':'"></span>
+              <template x-for="svc in editModal.ui.services" :key="svc">
+                <button type="button" @click="editModal.ui.selected_service = svc; reloadServiceUi()"
+                        class="px-3 py-1.5 rounded-xl text-xs font-mono-code font-semibold shrink-0"
+                        :class="editModal.ui.selected_service === svc ? 'glass-btn-primary' : 'glass-btn text-muted'"
+                        x-text="svc"></button>
+              </template>
             </div>
 
-            <!-- 1. Core Container Settings -->
-            <div class="glass-inset rounded-2xl p-4 space-y-3">
-              <p class="text-xs font-bold uppercase tracking-wider text-sky-400" x-text="t('secContainer')"></p>
+            <!-- ACCORDION 1: Container Core -->
+            <div class="glass-inset rounded-2xl overflow-hidden">
+              <button type="button" @click="editModal.sec.container = !editModal.sec.container"
+                      class="w-full px-4 py-3.5 flex items-center justify-between text-left">
+                <span class="flex items-center gap-2.5">
+                  <span class="w-7 h-7 rounded-lg bg-sky-500/15 text-sky-400 flex items-center justify-center">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/></svg>
+                  </span>
+                  <span class="text-xs font-bold tracking-wide" x-text="t('secContainer')"></span>
+                </span>
+                <svg class="w-4 h-4 text-subtle transition-transform" :class="editModal.sec.container ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+              </button>
 
-              <div>
-                <label class="block text-[11px] font-semibold text-muted mb-1">Image & Tag</label>
-                <input type="text" x-model="editModal.ui.service.image"
-                       class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
-              </div>
+              <div x-show="editModal.sec.container" class="px-4 pb-4 pt-1 space-y-3.5 border-t border-[var(--glass-border)]">
+                <div>
+                  <label class="block text-[11px] font-semibold text-muted mb-1">Image & Tag</label>
+                  <input type="text" x-model="editModal.ui.service.image"
+                         class="glass-input w-full rounded-xl px-3 py-2.5 text-xs font-mono-code" />
+                </div>
 
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label class="block text-[11px] font-semibold text-muted mb-1">Container Name</label>
                   <input type="text" x-model="editModal.ui.service.container_name"
-                         class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
+                         class="glass-input w-full rounded-xl px-3 py-2.5 text-xs font-mono-code" />
                 </div>
-                <div>
-                  <label class="block text-[11px] font-semibold text-muted mb-1">Restart Policy</label>
-                  <select x-model="editModal.ui.service.restart" class="glass-input rounded-xl px-3 py-2 text-xs">
-                    <option value="unless-stopped">unless-stopped</option>
-                    <option value="always">always</option>
-                    <option value="on-failure">on-failure</option>
-                    <option value="no">no</option>
-                  </select>
-                </div>
-              </div>
 
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                <!-- Restart Policy Pills -->
                 <div>
-                  <label class="block text-[11px] font-semibold text-muted mb-1">Network Mode</label>
-                  <select x-model="editModal.ui.service.network_mode" class="glass-input rounded-xl px-3 py-2 text-xs">
-                    <option value="">Default (Bridge)</option>
-                    <option value="host">host</option>
-                    <option value="bridge">bridge</option>
-                    <option value="none">none</option>
-                  </select>
+                  <label class="block text-[11px] font-semibold text-muted mb-1.5">Restart Policy</label>
+                  <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    <template x-for="opt in ['unless-stopped', 'always', 'on-failure', 'no']" :key="opt">
+                      <button type="button" @click="editModal.ui.service.restart = opt"
+                              class="py-2 px-2 rounded-xl text-[11px] font-semibold border transition"
+                              :class="editModal.ui.service.restart === opt
+                                ? 'bg-sky-500/20 border-sky-400/50 text-sky-300'
+                                : 'glass-btn text-muted'"
+                              x-text="opt"></button>
+                    </template>
+                  </div>
                 </div>
-                <div class="flex items-center justify-between pt-3 sm:pt-4 px-1">
+
+                <!-- Network Mode Pills -->
+                <div>
+                  <label class="block text-[11px] font-semibold text-muted mb-1.5">Network Mode</label>
+                  <div class="grid grid-cols-3 gap-1.5">
+                    <template x-for="net in [{v:'', l:'Bridge (Default)'}, {v:'host', l:'Host'}, {v:'none', l:'None'}]" :key="net.v">
+                      <button type="button" @click="editModal.ui.service.network_mode = net.v"
+                              class="py-2 px-2 rounded-xl text-[11px] font-semibold border transition"
+                              :class="(editModal.ui.service.network_mode || '') === net.v
+                                ? 'bg-sky-500/20 border-sky-400/50 text-sky-300'
+                                : 'glass-btn text-muted'"
+                              x-text="net.l"></button>
+                    </template>
+                  </div>
+                </div>
+
+                <!-- Privileged Toggle -->
+                <div class="glass-subcard rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3">
                   <div>
                     <p class="text-xs font-semibold">Privileged Mode</p>
                     <p class="text-[10.5px] text-muted" x-text="t('privilegedDesc')"></p>
                   </div>
-                  <label class="inline-flex items-center cursor-pointer">
+                  <label class="inline-flex items-center cursor-pointer shrink-0">
                     <input type="checkbox" x-model="editModal.ui.service.privileged" class="sr-only peer" />
                     <div class="w-11 h-6 bg-slate-600/60 rounded-full peer peer-checked:bg-amber-500 relative transition after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5"></div>
                   </label>
@@ -702,134 +716,215 @@
               </div>
             </div>
 
-            <!-- 2. Ports -->
-            <div class="glass-inset rounded-2xl p-4 space-y-2.5">
-              <div class="flex items-center justify-between">
-                <p class="text-xs font-bold uppercase tracking-wider text-sky-400">Ports</p>
-                <button type="button" @click="editModal.ui.service.ports.push({host:'', container:'', protocol:'tcp'})"
-                        class="glass-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-sky-400">+ Add Port</button>
-              </div>
-              <div x-show="editModal.ui.service.ports.length === 0" class="text-[11px] text-subtle italic" x-text="t('noPorts')"></div>
-              <template x-for="(p, idx) in editModal.ui.service.ports" :key="idx">
-                <div class="flex items-center gap-2">
-                  <input type="text" x-model="p.host" placeholder="Host (8098)"
-                         class="glass-input flex-1 rounded-xl px-2.5 py-2 text-xs font-mono-code" />
-                  <span class="text-subtle text-xs">:</span>
-                  <input type="text" x-model="p.container" placeholder="Container (8000)"
-                         class="glass-input flex-1 rounded-xl px-2.5 py-2 text-xs font-mono-code" />
-                  <select x-model="p.protocol" class="glass-input w-20 rounded-xl px-2 py-2 text-xs font-mono-code">
-                    <option value="tcp">tcp</option>
-                    <option value="udp">udp</option>
-                  </select>
-                  <button type="button" @click="editModal.ui.service.ports.splice(idx, 1)"
-                          class="glass-btn w-8 h-9 rounded-xl text-rose-400 shrink-0">✕</button>
-                </div>
-              </template>
-            </div>
+            <!-- ACCORDION 2: Ports (ĐÃ FIX HOÀN TOÀN BỐ CỤC LƯỚI) -->
+            <div class="glass-inset rounded-2xl overflow-hidden">
+              <button type="button" @click="editModal.sec.ports = !editModal.sec.ports"
+                      class="w-full px-4 py-3.5 flex items-center justify-between text-left">
+                <span class="flex items-center gap-2.5">
+                  <span class="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>
+                  </span>
+                  <span class="text-xs font-bold tracking-wide">Ports</span>
+                  <span class="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-muted font-semibold"
+                        x-text="editModal.ui.service.ports.length"></span>
+                </span>
+                <svg class="w-4 h-4 text-subtle transition-transform" :class="editModal.sec.ports ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+              </button>
 
-            <!-- 3. Volumes -->
-            <div class="glass-inset rounded-2xl p-4 space-y-2.5">
-              <div class="flex items-center justify-between">
-                <p class="text-xs font-bold uppercase tracking-wider text-sky-400">Volumes</p>
-                <button type="button" @click="editModal.ui.service.volumes.push({source:'', target:'', read_only:false})"
-                        class="glass-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-sky-400">+ Add Volume</button>
-              </div>
-              <template x-for="(v, idx) in editModal.ui.service.volumes" :key="idx">
-                <div class="space-y-1.5 pb-2 border-b border-[var(--glass-border)] last:border-0 last:pb-0">
-                  <div class="flex items-center gap-2">
-                    <input type="text" x-model="v.source" placeholder="/DATA/AppData/..."
-                           class="glass-input flex-1 rounded-xl px-2.5 py-2 text-xs font-mono-code" />
-                    <button type="button" @click="v.read_only = !v.read_only"
-                            class="px-2.5 h-9 rounded-xl text-[11px] font-bold border shrink-0"
-                            :class="v.read_only ? 'bg-amber-500/20 border-amber-400/40 text-amber-300' : 'glass-btn text-subtle'">RO</button>
-                    <button type="button" @click="editModal.ui.service.volumes.splice(idx, 1)"
-                            class="glass-btn w-8 h-9 rounded-xl text-rose-400 shrink-0">✕</button>
+              <div x-show="editModal.sec.ports" class="px-4 pb-4 pt-2 space-y-2.5 border-t border-[var(--glass-border)]">
+                <!-- Header Labels -->
+                <div x-show="editModal.ui.service.ports.length > 0"
+                     class="grid grid-cols-[1fr_14px_1fr_54px_34px] gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-subtle px-1">
+                  <span>Host</span><span></span><span>Container</span><span class="text-center">Proto</span><span></span>
+                </div>
+
+                <div x-show="editModal.ui.service.ports.length === 0" class="text-[11px] text-subtle italic" x-text="t('noPorts')"></div>
+
+                <template x-for="(p, idx) in editModal.ui.service.ports" :key="idx">
+                  <div class="grid grid-cols-[1fr_14px_1fr_54px_34px] gap-1.5 items-center">
+                    <input type="text" x-model="p.host" placeholder="8098"
+                           class="glass-input w-full rounded-xl px-2.5 py-2 text-xs font-mono-code text-center" />
+                    <span class="text-subtle text-xs text-center font-bold">:</span>
+                    <input type="text" x-model="p.container" placeholder="8000"
+                           class="glass-input w-full rounded-xl px-2.5 py-2 text-xs font-mono-code text-center" />
+                    <button type="button" @click="p.protocol = p.protocol === 'tcp' ? 'udp' : 'tcp'"
+                            class="h-[34px] rounded-xl text-[11px] font-mono-code font-bold uppercase border transition"
+                            :class="p.protocol === 'udp'
+                              ? 'bg-violet-500/20 border-violet-400/40 text-violet-300'
+                              : 'bg-sky-500/15 border-sky-400/30 text-sky-300'"
+                            x-text="p.protocol"></button>
+                    <button type="button" @click="editModal.ui.service.ports.splice(idx, 1)"
+                            class="glass-btn h-[34px] rounded-xl text-rose-400 text-xs flex items-center justify-center">✕</button>
                   </div>
-                  <input type="text" x-model="v.target" placeholder="Container path (e.g. /config)"
-                         class="glass-input w-full rounded-xl px-2.5 py-2 text-xs font-mono-code" />
-                </div>
-              </template>
+                </template>
+
+                <button type="button" @click="editModal.ui.service.ports.push({host:'', container:'', protocol:'tcp'})"
+                        class="glass-btn w-full py-2 rounded-xl text-xs font-semibold text-sky-400 mt-1">+ Add Port Mapping</button>
+              </div>
             </div>
 
-            <!-- 4. Environment Variables (Tự nhận diện biến True/False thành nút gạt!) -->
-            <div class="glass-inset rounded-2xl p-4 space-y-2.5">
-              <div class="flex items-center justify-between">
-                <p class="text-xs font-bold uppercase tracking-wider text-sky-400">Environment Variables</p>
-                <button type="button" @click="editModal.ui.service.environment.push({key:'', value:'', is_bool:false, bool_val:false, description:''})"
-                        class="glass-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-sky-400">+ Add Env</button>
-              </div>
-              <template x-for="(e, idx) in editModal.ui.service.environment" :key="idx">
-                <div class="space-y-1 pb-2 border-b border-[var(--glass-border)] last:border-0 last:pb-0">
-                  <div class="flex items-center gap-2">
-                    <input type="text" x-model="e.key" placeholder="KEY"
-                           class="glass-input w-[42%] rounded-xl px-2.5 py-2 text-xs font-mono-code" />
+            <!-- ACCORDION 3: Volumes (Thẻ có nhãn HOST / CONTAINER rõ ràng) -->
+            <div class="glass-inset rounded-2xl overflow-hidden">
+              <button type="button" @click="editModal.sec.volumes = !editModal.sec.volumes"
+                      class="w-full px-4 py-3.5 flex items-center justify-between text-left">
+                <span class="flex items-center gap-2.5">
+                  <span class="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>
+                  </span>
+                  <span class="text-xs font-bold tracking-wide">Volumes</span>
+                  <span class="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-muted font-semibold"
+                        x-text="editModal.ui.service.volumes.length"></span>
+                </span>
+                <svg class="w-4 h-4 text-subtle transition-transform" :class="editModal.sec.volumes ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+              </button>
 
-                    <!-- Smart Boolean Toggle Switch -->
+              <div x-show="editModal.sec.volumes" class="px-4 pb-4 pt-2 space-y-2.5 border-t border-[var(--glass-border)]">
+                <template x-for="(v, idx) in editModal.ui.service.volumes" :key="idx">
+                  <div class="glass-subcard rounded-2xl p-3 space-y-2">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-[10px] font-bold uppercase tracking-wider text-subtle" x-text="`Mount #${idx + 1}`"></span>
+                      <div class="flex items-center gap-1.5">
+                        <button type="button" @click="v.read_only = !v.read_only"
+                                class="px-2 py-0.5 rounded-lg text-[10px] font-bold border transition"
+                                :class="v.read_only
+                                  ? 'bg-amber-500/20 border-amber-400/40 text-amber-300'
+                                  : 'bg-emerald-500/15 border-emerald-400/30 text-emerald-300'"
+                                x-text="v.read_only ? 'Read-Only (RO)' : 'Read/Write (RW)'"></button>
+                        <button type="button" @click="editModal.ui.service.volumes.splice(idx, 1)"
+                                class="glass-btn w-6 h-6 rounded-lg text-rose-400 text-[11px] flex items-center justify-center">✕</button>
+                      </div>
+                    </div>
+
+                    <div class="space-y-1.5">
+                      <div>
+                        <span class="block text-[10px] font-semibold text-muted mb-0.5 ml-1">HOST PATH</span>
+                        <input type="text" x-model="v.source" placeholder="/DATA/AppData/..."
+                               class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
+                      </div>
+                      <div>
+                        <span class="block text-[10px] font-semibold text-sky-400/90 mb-0.5 ml-1">CONTAINER PATH</span>
+                        <input type="text" x-model="v.target" placeholder="/config"
+                               class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
+                      </div>
+                    </div>
+                  </div>
+                </template>
+
+                <button type="button" @click="editModal.ui.service.volumes.push({source:'', target:'', read_only:false})"
+                        class="glass-btn w-full py-2 rounded-xl text-xs font-semibold text-sky-400">+ Add Volume Mount</button>
+              </div>
+            </div>
+
+            <!-- ACCORDION 4: Environment Variables (Auto Toggle + Secret Masking) -->
+            <div class="glass-inset rounded-2xl overflow-hidden">
+              <button type="button" @click="editModal.sec.env = !editModal.sec.env"
+                      class="w-full px-4 py-3.5 flex items-center justify-between text-left">
+                <span class="flex items-center gap-2.5">
+                  <span class="w-7 h-7 rounded-lg bg-violet-500/15 text-violet-400 flex items-center justify-center">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5"/></svg>
+                  </span>
+                  <span class="text-xs font-bold tracking-wide">Environment</span>
+                  <span class="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-muted font-semibold"
+                        x-text="editModal.ui.service.environment.length"></span>
+                </span>
+                <svg class="w-4 h-4 text-subtle transition-transform" :class="editModal.sec.env ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+              </button>
+
+              <div x-show="editModal.sec.env" class="px-4 pb-4 pt-2 space-y-2.5 border-t border-[var(--glass-border)]">
+                <template x-for="(e, idx) in editModal.ui.service.environment" :key="idx">
+                  <div class="glass-subcard rounded-2xl p-3 space-y-2">
+                    <div class="flex items-center gap-2">
+                      <input type="text" x-model="e.key" placeholder="VARIABLE_NAME"
+                             class="glass-input flex-1 rounded-xl px-2.5 py-1.5 text-xs font-mono-code font-semibold text-sky-300" />
+                      <button type="button" @click="editModal.ui.service.environment.splice(idx, 1)"
+                              class="glass-btn w-7 h-7 rounded-lg text-rose-400 text-[11px] flex items-center justify-center shrink-0">✕</button>
+                    </div>
+
+                    <!-- Auto Boolean Switch -->
                     <template x-if="e.is_bool">
-                      <div class="flex-1 flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-[var(--input-bg)] border border-[var(--glass-border)]">
-                        <span class="font-mono-code text-xs" :class="e.bool_val ? 'text-emerald-400' : 'text-subtle'"
+                      <div class="flex items-center justify-between px-3 py-2 rounded-xl bg-[var(--input-bg)] border border-[var(--glass-border)]">
+                        <span class="font-mono-code text-xs font-semibold" :class="e.bool_val ? 'text-emerald-400' : 'text-subtle'"
                               x-text="e.bool_val ? 'true' : 'false'"></span>
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-2.5">
                           <label class="inline-flex items-center cursor-pointer">
                             <input type="checkbox" x-model="e.bool_val" class="sr-only peer" />
-                            <div class="w-9 h-5 bg-slate-600/60 rounded-full peer peer-checked:bg-emerald-500 relative transition after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+                            <div class="w-10 h-5 bg-slate-600/60 rounded-full peer peer-checked:bg-emerald-500 relative transition after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
                           </label>
                           <button type="button" @click="e.is_bool = false; e.value = e.bool_val ? 'true' : 'false'"
-                                  title="Switch to text" class="text-[10px] text-subtle hover:text-sky-400">Aa</button>
+                                  class="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-muted">Aa</button>
                         </div>
                       </div>
                     </template>
 
-                    <!-- Standard Text Input -->
+                    <!-- Secret / Standard Input -->
                     <template x-if="!e.is_bool">
-                      <input type="text" x-model="e.value" placeholder="Value"
-                             class="glass-input flex-1 rounded-xl px-2.5 py-2 text-xs font-mono-code" />
+                      <div class="relative">
+                        <input :type="(e.is_secret && !e.reveal) ? 'password' : 'text'" x-model="e.value" placeholder="Value"
+                               class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code"
+                               :class="e.is_secret ? 'pr-12' : ''" />
+                        <button x-show="e.is_secret" type="button" @click="e.reveal = !e.reveal"
+                                class="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] px-2 py-1 rounded-lg bg-white/10 text-muted"
+                                x-text="e.reveal ? 'Hide' : 'Show'"></button>
+                      </div>
                     </template>
 
-                    <button type="button" @click="editModal.ui.service.environment.splice(idx, 1)"
-                            class="glass-btn w-8 h-9 rounded-xl text-rose-400 shrink-0">✕</button>
+                    <p x-show="e.description" class="text-[10.5px] text-subtle pl-1" x-text="e.description"></p>
                   </div>
-                  <p x-show="e.description" class="text-[10.5px] text-subtle pl-1" x-text="e.description"></p>
-                </div>
-              </template>
+                </template>
+
+                <button type="button" @click="editModal.ui.service.environment.push({key:'', value:'', is_bool:false, bool_val:false, is_secret:false, reveal:true, description:''})"
+                        class="glass-btn w-full py-2 rounded-xl text-xs font-semibold text-sky-400">+ Add Variable</button>
+              </div>
             </div>
 
-            <!-- 5. CasaOS Card Metadata -->
-            <div class="glass-inset rounded-2xl p-4 space-y-3">
-              <p class="text-xs font-bold uppercase tracking-wider text-indigo-400">CasaOS Dashboard Card</p>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label class="block text-[11px] font-semibold text-muted mb-1" x-text="t('displayTitle')"></label>
-                  <input type="text" x-model="editModal.ui.casaos.title"
-                         class="glass-input w-full rounded-xl px-3 py-2 text-xs" />
+            <!-- ACCORDION 5: CasaOS Dashboard Card -->
+            <div class="glass-inset rounded-2xl overflow-hidden">
+              <button type="button" @click="editModal.sec.casaos = !editModal.sec.casaos"
+                      class="w-full px-4 py-3.5 flex items-center justify-between text-left">
+                <span class="flex items-center gap-2.5">
+                  <span class="w-7 h-7 rounded-lg bg-indigo-500/15 text-indigo-400 flex items-center justify-center">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/></svg>
+                  </span>
+                  <span class="text-xs font-bold tracking-wide">CasaOS Dashboard Card</span>
+                </span>
+                <svg class="w-4 h-4 text-subtle transition-transform" :class="editModal.sec.casaos ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+              </button>
+
+              <div x-show="editModal.sec.casaos" class="px-4 pb-4 pt-2 space-y-3 border-t border-[var(--glass-border)]">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-[11px] font-semibold text-muted mb-1" x-text="t('displayTitle')"></label>
+                    <input type="text" x-model="editModal.ui.casaos.title"
+                           class="glass-input w-full rounded-xl px-3 py-2 text-xs" />
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-semibold text-muted mb-1">WebUI Port</label>
+                    <input type="text" x-model="editModal.ui.casaos.port_map"
+                           class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
+                  </div>
                 </div>
-                <div>
-                  <label class="block text-[11px] font-semibold text-muted mb-1">WebUI Port</label>
-                  <input type="text" x-model="editModal.ui.casaos.port_map"
-                         class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
-                </div>
-              </div>
-              <div class="flex items-end gap-2.5">
-                <div class="flex-1">
-                  <label class="block text-[11px] font-semibold text-muted mb-1">Icon URL</label>
-                  <input type="text" x-model="editModal.ui.casaos.icon"
-                         class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
-                </div>
-                <div x-show="editModal.ui.casaos.icon" class="w-9 h-9 rounded-xl glass-icon-box p-1 shrink-0 overflow-hidden">
-                  <img :src="editModal.ui.casaos.icon" class="w-full h-full object-contain rounded" />
+                <div class="flex items-end gap-2.5">
+                  <div class="flex-1 min-w-0">
+                    <label class="block text-[11px] font-semibold text-muted mb-1">Icon URL</label>
+                    <input type="text" x-model="editModal.ui.casaos.icon"
+                           class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
+                  </div>
+                  <div x-show="editModal.ui.casaos.icon" class="w-9 h-9 rounded-xl glass-icon-box p-1 shrink-0 overflow-hidden">
+                    <img :src="editModal.ui.casaos.icon" class="w-full h-full object-contain rounded" />
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </template>
 
-        <!-- TAB B: RAW YAML CODE EDITOR -->
+        <!-- TAB B: YAML CODE -->
         <template x-if="!editModal.loading && editModal.tab === 'yaml'">
           <textarea x-model="editModal.rawYaml" spellcheck="false"
                     class="yaml-editor w-full h-full min-h-[380px] rounded-2xl p-4"></textarea>
         </template>
 
-        <!-- TAB C: BACKUPS & 1-CLICK ROLLBACK -->
+        <!-- TAB C: BACKUPS & ROLLBACK -->
         <template x-if="!editModal.loading && editModal.tab === 'backups'">
           <div class="space-y-2.5">
             <div x-show="editModal.backups.length === 0" class="py-10 text-center text-xs text-muted" x-text="t('noBackups')"></div>
@@ -840,20 +935,17 @@
                   <p class="text-[11px] text-muted mt-0.5" x-text="`${b.created_at} • ${(b.size / 1024).toFixed(1)} KB`"></p>
                 </div>
                 <button @click="rollbackCompose(b.filename)" :disabled="editModal.saving"
-                        class="glass-btn px-3 py-2 rounded-xl text-xs font-semibold text-amber-300 shrink-0">
-                  <span x-text="t('rollbackBtn')"></span>
-                </button>
+                        class="glass-btn px-3 py-2 rounded-xl text-xs font-semibold text-amber-300 shrink-0"
+                        x-text="t('rollbackBtn')"></button>
               </div>
             </template>
           </div>
         </template>
       </div>
 
-      <!-- Footer -->
       <div x-show="editModal.tab !== 'backups'" class="pt-3 border-t border-[var(--glass-border)] flex items-center gap-2 shrink-0">
         <button @click="validateCompose()" :disabled="editModal.saving"
-                class="glass-btn py-3 px-4 rounded-2xl text-xs font-semibold shrink-0"
-                x-text="t('validateBtn')"></button>
+                class="glass-btn py-3 px-4 rounded-2xl text-xs font-semibold shrink-0" x-text="t('validateBtn')"></button>
         <button @click="applyCompose()" :disabled="editModal.saving"
                 class="glass-btn-primary flex-1 py-3 px-4 rounded-2xl text-xs sm:text-sm font-semibold disabled:opacity-60"
                 x-text="editModal.saving ? t('applyingCompose') : t('saveAndApply')"></button>
@@ -861,14 +953,13 @@
     </div>
   </div>
 
-  <!-- MODAL 4: Smart Uninstall (4 tầng an toàn) -->
+  <!-- MODAL 4: Smart Uninstall -->
   <div x-show="uninstallModal.open" x-cloak x-transition.opacity
        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/70 backdrop-blur-md"
        @click.self="if (!uninstallModal.running) uninstallModal.open = false">
     <div class="glass-panel w-full max-w-md rounded-t-[28px] sm:rounded-[28px] p-5 sm:p-6 space-y-4"
          style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
       <div class="sheet-handle sm:hidden"></div>
-
       <div class="flex items-center justify-between gap-3 pb-3 border-b border-[var(--glass-border)]">
         <div class="min-w-0">
           <h3 class="font-bold text-base text-rose-400" x-text="t('uninstallTitle')"></h3>
@@ -877,7 +968,6 @@
         <button @click="uninstallModal.open = false" :disabled="uninstallModal.running"
                 class="glass-btn w-8 h-8 rounded-xl flex items-center justify-center text-muted">✕</button>
       </div>
-
       <div class="space-y-2.5 text-xs">
         <label class="glass-inset rounded-2xl p-3.5 flex items-center justify-between gap-3 opacity-80">
           <div>
@@ -886,7 +976,6 @@
           </div>
           <input type="checkbox" checked disabled class="w-4 h-4 accent-rose-500" />
         </label>
-
         <label x-show="uninstallModal.app?.source === 'casaos'"
                class="glass-inset rounded-2xl p-3.5 flex items-center justify-between gap-3 cursor-pointer">
           <div class="min-w-0">
@@ -895,7 +984,6 @@
           </div>
           <input type="checkbox" x-model="uninstallModal.removeCompose" class="w-4 h-4 accent-rose-500 shrink-0" />
         </label>
-
         <label class="glass-inset rounded-2xl p-3.5 flex items-center justify-between gap-3 cursor-pointer">
           <div>
             <p class="font-semibold" x-text="t('unStepImage')"></p>
@@ -903,7 +991,6 @@
           </div>
           <input type="checkbox" x-model="uninstallModal.removeImages" class="w-4 h-4 accent-rose-500 shrink-0" />
         </label>
-
         <div x-show="uninstallModal.app?.appdata_path"
              class="rounded-2xl p-3.5 border space-y-2.5 transition"
              :class="uninstallModal.removeAppdata ? 'bg-rose-500/12 border-rose-500/40' : 'glass-inset'">
@@ -914,18 +1001,14 @@
             </div>
             <input type="checkbox" x-model="uninstallModal.removeAppdata" class="w-4 h-4 accent-rose-500 shrink-0" />
           </label>
-
           <div x-show="uninstallModal.removeAppdata" x-cloak class="pt-1">
-            <p class="text-[11px] text-rose-300 mb-1.5"
-               x-text="`${t('typeToConfirm')}: ${uninstallModal.app?.name}`"></p>
+            <p class="text-[11px] text-rose-300 mb-1.5" x-text="`${t('typeToConfirm')}: ${uninstallModal.app?.name}`"></p>
             <input type="text" x-model="uninstallModal.confirmName" :placeholder="uninstallModal.app?.name"
                    class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
           </div>
         </div>
       </div>
-
       <div x-show="uninstallModal.error" x-cloak class="text-xs text-rose-400 px-1" x-text="uninstallModal.error"></div>
-
       <div class="flex gap-2 pt-1">
         <button @click="uninstallModal.open = false" :disabled="uninstallModal.running"
                 class="glass-btn flex-1 py-3 rounded-2xl text-xs font-semibold" x-text="t('cancel')"></button>
@@ -948,14 +1031,12 @@
         <h3 class="font-bold text-base" x-text="t('settingsTitle')"></h3>
         <button @click="settingsModal.open = false" class="glass-btn w-8 h-8 rounded-xl flex items-center justify-center text-rose-400">✕</button>
       </div>
-
       <div class="glass-dock p-1 rounded-2xl grid grid-cols-2 gap-1 mt-4 mb-4">
         <button @click="settingsModal.tab = 'schedule'" class="py-2 rounded-xl text-xs font-semibold transition"
                 :class="settingsModal.tab === 'schedule' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabSchedule')"></button>
         <button @click="settingsModal.tab = 'history'" class="py-2 rounded-xl text-xs font-semibold transition"
                 :class="settingsModal.tab === 'history' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabHistory')"></button>
       </div>
-
       <div class="flex-1 overflow-y-auto space-y-3.5">
         <template x-if="settingsModal.tab === 'schedule'">
           <div class="space-y-3.5">
@@ -979,7 +1060,6 @@
                 </div>
               </div>
             </div>
-
             <div class="glass-inset rounded-2xl p-4 flex items-center justify-between gap-3">
               <div class="min-w-0">
                 <p class="text-xs font-semibold" x-text="t('enableAutoUpdate')"></p>
@@ -990,7 +1070,6 @@
                 <div class="w-11 h-6 bg-slate-600/60 rounded-full peer peer-checked:bg-emerald-500 relative transition after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5"></div>
               </label>
             </div>
-
             <div class="grid grid-cols-2 gap-3">
               <div class="glass-inset rounded-2xl p-3.5 min-w-0 overflow-hidden">
                 <label class="block text-[11px] font-semibold text-muted mb-1.5 truncate" x-text="t('autoUpdateTime')"></label>
@@ -1003,7 +1082,6 @@
                        class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code text-center" />
               </div>
             </div>
-
             <div class="glass-inset rounded-2xl p-4 flex items-center justify-between gap-3">
               <div class="min-w-0">
                 <p class="text-xs font-semibold" x-text="t('pruneOldImages')"></p>
@@ -1014,19 +1092,16 @@
                 <div class="w-11 h-6 bg-slate-600/60 rounded-full peer peer-checked:bg-sky-500 relative transition after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5"></div>
               </label>
             </div>
-
             <div class="glass-inset rounded-2xl p-3.5">
               <label class="block text-[11px] font-semibold text-muted mb-1.5" x-text="t('githubTokenLabel')"></label>
               <input type="password" x-model="settingsForm.github_token"
                      :placeholder="settingsForm.has_github_token ? '•••••••• (Saved)' : 'ghp_...'"
                      class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
             </div>
-
             <button @click="saveSettings()" class="glass-btn-primary w-full py-3 rounded-2xl text-xs font-semibold"
                     x-text="t('saveSettings')"></button>
           </div>
         </template>
-
         <template x-if="settingsModal.tab === 'history'">
           <div class="space-y-2.5">
             <div x-show="updateHistory.length === 0" class="text-center py-8 text-xs text-muted" x-text="t('noHistory')"></div>
@@ -1098,14 +1173,14 @@
           open: 'Open Web', start: 'Start', stop: 'Stop', confirmStopTap: 'Tap to Stop', restart: 'Restart',
           logs: 'Live Logs', liveLogs: 'View Live Logs', moreActions: 'More options',
           updateNow: 'Update App', forcePull: 'Pull & Recreate', updateAndChangelog: 'Update & Changelog',
-          skipVersion: 'Skip Version', unskipVersion: 'Unskip Version',
+          skipVersion: 'Skip Version', unskipVersion: 'Unskip Version', repoSource: 'Repo',
           editCompose: 'Edit App (UI / YAML)', editTitle: 'Edit App',
           tabVisualUi: 'Visual UI', tabYamlCode: 'YAML Code', tabBackups: 'Backups',
-          loadingCompose: 'Loading docker-compose.yml...', selectService: 'Service to edit',
+          loadingCompose: 'Loading docker-compose.yml...', selectService: 'Service',
           secContainer: 'Container Configuration', privilegedDesc: 'Grant extended host privileges',
           noPorts: 'No ports published.', displayTitle: 'Display Title',
           noBackups: 'No backups created yet. Backups are auto-saved before every edit.',
-          rollbackBtn: 'Rollback', validateBtn: 'Validate', saveAndApply: 'Save & Apply', applyingCompose: 'Applying changes...',
+          rollbackBtn: 'Rollback', validateBtn: 'Validate', saveAndApply: 'Save & Apply', applyingCompose: 'Applying...',
           uninstallApp: 'Uninstall App', uninstallTitle: 'Uninstall Application',
           unStepContainer: 'Stop & remove container', unStepCompose: 'Remove CasaOS app config (cleans Dashboard)',
           unStepImage: 'Remove Docker image', unStepImageDesc: 'Free SSD storage used by this image',
@@ -1113,7 +1188,7 @@
           cancel: 'Cancel', confirmUninstall: 'Uninstall Now', uninstalling: 'Uninstalling...',
           loadingDetails: 'Fetching version & changelog...', recheck: 'Re-check',
           autoUpdateApp: 'Auto-Update this app', autoUpdateAppDesc: 'Update automatically on your daily schedule',
-          noChangelog: 'No GitHub Release notes detected automatically. Paste the GitHub repository URL once:',
+          noChangelog: 'Enter a GitHub repository (owner/repo or URL) to load Releases, CHANGELOG.md, or recent commits:',
           save: 'Save', noComposeWarning: 'No docker-compose.yml detected for safe recreate.',
           updatingWait: 'Updating... Please keep this window open',
           settingsTitle: 'Settings & Automation', tabSchedule: 'Preferences & Schedule', tabHistory: 'History',
@@ -1121,7 +1196,7 @@
           enableAutoUpdate: 'Enable Scheduled Auto-Update', enableAutoUpdateDesc: 'Only updates apps with Auto-Update toggled ON',
           autoUpdateTime: 'Daily Update Time', checkInterval: 'Silent Check (hrs)',
           pruneOldImages: 'Auto-clean old images', pruneOldImagesDesc: 'Free SSD space right after each successful update',
-          githubTokenLabel: 'GitHub Token (Optional — avoids Changelog API limits)',
+          githubTokenLabel: 'GitHub Token (Optional — avoids rate limits & supports private repos)',
           saveSettings: 'Save Settings', noHistory: 'No update history yet.', noApps: 'No matching containers found.',
           clear: 'Clear', connectingLogs: 'Connecting to live stream...'
         },
@@ -1138,10 +1213,10 @@
           open: 'Mở Web', start: 'Chạy', stop: 'Dừng', confirmStopTap: 'Chạm xác nhận', restart: 'Khởi động lại',
           logs: 'Xem Logs', liveLogs: 'Xem Live Logs', moreActions: 'Tuỳ chọn',
           updateNow: 'Cập nhật ngay', forcePull: 'Tải lại & Tạo mới', updateAndChangelog: 'Cập nhật & Changelog',
-          skipVersion: 'Bỏ qua bản này', unskipVersion: 'Bỏ ẩn bản này',
+          skipVersion: 'Bỏ qua bản này', unskipVersion: 'Bỏ ẩn bản này', repoSource: 'Nguồn',
           editCompose: 'Chỉnh sửa App (UI / YAML)', editTitle: 'Chỉnh sửa App',
           tabVisualUi: 'Tuỳ chỉnh UI', tabYamlCode: 'Sửa YAML', tabBackups: 'Sao lưu',
-          loadingCompose: 'Đang đọc docker-compose.yml...', selectService: 'Chọn service cần sửa',
+          loadingCompose: 'Đang đọc docker-compose.yml...', selectService: 'Service',
           secContainer: 'Cấu hình Container', privilegedDesc: 'Cấp quyền cao nhất trên máy chủ',
           noPorts: 'Chưa mở port nào.', displayTitle: 'Tên hiển thị',
           noBackups: 'Chưa có bản sao lưu nào. Hệ thống tự sao lưu trước mỗi lần bấm Lưu.',
@@ -1153,7 +1228,7 @@
           cancel: 'Huỷ', confirmUninstall: 'Xoá ngay', uninstalling: 'Đang gỡ bỏ...',
           loadingDetails: 'Đang tải phiên bản & Changelog...', recheck: 'Quét lại',
           autoUpdateApp: 'Tự động cập nhật app này', autoUpdateAppDesc: 'Chạy tự động theo khung giờ trong Cài đặt',
-          noChangelog: 'Chưa tự nhận diện được Changelog từ GitHub. Dán link GitHub repo 1 lần:',
+          noChangelog: 'Nhập link GitHub (owner/repo hoặc URL) để tải Releases, CHANGELOG.md hoặc commit mới nhất:',
           save: 'Lưu', noComposeWarning: 'Container không có file docker-compose.yml để cập nhật an toàn.',
           updatingWait: 'Đang cập nhật... Vui lòng không đóng trang',
           settingsTitle: 'Cài đặt & Tự động hóa', tabSchedule: 'Tuỳ chỉnh & Lịch', tabHistory: 'Lịch sử',
@@ -1161,7 +1236,7 @@
           enableAutoUpdate: 'Bật tự động cập nhật theo lịch', enableAutoUpdateDesc: 'Chỉ tự cập nhật những app bạn đã bật nút Auto riêng',
           autoUpdateTime: 'Giờ chạy mỗi ngày', checkInterval: 'Quét ngầm (giờ)',
           pruneOldImages: 'Tự xoá image cũ sau khi update', pruneOldImagesDesc: 'Giải phóng dung lượng SSD tự động sau mỗi lần cập nhật',
-          githubTokenLabel: 'GitHub Token (Tuỳ chọn — tránh giới hạn Changelog API)',
+          githubTokenLabel: 'GitHub Token (Tuỳ chọn — tránh giới hạn API & đọc repo Private)',
           saveSettings: 'Lưu cài đặt', noHistory: 'Chưa có lịch sử cập nhật nào.', noApps: 'Không tìm thấy container nào phù hợp.',
           clear: 'Xoá', connectingLogs: 'Đang kết nối luồng log trực tiếp...'
         }
@@ -1194,13 +1269,14 @@
         batchModal: { open: false, running: false, items: [], doneCount: 0, succeeded: 0, failed: 0, logs: '', ws: null },
         updateModal: {
           open: false, loading: false, updating: false, app: null,
-          changelogHtml: '', releaseTag: '', releaseUrl: '',
-          autoUpdate: false, customRepo: '', updateLogs: '', ws: null
+          changelogHtml: '', changelogError: '', releaseTag: '', releaseUrl: '',
+          autoUpdate: false, customRepo: '', showRepoInput: false, updateLogs: '', ws: null
         },
         editModal: {
           open: false, loading: false, saving: false, tab: 'ui',
           app: null, composePath: '', rawYaml: '', ui: null,
-          backups: [], feedback: '', feedbackOk: true
+          backups: [], feedback: '', feedbackOk: true,
+          sec: { container: true, ports: true, volumes: false, env: false, casaos: false }
         },
         uninstallModal: {
           open: false, running: false, app: null,
@@ -1321,39 +1397,30 @@
           finally { this.checkingUpdates = false; }
         },
 
-        // ---------------- Action Sheet ----------------
         openActionSheet(app) {
-          this.actionSheet.app = app;
-          this.actionSheet.confirmStop = false;
-          this.actionSheet.open = true;
+          this.actionSheet.app = app; this.actionSheet.confirmStop = false; this.actionSheet.open = true;
         },
 
         closeActionSheet() {
-          this.actionSheet.open = false;
-          this.actionSheet.confirmStop = false;
+          this.actionSheet.open = false; this.actionSheet.confirmStop = false;
         },
 
         handleSheetStopStart() {
           const app = this.actionSheet.app;
           if (!app) return;
           if (app.status === 'running') {
-            if (!this.actionSheet.confirmStop) {
-              this.actionSheet.confirmStop = true;
-              return;
-            }
-            this.closeActionSheet();
-            this.runAction(app, 'stop');
+            if (!this.actionSheet.confirmStop) { this.actionSheet.confirmStop = true; return; }
+            this.closeActionSheet(); this.runAction(app, 'stop');
           } else {
-            this.closeActionSheet();
-            this.runAction(app, 'start');
+            this.closeActionSheet(); this.runAction(app, 'start');
           }
         },
 
-        // ---------------- Update & Skip ----------------
         async openUpdateModal(app) {
           this.updateModal.open = true;
           this.updateModal.loading = true;
           this.updateModal.updating = false;
+          this.updateModal.showRepoInput = false;
           this.updateModal.updateLogs = '';
           this.updateModal.app = app;
           await this._fetchAppDetails(app.name, false);
@@ -1368,9 +1435,11 @@
             this.updateModal.app = data.app;
             this.updateModal.releaseTag = data.release_tag || '';
             this.updateModal.releaseUrl = data.release_url || '';
+            this.updateModal.changelogError = data.changelog_error || '';
             this.updateModal.autoUpdate = !!data.pref?.auto_update;
-            this.updateModal.customRepo = data.pref?.custom_repo || '';
+            this.updateModal.customRepo = data.pref?.custom_repo || data.app?.source_url || '';
             this.updateModal.changelogHtml = data.changelog ? DOMPurify.sanitize(marked.parse(data.changelog)) : '';
+            if (this.updateModal.changelogHtml) this.updateModal.showRepoInput = false;
           } catch (err) { this.showToast(err.message); }
           finally { this.updateModal.loading = false; }
         },
@@ -1419,8 +1488,7 @@
 
         startAppUpdate() {
           if (!this.updateModal.app) return;
-          this.updateModal.updating = true;
-          this.updateModal.updateLogs = '';
+          this.updateModal.updating = true; this.updateModal.updateLogs = '';
           const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
           const ws = new WebSocket(`${proto}//${window.location.host}/ws/update/${encodeURIComponent(this.updateModal.app.name)}`);
           this.updateModal.ws = ws;
@@ -1438,7 +1506,6 @@
           this.updateModal.open = false;
         },
 
-        // ---------------- Compose Editor (Visual UI <-> YAML + Rollback) ----------------
         async openEditModal(app) {
           this.editModal.open = true;
           this.editModal.loading = true;
@@ -1446,6 +1513,7 @@
           this.editModal.tab = 'ui';
           this.editModal.app = app;
           this.editModal.feedback = '';
+          this.editModal.sec = { container: true, ports: true, volumes: false, env: false, casaos: false };
           try {
             const res = await fetch(`/api/apps/${encodeURIComponent(app.name)}/compose`);
             const data = await res.json();
@@ -1487,26 +1555,21 @@
           if (nextTab === this.editModal.tab) return;
           this.editModal.feedback = '';
           if (this.editModal.tab === 'ui' && (nextTab === 'yaml' || nextTab === 'backups')) {
-            const ok = await this._syncUiToYaml();
-            if (!ok) return;
+            if (!(await this._syncUiToYaml())) return;
           } else if (this.editModal.tab === 'yaml' && nextTab === 'ui') {
             const res = await fetch(`/api/apps/${encodeURIComponent(this.editModal.app.name)}/compose/to-ui`, {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ raw_yaml: this.editModal.rawYaml, selected_service: this.editModal.ui?.selected_service })
             });
             const data = await res.json();
-            if (!res.ok) {
-              this.editModal.feedbackOk = false;
-              this.editModal.feedback = `YAML Error: ${data.detail}`;
-              return;
-            }
+            if (!res.ok) { this.editModal.feedbackOk = false; this.editModal.feedback = `YAML Error: ${data.detail}`; return; }
             this.editModal.ui = data.ui;
           }
           this.editModal.tab = nextTab;
         },
 
         async validateCompose() {
-          if (this.editModal.tab === 'ui') { const ok = await this._syncUiToYaml(); if (!ok) return; }
+          if (this.editModal.tab === 'ui' && !(await this._syncUiToYaml())) return;
           const res = await fetch(`/api/apps/${encodeURIComponent(this.editModal.app.name)}/compose/validate`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ raw_yaml: this.editModal.rawYaml })
@@ -1517,13 +1580,9 @@
         },
 
         async applyCompose() {
-          this.editModal.saving = true;
-          this.editModal.feedback = '';
+          this.editModal.saving = true; this.editModal.feedback = '';
           try {
-            if (this.editModal.tab === 'ui') {
-              const ok = await this._syncUiToYaml();
-              if (!ok) { this.editModal.saving = false; return; }
-            }
+            if (this.editModal.tab === 'ui' && !(await this._syncUiToYaml())) { this.editModal.saving = false; return; }
             const res = await fetch(`/api/apps/${encodeURIComponent(this.editModal.app.name)}/compose/apply`, {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ raw_yaml: this.editModal.rawYaml })
@@ -1532,20 +1591,15 @@
             if (!res.ok) throw new Error(data.detail || 'Apply failed');
             this.editModal.backups = data.backups || this.editModal.backups;
             this.showToast(this.lang === 'vi' ? 'Đã áp dụng cấu hình mới ✓' : 'Configuration applied ✓');
-            if (data.self_update) { setTimeout(() => window.location.reload(), 9000); }
+            if (data.self_update) setTimeout(() => window.location.reload(), 9000);
             this.editModal.open = false;
             await this.loadApps();
-          } catch (err) {
-            this.editModal.feedbackOk = false;
-            this.editModal.feedback = err.message;
-          } finally {
-            this.editModal.saving = false;
-          }
+          } catch (err) { this.editModal.feedbackOk = false; this.editModal.feedback = err.message; }
+          finally { this.editModal.saving = false; }
         },
 
         async rollbackCompose(filename) {
-          this.editModal.saving = true;
-          this.editModal.feedback = '';
+          this.editModal.saving = true; this.editModal.feedback = '';
           try {
             const res = await fetch(`/api/apps/${encodeURIComponent(this.editModal.app.name)}/compose/rollback`, {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1553,39 +1607,27 @@
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || 'Rollback failed');
-            this.showToast(this.lang === 'vi' ? 'Đã khôi phục bản sao lưu ✓' : 'Rolled back successfully ✓');
+            this.showToast(this.lang === 'vi' ? 'Đã khôi phục bản sao lưu ✓' : 'Rolled back ✓');
             this.editModal.open = false;
             await this.loadApps();
-          } catch (err) {
-            this.editModal.feedbackOk = false;
-            this.editModal.feedback = err.message;
-          } finally {
-            this.editModal.saving = false;
-          }
+          } catch (err) { this.editModal.feedbackOk = false; this.editModal.feedback = err.message; }
+          finally { this.editModal.saving = false; }
         },
 
-        closeEditModal() {
-          if (this.editModal.saving) return;
-          this.editModal.open = false;
-        },
+        closeEditModal() { if (!this.editModal.saving) this.editModal.open = false; },
 
-        // ---------------- Smart Uninstall ----------------
         openUninstallModal(app) {
-          this.uninstallModal.app = app;
-          this.uninstallModal.removeCompose = app.source === 'casaos';
-          this.uninstallModal.removeImages = false;
-          this.uninstallModal.removeAppdata = false;
-          this.uninstallModal.confirmName = '';
-          this.uninstallModal.error = '';
-          this.uninstallModal.running = false;
-          this.uninstallModal.open = true;
+          this.uninstallModal = {
+            open: true, running: false, app,
+            removeCompose: app.source === 'casaos',
+            removeImages: false, removeAppdata: false, confirmName: '', error: ''
+          };
         },
 
         async confirmUninstall() {
           const app = this.uninstallModal.app;
           if (!app) return;
-          this.uninstallModal.running = true;
-          this.uninstallModal.error = '';
+          this.uninstallModal.running = true; this.uninstallModal.error = '';
           try {
             const res = await fetch(`/api/apps/${encodeURIComponent(app.name)}/uninstall`, {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1601,18 +1643,12 @@
             this.uninstallModal.open = false;
             this.showToast(`${app.title}: ${this.lang === 'vi' ? 'Đã gỡ cài đặt ✓' : 'Uninstalled ✓'}`);
             await this.loadApps();
-          } catch (err) {
-            this.uninstallModal.error = err.message;
-          } finally {
-            this.uninstallModal.running = false;
-          }
+          } catch (err) { this.uninstallModal.error = err.message; }
+          finally { this.uninstallModal.running = false; }
         },
 
-        // ---------------- Batch Update, Settings, Actions, Logs ----------------
         startBatchUpdate() {
-          this.batchModal.open = true; this.batchModal.running = true;
-          this.batchModal.items = []; this.batchModal.doneCount = 0;
-          this.batchModal.succeeded = 0; this.batchModal.failed = 0; this.batchModal.logs = '';
+          this.batchModal = { open: true, running: true, items: [], doneCount: 0, succeeded: 0, failed: 0, logs: '', ws: null };
           const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
           const ws = new WebSocket(`${proto}//${window.location.host}/ws/update-all`);
           this.batchModal.ws = ws;
@@ -1687,8 +1723,7 @@
 
         openLogs(app) {
           this.closeLogs();
-          this.logModal.open = true; this.logModal.title = app.title;
-          this.logModal.containerName = app.name; this.logModal.lines = '';
+          this.logModal = { open: true, title: app.title, containerName: app.name, lines: '', ws: null };
           const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
           const ws = new WebSocket(`${proto}//${window.location.host}/ws/logs/${app.id}`);
           this.logModal.ws = ws;
