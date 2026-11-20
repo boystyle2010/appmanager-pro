@@ -190,17 +190,18 @@ def get_update_cache_item(container_name: str) -> dict[str, Any]:
 
 
 def save_update_cache(item: dict[str, Any]) -> None:
+    item.setdefault("target_tag", "")
     conn = get_connection()
     try:
         conn.execute(
             """
             INSERT INTO update_cache (
                 container_name, image, local_digest, remote_digest,
-                current_version, remote_version, has_update, source_url,
+                current_version, remote_version, target_tag, has_update, source_url,
                 changelog, release_tag, release_url, published_at, checked_at, error
             ) VALUES (
                 :container_name, :image, :local_digest, :remote_digest,
-                :current_version, :remote_version, :has_update, :source_url,
+                :current_version, :remote_version, :target_tag, :has_update, :source_url,
                 :changelog, :release_tag, :release_url, :published_at, :checked_at, :error
             )
             ON CONFLICT(container_name) DO UPDATE SET
@@ -209,6 +210,7 @@ def save_update_cache(item: dict[str, Any]) -> None:
                 remote_digest = excluded.remote_digest,
                 current_version = excluded.current_version,
                 remote_version = excluded.remote_version,
+                target_tag = excluded.target_tag,
                 has_update = excluded.has_update,
                 source_url = excluded.source_url,
                 changelog = excluded.changelog,
