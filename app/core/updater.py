@@ -1,12 +1,13 @@
 import asyncio
 from pathlib import Path
-from typing import Awaitable, Callable
+from typing import Any, Awaitable, Callable
 
 from app.core.database import add_update_history, get_setting
-from app.core.docker_client import get_app_by_name, get_docker_client
+from app.core.docker_client import get_app_by_name, get_docker_client, list_all_apps
 from app.core.registry_checker import check_one_app_by_name
 
 LogCallback = Callable[[str], Awaitable[None]]
+EventCallback = Callable[[dict[str, Any]], Awaitable[None]]
 
 
 async def _run_cmd_stream(
@@ -39,9 +40,13 @@ def _prune_old_image_sync(old_image_id: str, new_image_id: str) -> str:
 
 
 def _trigger_self_update_helper(compose_path: str) -> None:
-    """Khởi chạy 1 container helper tạm thời để tự update AppManager Pro mà không bị ngắt giữa chừng."""
     compose_dir = str(Path(compose_path).parent)
     client = get_docker_client()
+    try:
+        old = client.containers.get("appmanager-pro-self-updater")
+        old.remove(force=True)
+    except Exception:
+        pass
     client.containers.run(
         image="docker:27-cli",
         command=[
@@ -82,7 +87,6 @@ async def update_app_stream(
     compose_dir = str(Path(compose_path).parent)
     service = app_info.get("service") or ""
 
-    # Xử lý riêng nếu đang tự cập nhật chính AppManager Pro
     if app_info.get("is_self"):
         await send_log(f"==> Detected self-update for {title}.\n")
         await send_log("==> Launching detached helper container to pull & recreate...\n")
@@ -93,7 +97,7 @@ async def update_app_stream(
             )
             await send_log("==> Helper launched! AppManager Pro will restart in ~10 seconds.\n")
             await send_log("__SELF_UPDATE_RELOAD__\n")
-            return {"ok": True, "self_update": True}
+            return {"ok": True, "self_update": True, "to_version": target_ver}
         except Exception as exc:
             await send_log(f"[ERROR] Self-update failed: {exc}\n")
             add_update_history(
@@ -104,7 +108,6 @@ async def update_app_stream(
     await send_log(f"==> Updating {title} ({container_name})\n")
     await send_log(f"==> Compose file: {compose_path}\n\n")
 
-    # Bước 1: docker compose pull
     pull_cmd = ["docker", "compose", "-f", compose_path, "pull"]
     if service:
         pull_cmd.append(service)
@@ -117,7 +120,6 @@ async def update_app_stream(
         )
         return {"ok": False, "error": f"Pull failed (exit {rc})"}
 
-    # Bước 2: docker compose up -d
     up_cmd = ["docker", "compose", "-f", compose_path, "up", "-d", "--remove-orphans"]
     if service:
         up_cmd.append(service)
@@ -130,7 +132,6 @@ async def update_app_stream(
         )
         return {"ok": False, "error": f"Recreate failed (exit {rc2})"}
 
-    # Bước 3: Kiểm tra trạng thái & dọn image cũ
     await asyncio.sleep(3)
     refreshed = await asyncio.to_thread(get_app_by_name, container_name)
     new_ver = refreshed["version"] if refreshed else target_ver
@@ -142,7 +143,6 @@ async def update_app_stream(
         if prune_msg:
             await send_log(f"\n==> {prune_msg}\n")
 
-    # Bước 4: Cập nhật lại cache digest
     await send_log("==> Refreshing update status...\n")
     await check_one_app_by_name(container_name)
 
@@ -163,3 +163,79 @@ async def update_app_stream(
     else:
         await send_log(f"\n⚠️ Container status after update: {new_status}. Check Live Logs.\n")
         return {"ok": False, "error": f"Status is {new_status}"}
+
+
+async def update_all_apps_stream(send_event: EventCallback) -> None:
+    """Cập nhật tuần tự toàn bộ app có bản mới; luôn đẩy self-update xuống cuối cùng."""
+    data = await asyncio.to_thread(list_all_apps, True)
+    candidates = [a for a in data["apps"] if a["has_update"] and a["can_update"]]
+
+    regular = [a for a in candidates if not a["is_self"]]
+    self_apps = [a for a in candidates if a["is_self"]]
+    ordered = regular + self_apps
+
+    await send_event(
+        {
+            "type": "init",
+            "apps": [
+                {
+                    "name": a["name"],
+                    "title": a["title"],
+                    "icon": a["icon"],
+                    "from_version": a["version"],
+                    "to_version": a["remote_version"] or "latest",
+                    "is_self": a["is_self"],
+                    "status": "pending",
+                }
+                for a in ordered
+            ],
+        }
+    )
+
+    if not ordered:
+        await send_event({"type": "complete", "succeeded": 0, "failed": 0, "self_update": False})
+        return
+
+    succeeded = 0
+    failed = 0
+    self_triggered = False
+
+    async def forward_log(text: str) -> None:
+        await send_event({"type": "log", "text": text})
+
+    for idx, app_item in enumerate(ordered):
+        await send_event({"type": "app_start", "index": idx, "name": app_item["name"]})
+        await send_event(
+            {
+                "type": "log",
+                "text": f"\n========== [{idx + 1}/{len(ordered)}] {app_item['title']} ==========\n",
+            }
+        )
+        res = await update_app_stream(app_item["name"], forward_log, mode="batch")
+        ok = bool(res.get("ok"))
+        if ok:
+            succeeded += 1
+        else:
+            failed += 1
+        if res.get("self_update"):
+            self_triggered = True
+
+        await send_event(
+            {
+                "type": "app_done",
+                "index": idx,
+                "name": app_item["name"],
+                "ok": ok,
+                "to_version": res.get("to_version") or app_item["remote_version"],
+                "error": res.get("error") or "",
+            }
+        )
+
+    await send_event(
+        {
+            "type": "complete",
+            "succeeded": succeeded,
+            "failed": failed,
+            "self_update": self_triggered,
+        }
+    )
