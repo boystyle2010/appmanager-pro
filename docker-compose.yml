@@ -1,0 +1,56 @@
+name: appmanager-pro
+
+services:
+  appmanager-pro:
+    image: ghcr.io/boystyle2010/appmanager-pro:latest
+    container_name: appmanager-pro
+    restart: unless-stopped
+    ports:
+      - target: 8000
+        published: "8098"
+        protocol: tcp
+    environment:
+      - TZ=America/Denver
+      - CASAOS_APPS_DIR=/var/lib/casaos/apps
+      - APPDATA_DIR=/DATA/AppData
+      - RESET_AUTH=false
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/casaos/apps:/var/lib/casaos/apps
+      - /DATA/AppData:/DATA/AppData
+      - /DATA/AppData/appmanager-pro/data:/app/data
+    x-casaos:
+      envs:
+        - container: TZ
+          description:
+            en_US: Timezone (e.g., America/Denver, Asia/Ho_Chi_Minh)
+        - container: RESET_AUTH
+          description:
+            en_US: Set to true to reset Admin account on next startup
+      ports:
+        - container: "8000"
+          description:
+            en_US: WebUI Port (default host port 8098)
+      volumes:
+        - container: /app/data
+          description:
+            en_US: AppManager Pro database & configuration
+
+x-casaos:
+  architectures:
+    - amd64
+    - arm64
+  main: appmanager-pro
+  author: boystyle2010
+  category: Utilities
+  icon: https://raw.githubusercontent.com/boystyle2010/appmanager-pro/main/assets/icon.png
+  index: /
+  port_map: "8098"
+  scheme: http
+  store_app_id: appmanager-pro
+  title:
+    en_US: AppManager Pro
+  tagline:
+    en_US: Fast, Glassmorphic Docker & CasaOS App Manager
+  description:
+    en_US: High-speed Docker & CasaOS App Manager featuring real Registry Digest update checks, changelog viewer, safe YAML editor with rollback, and secure authentication.
