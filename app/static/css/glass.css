@@ -5,9 +5,10 @@
   --text-tertiary: #64748b;
 
   --glass-bg: rgba(17, 25, 44, 0.56);
-  --glass-bg-elevated: rgba(14, 21, 38, 0.84);
+  --glass-bg-elevated: rgba(14, 21, 38, 0.86);
   --glass-bg-hover: rgba(24, 35, 60, 0.72);
   --glass-inset: rgba(6, 10, 22, 0.42);
+  --glass-icon-bg: rgba(255, 255, 255, 0.11);
   --glass-surface: rgba(255, 255, 255, 0.055);
   --glass-surface-hover: rgba(255, 255, 255, 0.11);
 
@@ -31,9 +32,10 @@ html.light {
   --text-tertiary: #64748b;
 
   --glass-bg: rgba(255, 255, 255, 0.66);
-  --glass-bg-elevated: rgba(255, 255, 255, 0.88);
+  --glass-bg-elevated: rgba(255, 255, 255, 0.90);
   --glass-bg-hover: rgba(255, 255, 255, 0.86);
   --glass-inset: rgba(15, 23, 42, 0.04);
+  --glass-icon-bg: rgba(255, 255, 255, 0.85);
   --glass-surface: rgba(15, 23, 42, 0.045);
   --glass-surface-hover: rgba(15, 23, 42, 0.09);
 
@@ -70,7 +72,6 @@ body {
   margin: 0;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 .font-mono-code {
@@ -79,9 +80,7 @@ body {
 
 .ambient-bg {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
+  top: 0; left: 0; right: 0;
   height: 100lvh;
   z-index: 0;
   background:
@@ -93,10 +92,7 @@ body {
   transform: translateZ(0);
 }
 
-.page-layer {
-  position: relative;
-  z-index: 1;
-}
+.page-layer { position: relative; z-index: 1; }
 
 .glass-header {
   background: var(--header-bg);
@@ -121,7 +117,7 @@ body {
   -webkit-backdrop-filter: blur(22px) saturate(175%);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow);
-  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.2s ease, border-color 0.2s ease;
+  transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
   transform: translateZ(0);
 }
 
@@ -131,7 +127,6 @@ body {
   transform: translateY(-2px);
 }
 
-/* Viền nhấn nhẹ tinh tế cho app có bản cập nhật */
 .glass-card-update {
   border-color: rgba(245, 158, 11, 0.34);
   box-shadow: 0 18px 42px -14px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(251, 191, 36, 0.26);
@@ -142,12 +137,15 @@ body {
   border: 1px solid var(--glass-border);
 }
 
-/* Cụm nút bấm kính liền khối (Segmented Dock) */
+/* Nền sáng dịu cho hộp Icon giúp icon tối màu (scrutiny, v.v.) luôn nổi rõ */
+.glass-icon-box {
+  background: var(--glass-icon-bg);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
 .glass-dock {
   background: var(--glass-surface);
   border: 1px solid var(--glass-border);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
 
 .glass-input {
@@ -159,9 +157,9 @@ body {
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
-/* Sửa triệt để lỗi <input type="time"> và <input type="number"> tràn viền trên iOS Safari */
 input[type="time"].glass-input,
-input[type="number"].glass-input {
+input[type="number"].glass-input,
+select.glass-input {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
@@ -171,9 +169,7 @@ input[type="number"].glass-input {
   min-height: 38px;
 }
 
-.glass-input::placeholder {
-  color: var(--text-tertiary);
-}
+.glass-input::placeholder { color: var(--text-tertiary); }
 
 .glass-input:focus {
   outline: none;
@@ -193,11 +189,8 @@ input[type="number"].glass-input {
   border-color: var(--glass-border-strong);
 }
 
-.glass-btn:active:not(:disabled) {
-  transform: scale(0.97);
-}
+.glass-btn:active:not(:disabled) { transform: scale(0.97); }
 
-/* Nút chính tông kính xanh sâu tinh tế, không chói gắt */
 .glass-btn-primary {
   background: linear-gradient(135deg, rgba(14, 165, 233, 0.88) 0%, rgba(79, 70, 229, 0.88) 100%);
   border: 1px solid rgba(255, 255, 255, 0.22);
@@ -206,11 +199,6 @@ input[type="number"].glass-input {
   transition: filter 0.16s ease, transform 0.14s ease;
 }
 
-.glass-btn-primary:hover:not(:disabled) {
-  filter: brightness(1.08);
-}
-
-/* Nút Update tông hổ phách kính thanh lịch */
 .glass-btn-update {
   background: linear-gradient(135deg, rgba(245, 158, 11, 0.92) 0%, rgba(234, 88, 12, 0.90) 100%);
   border: 1px solid rgba(255, 255, 255, 0.26);
@@ -219,16 +207,18 @@ input[type="number"].glass-input {
   transition: filter 0.16s ease, transform 0.14s ease;
 }
 
-.glass-btn-update:hover:not(:disabled) {
-  filter: brightness(1.08);
+.glass-btn-danger {
+  background: linear-gradient(135deg, rgba(225, 29, 72, 0.90) 0%, rgba(190, 18, 60, 0.90) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  box-shadow: 0 6px 18px -6px rgba(225, 29, 72, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  transition: filter 0.16s ease, transform 0.14s ease;
 }
 
-.glass-btn-primary:active:not(:disabled),
-.glass-btn-update:active:not(:disabled) {
-  transform: scale(0.98);
-}
+.glass-btn-primary:hover:not(:disabled),
+.glass-btn-update:hover:not(:disabled),
+.glass-btn-danger:hover:not(:disabled) { filter: brightness(1.08); }
 
-/* Thanh kéo chuẩn iOS Bottom Sheet */
 .sheet-handle {
   width: 38px;
   height: 4px;
@@ -259,22 +249,31 @@ input[type="number"].glass-input {
   border: 1px solid rgba(255, 255, 255, 0.10);
 }
 
+.yaml-editor {
+  background: rgba(3, 7, 18, 0.85);
+  border: 1px solid var(--glass-border);
+  color: #e2e8f0;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  tab-size: 2;
+  resize: none;
+}
+
+.yaml-editor:focus {
+  outline: none;
+  border-color: rgba(56, 189, 248, 0.65);
+}
+
 .changelog-md {
   font-size: 0.82rem;
   line-height: 1.65;
   color: var(--text-primary);
 }
-.changelog-md h1, .changelog-md h2, .changelog-md h3 {
-  font-weight: 700;
-  margin: 0.9rem 0 0.4rem;
-}
+.changelog-md h1, .changelog-md h2, .changelog-md h3 { font-weight: 700; margin: 0.9rem 0 0.4rem; }
 .changelog-md h2 { font-size: 0.95rem; }
 .changelog-md h3 { font-size: 0.88rem; }
-.changelog-md ul, .changelog-md ol {
-  padding-left: 1.25rem;
-  margin: 0.4rem 0 0.7rem;
-  list-style: disc;
-}
+.changelog-md ul, .changelog-md ol { padding-left: 1.25rem; margin: 0.4rem 0 0.7rem; list-style: disc; }
 .changelog-md li { margin-bottom: 0.3rem; }
 .changelog-md p { margin-bottom: 0.55rem; }
 .changelog-md code {
@@ -294,7 +293,6 @@ input[type="number"].glass-input {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
-
 .changelog-md pre code {
   background: transparent;
   padding: 0;
@@ -303,14 +301,11 @@ input[type="number"].glass-input {
   line-height: 1.55;
   white-space: pre;
 }
-
 .changelog-md a { color: #38bdf8; text-decoration: underline; }
 
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-.safe-bottom {
-  padding-bottom: calc(2.5rem + env(safe-area-inset-bottom));
-}
+.safe-bottom { padding-bottom: calc(2.5rem + env(safe-area-inset-bottom)); }
 
 [x-cloak] { display: none !important; }
