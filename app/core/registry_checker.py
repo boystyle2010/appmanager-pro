@@ -33,7 +33,15 @@ SINGLE_MANIFEST_ACCEPT = ", ".join(
 PINNED_TAG_RE = re.compile(r"^(v?)(\d+(?:\.\d+)+)(-[a-zA-Z0-9._-]+)?$")
 PRERELEASE_RE = re.compile(r"(alpha|beta|rc\d*|dev|nightly|canary|pre|test|snapshot)", re.I)
 
-# Map sẵn repo GitHub cho các image chính chủ trên Docker Hub thường không gắn OCI source label
+GENERIC_VERSION_WORDS = {
+    "", "unknown", "none", "latest", "main", "master",
+    "edge", "stable", "dev", "nightly", "beta", "alpine",
+}
+
+NON_TAG_CHANGELOG_SOURCES = {
+    "CHANGELOG.md", "changelog.md", "HISTORY.md", "RELEASES.md", "NEWS", "Commits",
+}
+
 KNOWN_IMAGE_REPOS: dict[str, str] = {
     "library/php": "php/php-src",
     "library/nginx": "nginx/nginx",
@@ -177,7 +185,6 @@ def _slug_from_text(text: str) -> Optional[str]:
         m = re.search(pat, s)
         if m:
             return m.group(1).removesuffix(".git").rstrip("/")
-    # Hỗ trợ nhập ngắn dạng "owner/repo"
     if re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", s):
         return s.removesuffix(".git")
     return None
@@ -188,7 +195,6 @@ def extract_github_slug(
     image_ref: str,
     icon_url: str = "",
 ) -> Optional[str]:
-    """Trích xuất 'owner/repo' theo thứ tự ưu tiên: custom/OCI source -> compose icon -> ghcr.io -> Docker Hub map."""
     for candidate in (source_url, icon_url):
         slug = _slug_from_text(candidate)
         if slug:
@@ -210,15 +216,9 @@ def extract_github_slug(
 
 
 async def fetch_github_release(client: httpx.AsyncClient, slug: str) -> dict[str, str]:
-    """
-    Lấy Changelog theo 3 tầng:
-    1. GitHub Releases (latest hoặc bản phát hành gần nhất)
-    2. File CHANGELOG.md / HISTORY.md / RELEASES.md / NEWS trực tiếp trong repo
-    3. 6 commit gần nhất nếu repo chưa có Release lẫn file Changelog
-    """
     headers = {
         "Accept": "application/vnd.github+json",
-        "User-Agent": "AppManager-Pro/0.3.1",
+        "User-Agent": "AppManager-Pro/0.3.2",
     }
     gh_token = get_setting("github_token", "").strip()
     if gh_token:
@@ -233,7 +233,6 @@ async def fetch_github_release(client: httpx.AsyncClient, slug: str) -> dict[str
     }
 
     try:
-        # Tầng 1: GitHub Releases
         resp = await client.get(
             f"https://api.github.com/repos/{slug}/releases/latest",
             headers=headers,
@@ -266,7 +265,6 @@ async def fetch_github_release(client: httpx.AsyncClient, slug: str) -> dict[str
                 out["changelog"] = body
                 return out
 
-        # Kiểm tra repo có tồn tại/public không trước khi thử tầng 2 & 3
         repo_resp = await client.get(f"https://api.github.com/repos/{slug}", headers=headers)
         if repo_resp.status_code == 404:
             out["error"] = f"GitHub repo '{slug}' not found or Private (add GitHub Token in Settings)."
@@ -276,7 +274,6 @@ async def fetch_github_release(client: httpx.AsyncClient, slug: str) -> dict[str
             return out
         default_branch = (repo_resp.json() if repo_resp.status_code == 200 else {}).get("default_branch", "main")
 
-        # Tầng 2: Đọc trực tiếp CHANGELOG.md / HISTORY.md / NEWS trên nhánh mặc định
         raw_headers = {**headers, "Accept": "application/vnd.github.raw+json"}
         for fname in ("CHANGELOG.md", "changelog.md", "HISTORY.md", "RELEASES.md", "NEWS"):
             c_resp = await client.get(
@@ -292,7 +289,6 @@ async def fetch_github_release(client: httpx.AsyncClient, slug: str) -> dict[str
                 out["changelog"] = text
                 return out
 
-        # Tầng 3: Fallback sang 6 commit mới nhất
         cm_resp = await client.get(
             f"https://api.github.com/repos/{slug}/commits?per_page=6",
             headers=headers,
@@ -316,7 +312,7 @@ async def fetch_github_release(client: httpx.AsyncClient, slug: str) -> dict[str
     return out
 
 
-async def _fetch_remote_oci_labels(
+async def _fetch_remote_manifest_info(
     client: httpx.AsyncClient,
     registry: str,
     repo: str,
@@ -324,7 +320,11 @@ async def _fetch_remote_oci_labels(
     arch_digest: Optional[str],
     token_cache: dict[str, str],
     scope_key: str,
-) -> dict[str, str]:
+) -> tuple[str, dict[str, str]]:
+    """
+    Trả về (remote_config_digest, remote_oci_labels).
+    So sánh remote_config_digest với container.image.id giúp loại bỏ 100% báo update ảo trên GHCR/Buildx.
+    """
     try:
         single_manifest = manifest_data
         if "manifests" in manifest_data and arch_digest:
@@ -333,22 +333,23 @@ async def _fetch_remote_oci_labels(
                 client, m_url, SINGLE_MANIFEST_ACCEPT, token_cache, scope_key
             )
             if m_resp.status_code != 200:
-                return {}
+                return "", {}
             single_manifest = m_resp.json()
 
-        config_digest = (single_manifest.get("config") or {}).get("digest")
+        config_digest = str((single_manifest.get("config") or {}).get("digest") or "").strip()
         if not config_digest:
-            return {}
+            return "", {}
 
         b_url = f"https://{registry}/v2/{repo}/blobs/{config_digest}"
         b_resp = await _registry_request(client, b_url, "*/*", token_cache, scope_key)
         if b_resp.status_code != 200:
-            return {}
+            return config_digest, {}
 
         blob = b_resp.json()
-        return (blob.get("config") or {}).get("Labels") or {}
+        labels = (blob.get("config") or {}).get("Labels") or {}
+        return config_digest, labels
     except Exception:
-        return {}
+        return "", {}
 
 
 async def _discover_newer_pinned_tag(
@@ -435,6 +436,7 @@ async def check_single_app(
     image_ref = app_info["image"]
     icon_url = app_info.get("icon") or ""
     local_digests: list[str] = app_info.get("local_digests") or []
+    local_image_id: str = (app_info.get("image_id") or "").strip()
     current_version = app_info.get("version") or "latest"
     pref = get_app_pref(name)
     prev_cache = get_update_cache_item(name)
@@ -461,7 +463,6 @@ async def check_single_app(
         "error": "",
     }
 
-    # Bước 1: Kiểm tra Registry Digest nếu có local digest
     registry, repo, tag = parse_image_ref(image_ref)
     pinned_info = _parse_pinned_tag(tag)
     scope_key = f"{registry}/{repo}"
@@ -470,7 +471,9 @@ async def check_single_app(
     manifest_data: dict[str, Any] = {}
     arch_digest: Optional[str] = None
     remote_digest = ""
+    remote_labels: dict[str, str] = {}
 
+    # Bước 1: Kiểm tra Registry Digest + đối chiếu chắc chắn bằng Config ID (image_id)
     if local_digests:
         try:
             manifest_url = f"https://{registry}/v2/{repo}/manifests/{tag}"
@@ -492,9 +495,21 @@ async def check_single_app(
                 remote_candidates = {d for d in (top_digest, arch_digest) if d}
                 remote_digest = top_digest or arch_digest or ""
                 result["remote_digest"] = remote_digest
-                has_digest_update = bool(remote_candidates) and not any(
+
+                digest_differs = bool(remote_candidates) and not any(
                     d in remote_candidates for d in local_digests
                 )
+
+                if digest_differs:
+                    # Đối chiếu tầng 2 bằng Config Digest (khớp tuyệt đối với container.image.id)
+                    remote_cfg_digest, remote_labels = await _fetch_remote_manifest_info(
+                        client, registry, repo, manifest_data, arch_digest, token_cache, scope_key
+                    )
+                    if local_image_id and remote_cfg_digest and local_image_id == remote_cfg_digest:
+                        # Ảnh local và server thực chất giống hệt nhau -> không báo update ảo
+                        has_digest_update = False
+                    else:
+                        has_digest_update = True
             else:
                 result["error"] = f"Registry HTTP {resp.status_code}"
         except Exception as exc:
@@ -502,7 +517,7 @@ async def check_single_app(
     else:
         result["error"] = "Local build (no registry digest)"
 
-    # Bước 2: Luôn thử lấy Changelog từ GitHub (kể cả khi đã Up to date hoặc local build)
+    # Bước 2: Lấy Changelog từ GitHub (Releases -> CHANGELOG.md -> Commits)
     slug = extract_github_slug(source_url, image_ref, icon_url)
     if slug:
         result["source_url"] = f"https://github.com/{slug}"
@@ -549,18 +564,18 @@ async def check_single_app(
                     result["remote_digest"] = new_digest
             elif has_digest_update:
                 result["has_update"] = 1
-                remote_labels = await _fetch_remote_oci_labels(
-                    client, registry, repo, manifest_data, arch_digest, token_cache, scope_key
-                )
+
+                # Lọc bỏ các chữ chung chung kiểu "latest", "main" khi đọc OCI version
+                found_real_ver = ""
                 for key in (
                     "org.opencontainers.image.version",
                     "build_version",
                     "org.label-schema.version",
                     "version",
                 ):
-                    val = remote_labels.get(key)
-                    if val and str(val).lower() not in ("unknown", "none", ""):
-                        result["remote_version"] = str(val).strip()
+                    val = str(remote_labels.get(key) or "").strip()
+                    if val and val.lower() not in GENERIC_VERSION_WORDS:
+                        found_real_ver = val
                         break
 
                 if not result["source_url"]:
@@ -572,15 +587,18 @@ async def check_single_app(
                     if found_src:
                         result["source_url"] = found_src
 
-                if result["remote_version"] == current_version:
-                    if (
-                        result["release_tag"]
-                        and result["release_tag"] not in ("CHANGELOG.md", "Commits")
-                        and result["release_tag"].lstrip("v") != current_version.lstrip("v")
-                    ):
-                        result["remote_version"] = result["release_tag"]
-                    elif remote_digest:
-                        result["remote_version"] = f"{tag} ({remote_digest[7:14]})"
+                if found_real_ver and found_real_ver.lstrip("v") != current_version.lstrip("v"):
+                    result["remote_version"] = found_real_ver
+                elif (
+                    result["release_tag"]
+                    and result["release_tag"] not in NON_TAG_CHANGELOG_SOURCES
+                    and result["release_tag"].lstrip("v") != current_version.lstrip("v")
+                ):
+                    result["remote_version"] = result["release_tag"]
+                elif remote_digest:
+                    result["remote_version"] = f"build-{remote_digest[7:14]}"
+                else:
+                    result["remote_version"] = "New build"
         except Exception as exc:
             if not result["error"]:
                 result["error"] = str(exc)[:180]
