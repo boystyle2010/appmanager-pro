@@ -60,7 +60,7 @@ async def lifespan(_: FastAPI):
     stop_scheduler()
 
 
-app = FastAPI(title="AppManager Pro", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="AppManager Pro", version="0.2.1", lifespan=lifespan)
 
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 if ASSETS_DIR.exists():
@@ -333,6 +333,30 @@ async def ws_update_app(websocket: WebSocket, container_name: str):
 
     try:
         await update_app_stream(container_name, send_log, mode="manual")
+    except WebSocketDisconnect:
+        pass
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+
+@app.websocket("/ws/update-all")
+async def ws_update_all(websocket: WebSocket):
+    if not verify_websocket_user(websocket):
+        await websocket.close(code=4401)
+        return
+
+    await websocket.accept()
+
+    async def send_event(payload: dict):
+        try:
+            await websocket.send_json(payload)
+        except Exception:
+            pass
+
+    try:
+        await update_all_apps_stream(send_event)
     except WebSocketDisconnect:
         pass
     finally:
