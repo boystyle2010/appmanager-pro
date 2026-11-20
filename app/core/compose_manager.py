@@ -110,6 +110,9 @@ def _parse_volume_entry(entry: Any) -> dict[str, Any]:
     return {"source": parts[0], "target": parts[1], "read_only": "ro" in mode}
 
 
+SECRET_KEY_WORDS = ("PASS", "SECRET", "TOKEN", "API_KEY", "APIKEY", "AUTH_KEY", "PRIVATE_KEY")
+
+
 def _parse_env_entries(env_raw: Any, x_envs_desc: dict[str, str]) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     if isinstance(env_raw, dict):
@@ -131,12 +134,16 @@ def _parse_env_entries(env_raw: Any, x_envs_desc: dict[str, str]) -> list[dict[s
             continue
         low = v.strip().lower()
         is_bool = low in ("true", "false")
+        ku = k.upper()
+        is_secret = (not is_bool) and any(w in ku for w in SECRET_KEY_WORDS)
         items.append(
             {
                 "key": k,
                 "value": v,
                 "is_bool": is_bool,
                 "bool_val": low == "true",
+                "is_secret": is_secret,
+                "reveal": False,
                 "description": x_envs_desc.get(k, ""),
             }
         )
