@@ -7,9 +7,9 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="/manifest.json" />
-  <title>AppManager Pro</title>
-  <link rel="icon" type="image/png" href="/assets/icon.png" />
-  <link rel="apple-touch-icon" href="/assets/icon.png" />
+  <title>App Manager Pro</title>
+  <link rel="icon" type="image/png" href="/assets/icon.png?v=2" />
+  <link rel="apple-touch-icon" href="/assets/icon.png?v=2" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -34,10 +34,10 @@
   <div class="page-layer safe-bottom">
     <!-- Slim Sticky Glass Header -->
     <header class="glass-header sticky top-0 z-40">
-      <div class="max-w-7xl mx-auto px-4 h-[60px] flex items-center justify-between gap-3">
+      <div class="max-w-7xl mx-auto px-3.5 sm:px-4 h-[60px] flex items-center justify-between gap-2.5">
         <div class="flex items-center gap-2.5 min-w-0">
           <div class="brand-squircle w-9 h-9 shrink-0">
-            <img src="/assets/icon.png" alt="AppManager Pro" />
+            <img src="/assets/icon.png?v=2" alt="App Manager Pro" />
           </div>
           <div class="min-w-0">
             <div class="flex items-center gap-1.5">
@@ -63,13 +63,22 @@
           </div>
         </div>
 
-        <div class="flex items-center gap-2 shrink-0">
-          <button @click="checkUpdates(false)" :disabled="checkingUpdates"
-                  class="glass-btn h-9 px-3 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 text-sky-400 border-sky-400/25 disabled:opacity-70">
+        <!-- Right Controls: + Deploy | Check | Settings & Logout -->
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button @click="openDeployModal()" :title="t('deployApp')"
+                  class="glass-btn-primary h-9 w-9 sm:w-auto sm:px-3 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5">
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+            </svg>
+            <span class="hidden sm:inline" x-text="t('deployShort')"></span>
+          </button>
+
+          <button @click="checkUpdates(false)" :disabled="checkingUpdates" :title="t('checkShort')"
+                  class="glass-btn h-9 px-2.5 sm:px-3 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 text-sky-400 border-sky-400/25 disabled:opacity-70">
             <svg class="w-3.5 h-3.5" :class="checkingUpdates ? 'animate-spin' : ''" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M20.49 9A9 9 0 005.64 5.64L4 9m16 6l-1.64 3.36A9 9 0 013.51 15"/>
             </svg>
-            <span x-text="checkingUpdates ? t('checkingShort') : t('checkShort')"></span>
+            <span class="hidden min-[400px]:inline" x-text="checkingUpdates ? t('checkingShort') : t('checkShort')"></span>
           </button>
 
           <div class="glass-dock h-9 rounded-xl flex items-center overflow-hidden divide-x divide-[var(--glass-border)]">
@@ -110,7 +119,6 @@
             </div>
           </div>
 
-          <!-- Nút tắt Banner trên Mobile -->
           <button @click="dismissUpdateBanner()" :title="t('dismissBanner')" aria-label="Dismiss"
                   class="sm:hidden glass-btn w-7 h-7 rounded-full flex items-center justify-center text-muted hover:text-[var(--text-primary)] shrink-0">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
@@ -131,7 +139,6 @@
             </svg>
             <span x-text="`${t('updateAll')} (${summary.updates})`"></span>
           </button>
-          <!-- Nút tắt Banner trên Desktop -->
           <button @click="dismissUpdateBanner()" :title="t('dismissBanner')" aria-label="Dismiss"
                   class="hidden sm:flex glass-btn w-8 h-8 rounded-full items-center justify-center text-muted hover:text-[var(--text-primary)] shrink-0 ml-1">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
@@ -321,6 +328,187 @@
     </main>
   </div>
 
+  <!-- MODAL 0: + DEPLOY NEW APP (Quick Form UI <-> Paste YAML + Live Terminal) -->
+  <div x-show="deployModal.open" x-cloak x-transition.opacity
+       class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/70 backdrop-blur-md"
+       @click.self="closeDeployModal()">
+    <div class="glass-panel w-full max-w-3xl rounded-t-[28px] sm:rounded-[28px] p-5 sm:p-6 flex flex-col h-[92dvh] sm:max-h-[90vh]"
+         style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
+      <div class="sheet-handle sm:hidden"></div>
+
+      <div class="flex items-center justify-between gap-3 pb-3 border-b border-[var(--glass-border)]">
+        <div class="min-w-0">
+          <h3 class="font-bold text-base truncate" x-text="t('deployModalTitle')"></h3>
+          <p class="text-[11px] text-muted truncate" x-text="envMode === 'casaos' ? t('deployCasaosHint') : t('deployDockerHint')"></p>
+        </div>
+        <button @click="closeDeployModal()" :disabled="deployModal.deploying" aria-label="Close"
+                class="glass-btn w-8 h-8 rounded-full flex items-center justify-center text-muted hover:text-[var(--text-primary)] shrink-0">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Mode Switcher -->
+      <div x-show="!deployModal.deploying && !deployModal.logs" class="glass-dock p-1 rounded-2xl grid grid-cols-2 gap-1 mt-3 mb-3 shrink-0">
+        <button @click="switchDeployTab('yaml')" class="py-2 rounded-xl text-xs font-semibold transition"
+                :class="deployModal.tab === 'yaml' ? 'glass-btn-primary' : 'text-muted'" x-text="t('deployTabYaml')"></button>
+        <button @click="switchDeployTab('quick')" class="py-2 rounded-xl text-xs font-semibold transition"
+                :class="deployModal.tab === 'quick' ? 'glass-btn-primary' : 'text-muted'" x-text="t('deployTabQuick')"></button>
+      </div>
+
+      <div x-show="deployModal.feedback" x-cloak
+           class="mb-3 px-3.5 py-2.5 rounded-2xl text-xs font-medium shrink-0 border"
+           :class="deployModal.feedbackOk
+             ? 'bg-emerald-500/15 border-emerald-400/35 text-emerald-300'
+             : 'bg-rose-500/15 border-rose-500/35 text-rose-300'">
+        <span x-text="deployModal.feedback"></span>
+      </div>
+
+      <!-- Body -->
+      <div class="flex-1 overflow-y-auto space-y-3 pr-0.5">
+        <!-- TAB 1: PASTE DOCKER COMPOSE YAML -->
+        <template x-if="!deployModal.deploying && !deployModal.logs && deployModal.tab === 'yaml'">
+          <div class="space-y-3 flex flex-col h-full">
+            <div class="flex items-end gap-2">
+              <div class="flex-1 min-w-0">
+                <label class="block text-[11px] font-semibold text-muted mb-1" x-text="t('deployAppIdOptional')"></label>
+                <input type="text" x-model="deployModal.appName" placeholder="my-app (auto-detected from YAML name)"
+                       class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
+              </div>
+              <button type="button" @click="loadSampleCompose()"
+                      class="glass-btn h-[34px] px-3 rounded-xl text-[11px] font-semibold text-sky-400 shrink-0"
+                      x-text="t('loadSample')"></button>
+            </div>
+
+            <textarea x-model="deployModal.rawYaml" spellcheck="false"
+                      placeholder="name: my-app&#10;services:&#10;  my-app:&#10;    image: nginx:latest&#10;    ..."
+                      class="yaml-editor w-full flex-1 min-h-[300px] rounded-2xl p-4"></textarea>
+          </div>
+        </template>
+
+        <!-- TAB 2: QUICK FORM UI -->
+        <template x-if="!deployModal.deploying && !deployModal.logs && deployModal.tab === 'quick'">
+          <div class="space-y-3">
+            <div class="glass-inset rounded-2xl p-4 space-y-3">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[11px] font-semibold text-muted mb-1">App ID (Folder & Container)</label>
+                  <input type="text" x-model="deployModal.quick.app_name" placeholder="uptime-kuma"
+                         class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-semibold text-muted mb-1" x-text="t('displayTitle')"></label>
+                  <input type="text" x-model="deployModal.quick.title" placeholder="Uptime Kuma"
+                         class="glass-input w-full rounded-xl px-3 py-2 text-xs" />
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-semibold text-muted mb-1">Docker Image & Tag *</label>
+                <input type="text" x-model="deployModal.quick.image" placeholder="louislam/uptime-kuma:latest"
+                       class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
+              </div>
+
+              <div class="flex items-end gap-2.5">
+                <div class="flex-1 min-w-0">
+                  <label class="block text-[11px] font-semibold text-muted mb-1">Icon URL (Optional)</label>
+                  <input type="text" x-model="deployModal.quick.icon" placeholder="https://..."
+                         class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
+                </div>
+                <div x-show="deployModal.quick.icon" class="w-9 h-9 rounded-xl glass-icon-box p-1 shrink-0 overflow-hidden">
+                  <img :src="deployModal.quick.icon" class="w-full h-full object-contain rounded" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Quick Ports -->
+            <div class="glass-inset rounded-2xl p-4 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-emerald-400">Ports</span>
+                <button type="button" @click="deployModal.quick.ports.push({host:'', container:'', protocol:'tcp'})"
+                        class="glass-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-sky-400">+ Add Port</button>
+              </div>
+              <template x-for="(p, idx) in deployModal.quick.ports" :key="idx">
+                <div class="grid grid-cols-[1fr_14px_1fr_54px_34px] gap-1.5 items-center">
+                  <input type="text" x-model="p.host" placeholder="Host" class="glass-input w-full rounded-xl px-2.5 py-2 text-xs font-mono-code text-center" />
+                  <span class="text-subtle text-xs text-center font-bold">:</span>
+                  <input type="text" x-model="p.container" placeholder="Container" class="glass-input w-full rounded-xl px-2.5 py-2 text-xs font-mono-code text-center" />
+                  <button type="button" @click="p.protocol = p.protocol === 'tcp' ? 'udp' : 'tcp'"
+                          class="h-[34px] rounded-xl text-[11px] font-mono-code font-bold uppercase border bg-sky-500/15 border-sky-400/30 text-sky-300"
+                          x-text="p.protocol"></button>
+                  <button type="button" @click="deployModal.quick.ports.splice(idx, 1)"
+                          class="glass-btn h-[34px] rounded-xl text-rose-400 flex items-center justify-center">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                  </button>
+                </div>
+              </template>
+            </div>
+
+            <!-- Quick Volumes -->
+            <div class="glass-inset rounded-2xl p-4 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-amber-400">Volumes</span>
+                <button type="button" @click="deployModal.quick.volumes.push({source:`/DATA/AppData/${deployModal.quick.app_name || 'app'}/data`, target:'/data', read_only:false})"
+                        class="glass-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-sky-400">+ Add Volume</button>
+              </div>
+              <template x-for="(v, idx) in deployModal.quick.volumes" :key="idx">
+                <div class="glass-subcard rounded-xl p-2.5 space-y-1.5">
+                  <div class="flex items-center gap-1.5">
+                    <input type="text" x-model="v.source" placeholder="/DATA/AppData/..." class="glass-input flex-1 rounded-xl px-2.5 py-1.5 text-xs font-mono-code" />
+                    <button type="button" @click="deployModal.quick.volumes.splice(idx, 1)" class="glass-btn w-7 h-7 rounded-full text-rose-400 flex items-center justify-center shrink-0">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                  </div>
+                  <input type="text" x-model="v.target" placeholder="Container path (/data)" class="glass-input w-full rounded-xl px-2.5 py-1.5 text-xs font-mono-code" />
+                </div>
+              </template>
+            </div>
+
+            <!-- Quick Env -->
+            <div class="glass-inset rounded-2xl p-4 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-violet-400">Environment</span>
+                <button type="button" @click="deployModal.quick.environment.push({key:'', value:''})"
+                        class="glass-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-sky-400">+ Add Env</button>
+              </div>
+              <template x-for="(e, idx) in deployModal.quick.environment" :key="idx">
+                <div class="flex items-center gap-1.5">
+                  <input type="text" x-model="e.key" placeholder="KEY" class="glass-input w-[42%] rounded-xl px-2.5 py-1.5 text-xs font-mono-code" />
+                  <input type="text" x-model="e.value" placeholder="Value" class="glass-input flex-1 rounded-xl px-2.5 py-1.5 text-xs font-mono-code" />
+                  <button type="button" @click="deployModal.quick.environment.splice(idx, 1)" class="glass-btn w-7 h-7 rounded-full text-rose-400 flex items-center justify-center shrink-0">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                  </button>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+
+        <!-- LIVE DEPLOY TERMINAL -->
+        <pre x-show="deployModal.deploying || deployModal.logs" x-ref="deployLogBox"
+             class="glass-terminal font-mono-code rounded-2xl p-4 h-80 overflow-auto text-[11px] text-emerald-300 leading-relaxed whitespace-pre-wrap break-all"
+             x-text="deployModal.logs"></pre>
+      </div>
+
+      <!-- Footer -->
+      <div class="pt-3 border-t border-[var(--glass-border)] flex items-center gap-2 shrink-0">
+        <template x-if="!deployModal.deploying && !deployModal.done">
+          <div class="flex items-center gap-2 w-full">
+            <button @click="validateDeploy()" class="glass-btn py-3 px-4 rounded-2xl text-xs font-semibold shrink-0" x-text="t('validateBtn')"></button>
+            <button @click="startDeploy()" class="glass-btn-primary flex-1 py-3 px-4 rounded-2xl text-xs sm:text-sm font-semibold" x-text="t('deployNow')"></button>
+          </div>
+        </template>
+        <button x-show="deployModal.deploying" disabled
+                class="glass-btn w-full py-3 rounded-2xl text-xs font-semibold opacity-75"
+                x-text="t('deployingWait')"></button>
+        <button x-show="!deployModal.deploying && deployModal.done" @click="closeDeployModal()"
+                class="glass-btn-primary w-full py-3 rounded-2xl text-xs font-semibold"
+                x-text="t('close')"></button>
+      </div>
+    </div>
+  </div>
+
   <!-- iOS GROUPED GLASS ACTION SHEET -->
   <div x-show="actionSheet.open" x-cloak x-transition.opacity
        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/60 backdrop-blur-sm"
@@ -393,7 +581,6 @@
         </button>
       </div>
 
-      <!-- Power Controls (Đều có bảng xác nhận trước khi Restart / Stop) -->
       <div class="grid grid-cols-2 gap-2 text-xs font-semibold">
         <button @click="const a = actionSheet.app; closeActionSheet(); confirmRestart(a)"
                 class="glass-btn py-2.5 px-3 rounded-2xl flex items-center justify-center gap-2 text-sky-400">
@@ -1036,10 +1223,10 @@
     </div>
   </div>
 
-  <!-- MODAL 5: Settings & History -->
+  <!-- MODAL 5: Settings, Docker Storage/Prune SSD & History -->
   <div x-show="settingsModal.open" x-cloak x-transition.opacity
        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/65 backdrop-blur-md"
-       @click.self="settingsModal.open = false" @keydown.escape.window="settingsModal.open = false">
+       @click.self="settingsModal.open = false" @keydown.escape.window="if (!confirmModal.open) settingsModal.open = false">
     <div class="glass-panel w-full max-w-xl rounded-t-[28px] sm:rounded-[28px] p-5 sm:p-6 flex flex-col max-h-[90dvh]"
          style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
       <div class="sheet-handle sm:hidden"></div>
@@ -1052,13 +1239,19 @@
           </svg>
         </button>
       </div>
-      <div class="glass-dock p-1 rounded-2xl grid grid-cols-2 gap-1 mt-4 mb-4">
+
+      <!-- 3 Tabs: Schedule | Storage (Prune SSD) | History -->
+      <div class="glass-dock p-1 rounded-2xl grid grid-cols-3 gap-1 mt-4 mb-4">
         <button @click="settingsModal.tab = 'schedule'" class="py-2 rounded-xl text-xs font-semibold transition"
-                :class="settingsModal.tab === 'schedule' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabSchedule')"></button>
+                :class="settingsModal.tab === 'schedule' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabScheduleShort')"></button>
+        <button @click="settingsModal.tab = 'storage'; loadStorage()" class="py-2 rounded-xl text-xs font-semibold transition"
+                :class="settingsModal.tab === 'storage' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabStorage')"></button>
         <button @click="settingsModal.tab = 'history'" class="py-2 rounded-xl text-xs font-semibold transition"
                 :class="settingsModal.tab === 'history' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabHistory')"></button>
       </div>
+
       <div class="flex-1 overflow-y-auto space-y-3.5">
+        <!-- TAB 1: PREFERENCES & SCHEDULE -->
         <template x-if="settingsModal.tab === 'schedule'">
           <div class="space-y-3.5">
             <div class="grid grid-cols-2 gap-3">
@@ -1123,6 +1316,95 @@
                     x-text="t('saveSettings')"></button>
           </div>
         </template>
+
+        <!-- TAB 2: DOCKER STORAGE & PRUNE SSD -->
+        <template x-if="settingsModal.tab === 'storage'">
+          <div class="space-y-3.5">
+            <div x-show="storageState.loading && !storageState.data" class="py-10 text-center text-xs text-muted" x-text="t('scanningStorage')"></div>
+
+            <template x-if="storageState.data">
+              <div class="space-y-3">
+                <!-- Reclaimable SSD Hero Card -->
+                <div class="rounded-2xl p-4 bg-gradient-to-br from-sky-500/15 via-indigo-500/10 to-transparent border border-sky-400/25 flex items-center justify-between gap-3">
+                  <div>
+                    <p class="text-[11px] font-semibold uppercase tracking-wider text-sky-400" x-text="t('reclaimableSpace')"></p>
+                    <p class="text-2xl font-bold font-mono-code mt-1" x-text="storageState.data.total_reclaimable"></p>
+                    <p class="text-[11px] text-muted mt-0.5"
+                       x-text="`${storageState.data.images.total_count} images (${storageState.data.images.total_size})`"></p>
+                  </div>
+                  <button @click="loadStorage()" :disabled="storageState.loading"
+                          class="glass-btn w-9 h-9 rounded-xl flex items-center justify-center text-sky-400">
+                    <svg class="w-4 h-4" :class="storageState.loading ? 'animate-spin' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M20.49 9A9 9 0 005.64 5.64L4 9m16 6l-1.64 3.36A9 9 0 013.51 15"/>
+                    </svg>
+                  </button>
+                </div>
+
+                <!-- Prune Options -->
+                <div class="space-y-2 text-xs">
+                  <!-- Unused Images -->
+                  <div class="glass-inset rounded-2xl p-3.5 space-y-2.5">
+                    <label class="flex items-center justify-between gap-3 cursor-pointer">
+                      <div class="min-w-0">
+                        <p class="font-semibold" x-text="t('pruneImagesTitle')"></p>
+                        <p class="text-[11px] text-muted font-mono-code mt-0.5"
+                           x-text="pruneOpts.all_unused_images
+                             ? `${storageState.data.images.unused_count} unused • ${storageState.data.images.unused_size}`
+                             : `${storageState.data.images.dangling_count} dangling • ${storageState.data.images.dangling_size}`"></p>
+                      </div>
+                      <input type="checkbox" x-model="pruneOpts.prune_images" class="w-4 h-4 accent-sky-500 shrink-0" />
+                    </label>
+                    <label x-show="pruneOpts.prune_images" class="flex items-center gap-2 text-[11px] text-amber-300/90 pl-0.5 cursor-pointer">
+                      <input type="checkbox" x-model="pruneOpts.all_unused_images" class="w-3.5 h-3.5 accent-amber-500" />
+                      <span x-text="t('pruneAllUnusedImages')"></span>
+                    </label>
+                  </div>
+
+                  <!-- Build Cache -->
+                  <label class="glass-inset rounded-2xl p-3.5 flex items-center justify-between gap-3 cursor-pointer">
+                    <div class="min-w-0">
+                      <p class="font-semibold" x-text="t('pruneCacheTitle')"></p>
+                      <p class="text-[11px] text-muted font-mono-code mt-0.5"
+                         x-text="`${storageState.data.build_cache.count} items • ${storageState.data.build_cache.reclaimable_size}`"></p>
+                    </div>
+                    <input type="checkbox" x-model="pruneOpts.prune_build_cache" class="w-4 h-4 accent-sky-500 shrink-0" />
+                  </label>
+
+                  <!-- Stopped Containers -->
+                  <label class="glass-inset rounded-2xl p-3.5 flex items-center justify-between gap-3 cursor-pointer">
+                    <div class="min-w-0">
+                      <p class="font-semibold" x-text="t('pruneContainersTitle')"></p>
+                      <p class="text-[11px] text-muted font-mono-code mt-0.5"
+                         x-text="`${storageState.data.containers.stopped_count} stopped • ${storageState.data.containers.reclaimable_size}`"></p>
+                    </div>
+                    <input type="checkbox" x-model="pruneOpts.prune_containers" class="w-4 h-4 accent-amber-500 shrink-0" />
+                  </label>
+
+                  <!-- Unused Volumes -->
+                  <label class="glass-inset rounded-2xl p-3.5 flex items-center justify-between gap-3 cursor-pointer">
+                    <div class="min-w-0">
+                      <p class="font-semibold text-amber-300" x-text="t('pruneVolumesTitle')"></p>
+                      <p class="text-[11px] text-muted font-mono-code mt-0.5"
+                         x-text="`${storageState.data.volumes.unused_count} unused • ${storageState.data.volumes.reclaimable_size}`"></p>
+                    </div>
+                    <input type="checkbox" x-model="pruneOpts.prune_volumes" class="w-4 h-4 accent-rose-500 shrink-0" />
+                  </label>
+                </div>
+
+                <div x-show="storageState.lastFreed" x-cloak
+                     class="rounded-2xl px-3.5 py-2.5 bg-emerald-500/15 border border-emerald-400/35 text-xs text-emerald-300 font-semibold"
+                     x-text="storageState.lastFreed"></div>
+
+                <button @click="confirmPrune()"
+                        :disabled="storageState.pruning || (!pruneOpts.prune_images && !pruneOpts.prune_build_cache && !pruneOpts.prune_containers && !pruneOpts.prune_volumes)"
+                        class="glass-btn-update w-full py-3 rounded-2xl text-xs font-semibold disabled:opacity-45"
+                        x-text="storageState.pruning ? t('pruningWait') : t('pruneNowBtn')"></button>
+              </div>
+            </template>
+          </div>
+        </template>
+
+        <!-- TAB 3: UPDATE HISTORY -->
         <template x-if="settingsModal.tab === 'history'">
           <div class="space-y-2.5">
             <div x-show="updateHistory.length === 0" class="text-center py-8 text-xs text-muted" x-text="t('noHistory')"></div>
@@ -1175,7 +1457,7 @@
     </div>
   </div>
 
-  <!-- MODAL 7: UNIFIED GLASS CONFIRMATION DIALOG (Stop / Restart / Update / Update All / Rollback) -->
+  <!-- MODAL 7: UNIFIED GLASS CONFIRMATION DIALOG -->
   <div x-show="confirmModal.open" x-cloak x-transition.opacity
        class="fixed inset-0 z-[60] flex items-center justify-center p-5 bg-black/70 backdrop-blur-md"
        @click.self="closeConfirm()" @keydown.escape.window="closeConfirm()">
@@ -1224,6 +1506,12 @@
       const dict = {
         en: {
           running: 'running', statusRunning: 'Running',
+          deployApp: 'Deploy New App', deployShort: 'Deploy',
+          deployModalTitle: 'Deploy New App', deployCasaosHint: 'Saves directly to CasaOS apps folder for seamless Dashboard sync',
+          deployDockerHint: 'Saves compose file to /DATA/AppData/stacks/',
+          deployTabYaml: 'Paste YAML', deployTabQuick: 'Quick Form UI',
+          deployAppIdOptional: 'App ID / Folder Name (optional if YAML has name:)',
+          loadSample: 'Sample YAML', deployNow: 'Deploy & Start', deployingWait: 'Pulling image & deploying...',
           checkShort: 'Check', checkingShort: 'Scanning...', settings: 'Settings', logout: 'Logout',
           searchPlaceholder: 'Search apps, images, containers...',
           all: 'All', tabUpdates: 'Updates', tabRunning: 'Running', tabStopped: 'Stopped', tabCasaos: 'CasaOS', tabDocker: 'Docker',
@@ -1253,12 +1541,17 @@
           confirmUpdateTitle: 'Confirm App Update', confirmUpdateMsg: 'Pull the latest image and recreate',
           confirmBatchTitle: 'Update All Apps?', confirmBatchMsg: 'apps will be updated sequentially and restarted briefly. Continue?',
           confirmRollbackTitle: 'Rollback Configuration?', confirmRollbackMsg: 'Restore backup file and recreate container immediately?',
+          confirmPruneTitle: 'Clean Docker Storage?', confirmPruneMsg: 'Selected unused Docker resources will be permanently removed to free SSD space.',
           loadingDetails: 'Fetching version & changelog...', recheck: 'Re-check',
           autoUpdateApp: 'Auto-Update this app', autoUpdateAppDesc: 'Update automatically on your daily schedule',
           noChangelog: 'Enter a GitHub repository (owner/repo or URL) to load Releases, CHANGELOG.md, or recent commits:',
           save: 'Save', noComposeWarning: 'No docker-compose.yml detected for safe recreate.',
           updatingWait: 'Updating... Please keep this window open',
-          settingsTitle: 'Settings & Automation', tabSchedule: 'Preferences & Schedule', tabHistory: 'History',
+          settingsTitle: 'Settings & Maintenance', tabScheduleShort: 'General', tabStorage: 'Storage / SSD', tabHistory: 'History',
+          scanningStorage: 'Analyzing Docker disk usage...', reclaimableSpace: 'Reclaimable SSD Space',
+          pruneImagesTitle: 'Unused Docker Images', pruneAllUnusedImages: 'Remove ALL unused images (not just dangling layers)',
+          pruneCacheTitle: 'Build Cache', pruneContainersTitle: 'Stopped Containers',
+          pruneVolumesTitle: 'Unused Anonymous Volumes', pruneNowBtn: 'Clean Selected Now', pruningWait: 'Cleaning SSD...',
           appearance: 'Appearance', dark: 'Dark', light: 'Light', language: 'Language',
           enableAutoUpdate: 'Enable Scheduled Auto-Update', enableAutoUpdateDesc: 'Only updates apps with Auto-Update toggled ON',
           autoUpdateTime: 'Daily Update Time', checkInterval: 'Silent Check (hrs)',
@@ -1269,6 +1562,12 @@
         },
         vi: {
           running: 'đang chạy', statusRunning: 'Đang chạy',
+          deployApp: 'Cài ứng dụng mới', deployShort: 'Cài mới',
+          deployModalTitle: 'Cài ứng dụng mới (+ Deploy)', deployCasaosHint: 'Tự lưu vào thư mục CasaOS để đồng bộ icon ngay lên Dashboard',
+          deployDockerHint: 'Lưu cấu hình compose vào /DATA/AppData/stacks/',
+          deployTabYaml: 'Dán Compose YAML', deployTabQuick: 'Tạo nhanh bằng UI',
+          deployAppIdOptional: 'Tên thư mục App (để trống sẽ tự lấy từ trường name:)',
+          loadSample: 'Nạp mẫu', deployNow: 'Cài đặt & Khởi chạy', deployingWait: 'Đang kéo image & triển khai...',
           checkShort: 'Quét mới', checkingShort: 'Đang quét...', settings: 'Cài đặt', logout: 'Đăng xuất',
           searchPlaceholder: 'Tìm theo tên app, image, container...',
           all: 'Tất cả', tabUpdates: 'Có Update', tabRunning: 'Đang chạy', tabStopped: 'Đã dừng', tabCasaos: 'CasaOS', tabDocker: 'Docker thuần',
@@ -1298,12 +1597,17 @@
           confirmUpdateTitle: 'Xác nhận cập nhật', confirmUpdateMsg: 'Tải image mới nhất và khởi tạo lại container',
           confirmBatchTitle: 'Cập nhật tất cả ứng dụng?', confirmBatchMsg: 'ứng dụng sẽ được cập nhật lần lượt và khởi động lại ngắn. Bạn muốn tiếp tục?',
           confirmRollbackTitle: 'Khôi phục bản sao lưu?', confirmRollbackMsg: 'Ghi đè cấu hình bằng bản sao lưu này và khởi tạo lại container ngay?',
+          confirmPruneTitle: 'Dọn rác Docker SSD?', confirmPruneMsg: 'Các tài nguyên Docker không sử dụng đã chọn sẽ bị xoá vĩnh viễn để giải phóng dung lượng SSD.',
           loadingDetails: 'Đang tải phiên bản & Changelog...', recheck: 'Quét lại',
           autoUpdateApp: 'Tự động cập nhật app này', autoUpdateAppDesc: 'Chạy tự động theo khung giờ trong Cài đặt',
           noChangelog: 'Nhập link GitHub (owner/repo hoặc URL) để tải Releases, CHANGELOG.md hoặc commit mới nhất:',
           save: 'Lưu', noComposeWarning: 'Container không có file docker-compose.yml để cập nhật an toàn.',
           updatingWait: 'Đang cập nhật... Vui lòng không đóng trang',
-          settingsTitle: 'Cài đặt & Tự động hóa', tabSchedule: 'Tuỳ chỉnh & Lịch', tabHistory: 'Lịch sử',
+          settingsTitle: 'Cài đặt & Bảo trì SSD', tabScheduleShort: 'Cài đặt', tabStorage: 'Dọn SSD', tabHistory: 'Lịch sử',
+          scanningStorage: 'Đang phân tích dung lượng Docker...', reclaimableSpace: 'Dung lượng rác có thể thu hồi',
+          pruneImagesTitle: 'Docker Images thừa', pruneAllUnusedImages: 'Xoá TẤT CẢ image không gắn container (thay vì chỉ layer rác)',
+          pruneCacheTitle: 'Bộ nhớ đệm Build Cache', pruneContainersTitle: 'Container đang dừng (Stopped)',
+          pruneVolumesTitle: 'Volumes mồ côi không dùng', pruneNowBtn: 'Dọn sạch ngay', pruningWait: 'Đang dọn dẹp SSD...',
           appearance: 'Giao diện', dark: 'Tối', light: 'Sáng', language: 'Ngôn ngữ',
           enableAutoUpdate: 'Bật tự động cập nhật theo lịch', enableAutoUpdateDesc: 'Chỉ tự cập nhật những app bạn đã bật nút Auto riêng',
           autoUpdateTime: 'Giờ chạy mỗi ngày', checkInterval: 'Quét ngầm (giờ)',
@@ -1341,6 +1645,11 @@
         actionSheet: { open: false, app: null },
         logModal: { open: false, title: '', containerName: '', lines: '', ws: null },
         batchModal: { open: false, running: false, items: [], doneCount: 0, succeeded: 0, failed: 0, logs: '', ws: null },
+        deployModal: {
+          open: false, tab: 'yaml', appName: '', rawYaml: '',
+          quick: { app_name: '', title: '', image: '', icon: '', ports: [{host:'', container:'', protocol:'tcp'}], volumes: [], environment: [{key:'TZ', value:'America/Denver'}] },
+          feedback: '', feedbackOk: true, deploying: false, done: false, logs: '', ws: null
+        },
         updateModal: {
           open: false, loading: false, updating: false, app: null,
           changelogHtml: '', changelogError: '', releaseTag: '', releaseUrl: '',
@@ -1362,6 +1671,11 @@
           check_interval_hours: 6, auto_update_enabled: false,
           auto_update_time: '03:30', prune_old_images: true,
           github_token: '', has_github_token: false
+        },
+        storageState: { loading: false, pruning: false, data: null, lastFreed: '' },
+        pruneOpts: {
+          prune_images: true, all_unused_images: false,
+          prune_build_cache: true, prune_containers: false, prune_volumes: false
         },
         updateHistory: [],
         filterTabs: [
@@ -1391,10 +1705,7 @@
           this.confirmModal = { open: true, tone, title, message, confirmLabel, onConfirm };
         },
 
-        closeConfirm() {
-          this.confirmModal.open = false;
-          this.confirmModal.onConfirm = null;
-        },
+        closeConfirm() { this.confirmModal.open = false; this.confirmModal.onConfirm = null; },
 
         runConfirmedAction() {
           const fn = this.confirmModal.onConfirm;
@@ -1404,21 +1715,17 @@
 
         confirmStop(app) {
           this.askConfirm({
-            tone: 'danger',
-            title: this.t('confirmStopTitle'),
+            tone: 'danger', title: this.t('confirmStopTitle'),
             message: `"${app.title}" ${this.t('confirmStopMsg')}`,
-            confirmLabel: this.t('stop'),
-            onConfirm: () => this.runAction(app, 'stop')
+            confirmLabel: this.t('stop'), onConfirm: () => this.runAction(app, 'stop')
           });
         },
 
         confirmRestart(app) {
           this.askConfirm({
-            tone: 'primary',
-            title: this.t('confirmRestartTitle'),
+            tone: 'primary', title: this.t('confirmRestartTitle'),
             message: `"${app.title}" ${this.t('confirmRestartMsg')}`,
-            confirmLabel: this.t('restart'),
-            onConfirm: () => this.runAction(app, 'restart')
+            confirmLabel: this.t('restart'), onConfirm: () => this.runAction(app, 'restart')
           });
         },
 
@@ -1426,9 +1733,7 @@
           const app = this.updateModal.app;
           if (!app) return;
           const extra = app.target_tag
-            ? (this.lang === 'vi'
-                ? ` và nâng tag lên ${app.target_tag}`
-                : ` and bump tag to ${app.target_tag}`)
+            ? (this.lang === 'vi' ? ` và nâng tag lên ${app.target_tag}` : ` and bump tag to ${app.target_tag}`)
             : '';
           this.askConfirm({
             tone: app.raw_has_update ? 'update' : 'primary',
@@ -1441,8 +1746,7 @@
 
         confirmBatchUpdate() {
           this.askConfirm({
-            tone: 'update',
-            title: this.t('confirmBatchTitle'),
+            tone: 'update', title: this.t('confirmBatchTitle'),
             message: `${this.summary.updates} ${this.t('confirmBatchMsg')}`,
             confirmLabel: `${this.t('updateAll')} (${this.summary.updates})`,
             onConfirm: () => this.startBatchUpdate()
@@ -1451,12 +1755,169 @@
 
         confirmRollback(filename) {
           this.askConfirm({
-            tone: 'update',
-            title: this.t('confirmRollbackTitle'),
+            tone: 'update', title: this.t('confirmRollbackTitle'),
             message: `${filename} — ${this.t('confirmRollbackMsg')}`,
-            confirmLabel: this.t('rollbackBtn'),
-            onConfirm: () => this.rollbackCompose(filename)
+            confirmLabel: this.t('rollbackBtn'), onConfirm: () => this.rollbackCompose(filename)
           });
+        },
+
+        confirmPrune() {
+          this.askConfirm({
+            tone: 'update', title: this.t('confirmPruneTitle'),
+            message: this.t('confirmPruneMsg'),
+            confirmLabel: this.t('pruneNowBtn'), onConfirm: () => this.runPrune()
+          });
+        },
+
+        // ---------------- + Deploy New App ----------------
+        openDeployModal() {
+          this.deployModal = {
+            open: true, tab: 'yaml', appName: '', rawYaml: '',
+            quick: {
+              app_name: '', title: '', image: '', icon: '',
+              ports: [{host:'', container:'', protocol:'tcp'}],
+              volumes: [], environment: [{key:'TZ', value:'America/Denver'}]
+            },
+            feedback: '', feedbackOk: true, deploying: false, done: false, logs: '', ws: null
+          };
+        },
+
+        closeDeployModal() {
+          if (this.deployModal.deploying) return;
+          if (this.deployModal.ws) this.deployModal.ws.close();
+          this.deployModal.open = false;
+        },
+
+        loadSampleCompose() {
+          this.deployModal.appName = 'homepage-demo';
+          this.deployModal.rawYaml = `name: homepage-demo\n\nservices:\n  homepage-demo:\n    image: nginx:alpine\n    container_name: homepage-demo\n    restart: unless-stopped\n    ports:\n      - target: 80\n        published: "8880"\n        protocol: tcp\n\nx-casaos:\n  architectures:\n    - amd64\n    - arm64\n  main: homepage-demo\n  category: Utilities\n  index: /\n  port_map: "8880"\n  scheme: http\n  title:\n    en_US: Nginx Demo\n`;
+        },
+
+        async switchDeployTab(nextTab) {
+          if (nextTab === this.deployModal.tab) return;
+          this.deployModal.feedback = '';
+          if (this.deployModal.tab === 'quick' && nextTab === 'yaml' && this.deployModal.quick.image.trim()) {
+            const ok = await this._generateDeployYamlFromQuick();
+            if (!ok) return;
+          }
+          this.deployModal.tab = nextTab;
+        },
+
+        async _generateDeployYamlFromQuick() {
+          const res = await fetch('/api/deploy/generate', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(this.deployModal.quick)
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            this.deployModal.feedbackOk = false;
+            this.deployModal.feedback = data.detail || 'Invalid form values';
+            return false;
+          }
+          this.deployModal.appName = data.app_name;
+          this.deployModal.rawYaml = data.raw_yaml;
+          return true;
+        },
+
+        async validateDeploy() {
+          this.deployModal.feedback = '';
+          if (this.deployModal.tab === 'quick') {
+            if (!(await this._generateDeployYamlFromQuick())) return;
+          }
+          const res = await fetch('/api/deploy/validate', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ app_name: this.deployModal.appName, raw_yaml: this.deployModal.rawYaml })
+          });
+          const data = await res.json();
+          this.deployModal.feedbackOk = !!data.ok;
+          this.deployModal.feedback = data.message || data.detail || '';
+          if (data.ok && data.app_name && !this.deployModal.appName) {
+            this.deployModal.appName = data.app_name;
+          }
+        },
+
+        async startDeploy() {
+          this.deployModal.feedback = '';
+          if (this.deployModal.tab === 'quick') {
+            if (!(await this._generateDeployYamlFromQuick())) return;
+          }
+          if (!this.deployModal.rawYaml.trim()) {
+            this.deployModal.feedbackOk = false;
+            this.deployModal.feedback = 'YAML content cannot be empty.';
+            return;
+          }
+
+          this.deployModal.deploying = true;
+          this.deployModal.done = false;
+          this.deployModal.logs = '';
+
+          const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const ws = new WebSocket(`${proto}//${window.location.host}/ws/deploy`);
+          this.deployModal.ws = ws;
+
+          ws.onopen = () => {
+            ws.send(JSON.stringify({
+              app_name: this.deployModal.appName,
+              raw_yaml: this.deployModal.rawYaml
+            }));
+          };
+
+          ws.onmessage = (event) => {
+            try {
+              const msg = JSON.parse(event.data);
+              if (msg.type === 'log') {
+                this.deployModal.logs += msg.text;
+                this.$nextTick(() => { const b = this.$refs.deployLogBox; if (b) b.scrollTop = b.scrollHeight; });
+              } else if (msg.type === 'done') {
+                this.deployModal.deploying = false;
+                this.deployModal.done = true;
+                if (msg.ok) {
+                  this.showToast(this.lang === 'vi' ? `Đã cài ${msg.app_name} thành công ✓` : `Deployed ${msg.app_name} ✓`);
+                  this.loadApps();
+                }
+              }
+            } catch (_) {}
+          };
+
+          ws.onclose = () => {
+            this.deployModal.deploying = false;
+            this.deployModal.ws = null;
+          };
+        },
+
+        // ---------------- Storage & Prune SSD ----------------
+        async loadStorage() {
+          this.storageState.loading = true;
+          try {
+            const res = await fetch('/api/system/storage');
+            if (res.ok) this.storageState.data = await res.json();
+          } finally {
+            this.storageState.loading = false;
+          }
+        },
+
+        async runPrune() {
+          this.storageState.pruning = true;
+          this.storageState.lastFreed = '';
+          try {
+            const res = await fetch('/api/system/prune', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.pruneOpts)
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Prune failed');
+            this.storageState.data = data.storage;
+            const msg = this.lang === 'vi'
+              ? `Đã giải phóng ${data.freed_display} dung lượng SSD ✓`
+              : `Freed ${data.freed_display} of SSD space ✓`;
+            this.storageState.lastFreed = msg;
+            this.showToast(msg);
+            if (this.pruneOpts.prune_containers) await this.loadApps();
+          } catch (err) {
+            this.showToast(err.message);
+          } finally {
+            this.storageState.pruning = false;
+          }
         },
 
         async init() {
@@ -1563,12 +2024,9 @@
         closeActionSheet() { this.actionSheet.open = false; },
 
         async openUpdateModal(app) {
-          this.updateModal.open = true;
-          this.updateModal.loading = true;
-          this.updateModal.updating = false;
-          this.updateModal.showRepoInput = false;
-          this.updateModal.updateLogs = '';
-          this.updateModal.app = app;
+          this.updateModal.open = true; this.updateModal.loading = true;
+          this.updateModal.updating = false; this.updateModal.showRepoInput = false;
+          this.updateModal.updateLogs = ''; this.updateModal.app = app;
           await this._fetchAppDetails(app.name, false);
         },
 
@@ -1623,273 +2081,3 @@
 
         async saveCustomRepo() {
           if (!this.updateModal.app) return;
-          this.updateModal.loading = true;
-          await fetch(`/api/apps/${encodeURIComponent(this.updateModal.app.name)}/prefs`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ custom_repo: this.updateModal.customRepo })
-          });
-          await this._fetchAppDetails(this.updateModal.app.name, false);
-          await this.loadApps();
-        },
-
-        startAppUpdate() {
-          if (!this.updateModal.app) return;
-          this.updateModal.updating = true; this.updateModal.updateLogs = '';
-          const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-          const ws = new WebSocket(`${proto}//${window.location.host}/ws/update/${encodeURIComponent(this.updateModal.app.name)}`);
-          this.updateModal.ws = ws;
-          ws.onmessage = (event) => {
-            if (event.data.includes('__SELF_UPDATE_RELOAD__')) { setTimeout(() => window.location.reload(), 10000); return; }
-            this.updateModal.updateLogs += event.data;
-            this.$nextTick(() => { const b = this.$refs.updateLogBox; if (b) b.scrollTop = b.scrollHeight; });
-          };
-          ws.onclose = async () => { this.updateModal.updating = false; this.updateModal.ws = null; await this.loadApps(); };
-        },
-
-        closeUpdateModal() {
-          if (this.updateModal.updating) return;
-          if (this.updateModal.ws) this.updateModal.ws.close();
-          this.updateModal.open = false;
-        },
-
-        async openEditModal(app) {
-          this.editModal.open = true;
-          this.editModal.loading = true;
-          this.editModal.saving = false;
-          this.editModal.tab = 'ui';
-          this.editModal.app = app;
-          this.editModal.feedback = '';
-          this.editModal.sec = { container: true, ports: true, volumes: false, env: false, casaos: false };
-          try {
-            const res = await fetch(`/api/apps/${encodeURIComponent(app.name)}/compose`);
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || 'Cannot load compose file');
-            this.editModal.composePath = data.compose_path;
-            this.editModal.rawYaml = data.raw_yaml;
-            this.editModal.ui = data.ui;
-            this.editModal.backups = data.backups || [];
-          } catch (err) {
-            this.editModal.feedbackOk = false;
-            this.editModal.feedback = err.message;
-          } finally {
-            this.editModal.loading = false;
-          }
-        },
-
-        async reloadServiceUi() {
-          if (!this.editModal.app) return;
-          const res = await fetch(`/api/apps/${encodeURIComponent(this.editModal.app.name)}/compose/to-ui`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ raw_yaml: this.editModal.rawYaml, selected_service: this.editModal.ui.selected_service })
-          });
-          if (res.ok) { const d = await res.json(); this.editModal.ui = d.ui; }
-        },
-
-        async _syncUiToYaml() {
-          if (!this.editModal.ui || !this.editModal.app) return true;
-          const res = await fetch(`/api/apps/${encodeURIComponent(this.editModal.app.name)}/compose/to-yaml`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ base_yaml: this.editModal.rawYaml, ui: this.editModal.ui })
-          });
-          const data = await res.json();
-          if (!res.ok) { this.editModal.feedbackOk = false; this.editModal.feedback = data.detail || 'Sync error'; return false; }
-          this.editModal.rawYaml = data.raw_yaml;
-          return true;
-        },
-
-        async switchEditTab(nextTab) {
-          if (nextTab === this.editModal.tab) return;
-          this.editModal.feedback = '';
-          if (this.editModal.tab === 'ui' && (nextTab === 'yaml' || nextTab === 'backups')) {
-            if (!(await this._syncUiToYaml())) return;
-          } else if (this.editModal.tab === 'yaml' && nextTab === 'ui') {
-            const res = await fetch(`/api/apps/${encodeURIComponent(this.editModal.app.name)}/compose/to-ui`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ raw_yaml: this.editModal.rawYaml, selected_service: this.editModal.ui?.selected_service })
-            });
-            const data = await res.json();
-            if (!res.ok) { this.editModal.feedbackOk = false; this.editModal.feedback = `YAML Error: ${data.detail}`; return; }
-            this.editModal.ui = data.ui;
-          }
-          this.editModal.tab = nextTab;
-        },
-
-        async validateCompose() {
-          if (this.editModal.tab === 'ui' && !(await this._syncUiToYaml())) return;
-          const res = await fetch(`/api/apps/${encodeURIComponent(this.editModal.app.name)}/compose/validate`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ raw_yaml: this.editModal.rawYaml })
-          });
-          const data = await res.json();
-          this.editModal.feedbackOk = !!data.ok;
-          this.editModal.feedback = data.message || data.detail || '';
-        },
-
-        async applyCompose() {
-          this.editModal.saving = true; this.editModal.feedback = '';
-          try {
-            if (this.editModal.tab === 'ui' && !(await this._syncUiToYaml())) { this.editModal.saving = false; return; }
-            const res = await fetch(`/api/apps/${encodeURIComponent(this.editModal.app.name)}/compose/apply`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ raw_yaml: this.editModal.rawYaml })
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || 'Apply failed');
-            this.editModal.backups = data.backups || this.editModal.backups;
-            this.showToast(this.lang === 'vi' ? 'Đã áp dụng cấu hình mới ✓' : 'Configuration applied ✓');
-            if (data.self_update) setTimeout(() => window.location.reload(), 9000);
-            this.editModal.open = false;
-            await this.loadApps();
-          } catch (err) { this.editModal.feedbackOk = false; this.editModal.feedback = err.message; }
-          finally { this.editModal.saving = false; }
-        },
-
-        async rollbackCompose(filename) {
-          this.editModal.saving = true; this.editModal.feedback = '';
-          try {
-            const res = await fetch(`/api/apps/${encodeURIComponent(this.editModal.app.name)}/compose/rollback`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ filename })
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || 'Rollback failed');
-            this.showToast(this.lang === 'vi' ? 'Đã khôi phục bản sao lưu ✓' : 'Rolled back ✓');
-            this.editModal.open = false;
-            await this.loadApps();
-          } catch (err) { this.editModal.feedbackOk = false; this.editModal.feedback = err.message; }
-          finally { this.editModal.saving = false; }
-        },
-
-        closeEditModal() { if (!this.editModal.saving) this.editModal.open = false; },
-
-        openUninstallModal(app) {
-          this.uninstallModal = {
-            open: true, running: false, app,
-            removeCompose: app.source === 'casaos',
-            removeImages: false, removeAppdata: false, confirmName: '', error: ''
-          };
-        },
-
-        async confirmUninstall() {
-          const app = this.uninstallModal.app;
-          if (!app) return;
-          this.uninstallModal.running = true; this.uninstallModal.error = '';
-          try {
-            const res = await fetch(`/api/apps/${encodeURIComponent(app.name)}/uninstall`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                remove_compose: this.uninstallModal.removeCompose,
-                remove_images: this.uninstallModal.removeImages,
-                remove_appdata: this.uninstallModal.removeAppdata,
-                confirm_name: this.uninstallModal.confirmName
-              })
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || 'Uninstall failed');
-            this.uninstallModal.open = false;
-            this.showToast(`${app.title}: ${this.lang === 'vi' ? 'Đã gỡ cài đặt ✓' : 'Uninstalled ✓'}`);
-            await this.loadApps();
-          } catch (err) { this.uninstallModal.error = err.message; }
-          finally { this.uninstallModal.running = false; }
-        },
-
-        startBatchUpdate() {
-          this.batchModal = { open: true, running: true, items: [], doneCount: 0, succeeded: 0, failed: 0, logs: '', ws: null };
-          const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-          const ws = new WebSocket(`${proto}//${window.location.host}/ws/update-all`);
-          this.batchModal.ws = ws;
-          ws.onmessage = (event) => {
-            try {
-              const msg = JSON.parse(event.data);
-              if (msg.type === 'init') this.batchModal.items = msg.apps || [];
-              else if (msg.type === 'app_start' && this.batchModal.items[msg.index]) this.batchModal.items[msg.index].status = 'running';
-              else if (msg.type === 'log' && !msg.text.includes('__SELF_UPDATE_RELOAD__')) {
-                this.batchModal.logs += msg.text;
-                this.$nextTick(() => { const b = this.$refs.batchLogBox; if (b) b.scrollTop = b.scrollHeight; });
-              }
-              else if (msg.type === 'app_done') {
-                if (this.batchModal.items[msg.index]) this.batchModal.items[msg.index].status = msg.ok ? 'success' : 'failed';
-                this.batchModal.doneCount += 1;
-              }
-              else if (msg.type === 'complete') {
-                this.batchModal.succeeded = msg.succeeded; this.batchModal.failed = msg.failed;
-                this.batchModal.running = false;
-                if (msg.self_update) setTimeout(() => window.location.reload(), 10000);
-              }
-            } catch (_) {}
-          };
-          ws.onclose = async () => { this.batchModal.running = false; this.batchModal.ws = null; await this.loadApps(); };
-        },
-
-        closeBatchModal() {
-          if (this.batchModal.running) return;
-          if (this.batchModal.ws) this.batchModal.ws.close();
-          this.batchModal.open = false;
-        },
-
-        async openSettings() {
-          this.settingsModal.open = true;
-          const res = await fetch('/api/settings');
-          if (res.ok) {
-            const data = await res.json();
-            this.settingsForm = { ...data.settings, github_token: '' };
-            this.updateHistory = data.history || [];
-          }
-        },
-
-        async saveSettings() {
-          const payload = {
-            check_interval_hours: this.settingsForm.check_interval_hours,
-            auto_update_enabled: this.settingsForm.auto_update_enabled,
-            auto_update_time: this.settingsForm.auto_update_time,
-            prune_old_images: this.settingsForm.prune_old_images
-          };
-          if (this.settingsForm.github_token.trim()) payload.github_token = this.settingsForm.github_token.trim();
-          const res = await fetch('/api/settings', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          if (res.ok) {
-            this.showToast(this.lang === 'vi' ? 'Đã lưu cài đặt ✓' : 'Settings saved ✓');
-            this.settingsModal.open = false;
-          }
-        },
-
-        async runAction(app, action) {
-          this.busyId = app.id;
-          try {
-            const res = await fetch(`/api/apps/${app.id}/${action}`, { method: 'POST' });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || 'Action failed');
-            this.showToast(`${app.title}: ${action} OK`);
-            await this.loadApps();
-          } catch (err) { this.error = err.message; }
-          finally { this.busyId = null; }
-        },
-
-        openLogs(app) {
-          this.closeLogs();
-          this.logModal = { open: true, title: app.title, containerName: app.name, lines: '', ws: null };
-          const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-          const ws = new WebSocket(`${proto}//${window.location.host}/ws/logs/${app.id}`);
-          this.logModal.ws = ws;
-          ws.onmessage = (event) => {
-            this.logModal.lines += event.data;
-            this.$nextTick(() => { const b = this.$refs.logBox; if (b) b.scrollTop = b.scrollHeight; });
-          };
-        },
-
-        closeLogs() {
-          if (this.logModal.ws) { this.logModal.ws.close(); this.logModal.ws = null; }
-          this.logModal.open = false;
-        },
-
-        async logout() {
-          await fetch('/api/auth/logout', { method: 'POST' });
-          window.location.href = '/login';
-        }
-      };
-    }
-  </script>
-</body>
-</html>
