@@ -285,6 +285,25 @@ input[type="number"].glass-input {
   background: rgba(56, 189, 248, 0.14);
   color: #38bdf8;
 }
+.changelog-md pre {
+  background: rgba(3, 7, 18, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 14px;
+  padding: 0.75rem 0.9rem;
+  margin: 0.5rem 0 0.75rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.changelog-md pre code {
+  background: transparent;
+  padding: 0;
+  color: #cbd5e1;
+  font-size: 0.72rem;
+  line-height: 1.55;
+  white-space: pre;
+}
+
 .changelog-md a { color: #38bdf8; text-decoration: underline; }
 
 .no-scrollbar::-webkit-scrollbar { display: none; }
