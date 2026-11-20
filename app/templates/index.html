@@ -2,179 +2,298 @@
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#050814" id="meta-theme-color" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>AppManager Pro</title>
   <link rel="icon" type="image/png" href="/assets/icon.png" />
   <link rel="apple-touch-icon" href="/assets/icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
   <link rel="stylesheet" href="/static/css/glass.css" />
   <script>
-    if (localStorage.getItem('amp_theme') === 'light') {
-      document.documentElement.classList.remove('dark');
-      document.documentElement.classList.add('light');
-    }
+    (function () {
+      const saved = localStorage.getItem('amp_theme') || 'dark';
+      const isLight = saved === 'light';
+      document.documentElement.classList.toggle('light', isLight);
+      document.documentElement.classList.toggle('dark', !isLight);
+      document.getElementById('meta-theme-color').setAttribute('content', isLight ? '#e6effb' : '#050814');
+    })();
   </script>
 </head>
-<body class="pb-12" x-data="dashboardApp()" x-init="init()" @keydown.window="handleShortcut($event)">
-  <div class="ambient-bg">
-    <div class="ambient-orb orb-1"></div>
-    <div class="ambient-orb orb-2"></div>
-    <div class="ambient-orb orb-3"></div>
-  </div>
+<body class="safe-bottom" x-data="dashboardApp()" x-init="init()" @keydown.window="handleShortcut($event)">
+  <div class="ambient-bg"></div>
+  <div class="ambient-grid"></div>
 
-  <!-- Floating Glass Header -->
-  <header class="sticky top-3 z-30 max-w-7xl mx-auto px-4">
-    <div class="glass-panel rounded-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-400/30 to-indigo-500/30 border border-white/20 flex items-center justify-center overflow-hidden shrink-0">
-          <img src="/assets/icon.png" alt="Logo" class="w-8 h-8 object-contain"
-               onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
-          <span style="display:none" class="font-bold text-sky-400 text-sm">AP</span>
+  <!-- Edge-to-Edge Slim Sticky Glass Header (Zero top gap on iOS) -->
+  <header class="glass-header sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
+      <!-- Left: Brand -->
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="brand-squircle w-9 h-9 shrink-0">
+          <img src="/assets/icon.png" alt="AppManager Pro" />
         </div>
-        <div>
+        <div class="min-w-0">
           <div class="flex items-center gap-2">
-            <h1 class="font-bold text-base leading-tight">AppManager Pro</h1>
-            <span class="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-400 border border-sky-400/30 font-semibold"
+            <h1 class="font-bold text-[15px] tracking-tight truncate">AppManager Pro</h1>
+            <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-sky-500/15 text-sky-400 border border-sky-400/25"
                   x-text="envMode"></span>
           </div>
-          <p class="text-xs text-muted" x-text="`${summary.running} ${t('running')} • ${summary.total} ${t('apps')}`"></p>
+          <p class="text-[11px] text-muted flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]"></span>
+            <span x-text="`${summary.running}/${summary.total} ${t('running')}`"></span>
+          </p>
         </div>
       </div>
 
-      <!-- Search Bar -->
-      <div class="flex-1 min-w-[200px] max-w-md order-3 sm:order-2">
+      <!-- Center: Desktop Search -->
+      <div class="hidden md:block flex-1 max-w-md mx-4">
         <div class="relative">
-          <input x-ref="searchInput" type="text" x-model="search"
-                 :placeholder="t('searchPlaceholder')"
-                 class="glass-input w-full rounded-xl pl-4 pr-10 py-2 text-sm" />
-          <kbd class="hidden sm:inline-block absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-muted">/</kbd>
+          <svg class="w-4 h-4 text-subtle absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="7"/><path stroke-linecap="round" d="M20 20l-3.5-3.5"/>
+          </svg>
+          <input x-ref="searchInput" type="text" x-model="search" :placeholder="t('searchPlaceholder')"
+                 class="glass-input w-full rounded-2xl pl-10 pr-10 py-2 text-xs" />
+          <kbd class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono-code px-1.5 py-0.5 rounded-md bg-[var(--glass-surface)] border border-[var(--glass-border)] text-subtle">/</kbd>
         </div>
       </div>
 
-      <!-- Controls -->
-      <div class="flex items-center gap-2 order-2 sm:order-3">
-        <button @click="loadApps()" :disabled="loading" class="glass-btn px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-1.5">
-          <span :class="loading ? 'animate-spin inline-block' : ''">↻</span>
-          <span class="hidden md:inline" x-text="t('refresh')"></span>
+      <!-- Right: Compact Action Dock -->
+      <div class="flex items-center gap-1.5 shrink-0">
+        <button @click="loadApps()" :disabled="loading" :title="t('refresh')"
+                class="glass-btn w-9 h-9 rounded-xl flex items-center justify-center">
+          <svg class="w-4 h-4" :class="loading ? 'animate-spin text-sky-400' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M20.49 9A9 9 0 005.64 5.64L4 9m16 6l-1.64 3.36A9 9 0 013.51 15"/>
+          </svg>
         </button>
-        <button @click="toggleLang()" class="glass-btn px-2.5 py-2 rounded-xl text-xs font-semibold">
+
+        <button @click="toggleLang()" :title="lang === 'vi' ? 'Switch to English' : 'Chuyển sang Tiếng Việt'"
+                class="glass-btn h-9 px-2.5 rounded-xl text-xs font-semibold tracking-wide">
           <span x-text="lang === 'vi' ? 'VN' : 'EN'"></span>
         </button>
-        <button @click="toggleTheme()" class="glass-btn px-2.5 py-2 rounded-xl text-xs">
-          <span x-text="theme === 'dark' ? '☀️' : '🌙'"></span>
+
+        <button @click="toggleTheme()" aria-label="Toggle theme"
+                class="glass-btn w-9 h-9 rounded-xl flex items-center justify-center">
+          <svg x-show="theme === 'dark'" class="w-4 h-4 text-amber-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="4"/><path stroke-linecap="round" d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41"/>
+          </svg>
+          <svg x-show="theme === 'light'" x-cloak class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+          </svg>
         </button>
-        <button @click="logout()" class="glass-btn px-3 py-2 rounded-xl text-xs font-medium text-rose-400 hover:border-rose-400/40"
-                :title="t('logout')">
-          <span x-text="t('logout')"></span>
+
+        <button @click="logout()" :title="t('logout')"
+                class="glass-btn w-9 h-9 rounded-xl flex items-center justify-center text-rose-400 hover:border-rose-400/40 hover:bg-rose-500/10">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9"/>
+          </svg>
         </button>
       </div>
     </div>
   </header>
 
-  <main class="max-w-7xl mx-auto px-4 mt-6">
-    <!-- Filter Tabs -->
-    <div class="flex flex-wrap items-center gap-2 mb-6">
+  <main class="max-w-7xl mx-auto px-4 pt-5">
+    <!-- Mobile Search Bar (cuộn tự nhiên, không chiếm màn hình khi lướt) -->
+    <div class="md:hidden mb-3.5">
+      <div class="relative">
+        <svg class="w-4 h-4 text-subtle absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <circle cx="11" cy="11" r="7"/><path stroke-linecap="round" d="M20 20l-3.5-3.5"/>
+        </svg>
+        <input type="text" x-model="search" :placeholder="t('searchPlaceholder')"
+               class="glass-input w-full rounded-2xl pl-10 pr-9 py-2.5 text-sm" />
+        <button x-show="search" x-cloak @click="search = ''"
+                class="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-subtle hover:text-[var(--text-primary)]">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Single-Row Horizontal Scrollable Filter Pills -->
+    <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 mb-5">
       <template x-for="tab in filterTabs" :key="tab.id">
         <button @click="filter = tab.id"
-                class="px-4 py-2 rounded-xl text-xs font-semibold transition-all border"
-                :class="filter === tab.id
-                  ? 'glass-btn-primary border-transparent'
-                  : 'glass-btn text-muted'">
+                class="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-semibold transition-all"
+                :class="filter === tab.id ? 'glass-btn-primary' : 'glass-btn text-muted'">
           <span x-text="t(tab.labelKey)"></span>
-          <span class="ml-1.5 opacity-80" x-text="`(${countForTab(tab.id)})`"></span>
+          <span class="px-1.5 py-0.5 rounded-full text-[10px] leading-none"
+                :class="filter === tab.id ? 'bg-white/20 text-white' : 'bg-[var(--glass-surface)] text-subtle'"
+                x-text="countForTab(tab.id)"></span>
         </button>
       </template>
     </div>
 
     <!-- Error Banner -->
-    <div x-show="error" x-cloak class="glass-panel rounded-2xl p-4 mb-6 border-rose-400/40 bg-rose-500/15 text-sm text-rose-200 flex justify-between items-center">
+    <div x-show="error" x-cloak
+         class="glass-panel rounded-2xl p-4 mb-5 border-rose-500/40 bg-rose-500/15 text-xs sm:text-sm text-rose-400 flex items-center justify-between gap-3">
       <span x-text="error"></span>
-      <button @click="error = ''" class="text-xs underline ml-4">OK</button>
+      <button @click="error = ''" class="glass-btn px-2.5 py-1 rounded-lg text-xs">OK</button>
     </div>
 
     <!-- Loading Skeleton -->
     <div x-show="loading && apps.length === 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       <template x-for="n in 8" :key="n">
-        <div class="glass-card rounded-3xl p-5 h-44 animate-pulse"></div>
+        <div class="glass-card rounded-[24px] p-5 h-48 animate-pulse"></div>
       </template>
     </div>
 
     <!-- App Grid -->
     <div x-show="filteredApps.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       <template x-for="app in filteredApps" :key="app.full_id">
-        <div class="glass-card rounded-3xl p-5 flex flex-col justify-between gap-4">
-          <!-- Top Row: Icon + Name + Status -->
+        <div class="glass-card rounded-[24px] p-4 sm:p-5 flex flex-col justify-between gap-4">
+          <!-- Card Header: Icon + Name + Source Badge -->
           <div class="flex items-start gap-3.5">
-            <div class="w-12 h-12 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-center shrink-0 overflow-hidden">
-              <template x-if="app.icon">
-                <img :src="app.icon" :alt="app.title" class="w-9 h-9 object-contain"
+            <!-- App Icon -->
+            <template x-if="app.icon">
+              <div class="w-12 h-12 rounded-2xl shrink-0 overflow-hidden flex items-center justify-center shadow-md"
+                   :class="isSelfApp(app) ? 'brand-squircle' : 'glass-inset p-1.5'">
+                <img :src="app.icon" :alt="app.title"
+                     :class="isSelfApp(app) ? '' : 'w-full h-full object-contain rounded-xl'"
                      @error="app.icon = ''" />
-              </template>
-              <template x-if="!app.icon">
-                <span class="text-sm font-bold text-sky-400 uppercase" x-text="app.title.slice(0, 2)"></span>
-              </template>
-            </div>
-
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-2">
-                <h2 class="font-semibold text-sm truncate" :title="app.title" x-text="app.title"></h2>
               </div>
-              <div class="flex items-center gap-1.5 mt-1 flex-wrap">
-                <span class="inline-flex items-center gap-1 text-[11px] font-medium"
-                      :class="app.status === 'running' ? 'text-emerald-400' : 'text-slate-400'">
+            </template>
+            <template x-if="!app.icon">
+              <div class="w-12 h-12 rounded-2xl shrink-0 flex items-center justify-center text-white font-bold text-sm uppercase shadow-md ring-1 ring-white/20"
+                   :class="avatarGradient(app.title)"
+                   x-text="app.title.slice(0, 2)"></div>
+            </template>
+
+            <!-- Title & Status -->
+            <div class="min-w-0 flex-1 pt-0.5">
+              <div class="flex items-center justify-between gap-2">
+                <h2 class="font-semibold text-[15px] leading-snug truncate" :title="app.title" x-text="app.title"></h2>
+                <span class="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider shrink-0 border"
+                      :class="app.source === 'casaos'
+                        ? 'bg-indigo-500/15 text-indigo-400 border-indigo-400/25'
+                        : 'bg-sky-500/15 text-sky-400 border-sky-400/25'"
+                      x-text="app.source"></span>
+              </div>
+
+              <div class="flex items-center gap-1.5 mt-1 text-[11px] font-medium">
+                <span class="inline-flex items-center gap-1.5"
+                      :class="app.status === 'running' ? 'text-emerald-400' : 'text-subtle'">
                   <span class="w-2 h-2 rounded-full"
                         :class="app.status === 'running' ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-slate-500'"></span>
-                  <span x-text="app.status"></span>
+                  <span x-text="app.status === 'running' ? t('statusRunning') : app.status"></span>
                 </span>
-                <span x-show="app.uptime" class="text-[11px] text-muted" x-text="`• ${app.uptime}`"></span>
+                <span x-show="app.uptime" class="text-subtle">•</span>
+                <span x-show="app.uptime" class="text-muted" x-text="app.uptime"></span>
               </div>
             </div>
-
-            <span class="text-[10px] px-2 py-0.5 rounded-lg border shrink-0 font-medium uppercase"
-                  :class="app.source === 'casaos'
-                    ? 'bg-indigo-500/15 text-indigo-300 border-indigo-400/30'
-                    : 'bg-sky-500/15 text-sky-300 border-sky-400/30'"
-                  x-text="app.source"></span>
           </div>
 
-          <!-- Meta Info: Image & Real Version -->
-          <div class="rounded-2xl bg-black/15 border border-white/5 px-3 py-2 text-[11px] space-y-1">
+          <!-- Metadata Inset Panel -->
+          <div class="glass-inset rounded-2xl px-3.5 py-2.5 space-y-1.5 text-[11px]">
             <div class="flex items-center justify-between gap-2">
-              <span class="text-muted shrink-0" x-text="t('version')"></span>
-              <span class="font-mono font-medium truncate text-sky-300" :title="app.version" x-text="app.version"></span>
+              <span class="text-subtle flex items-center gap-1.5 shrink-0">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z"/>
+                  <circle cx="6.75" cy="6.75" r="1"/>
+                </svg>
+                <span x-text="t('version')"></span>
+              </span>
+              <span class="font-mono-code font-medium px-2 py-0.5 rounded-md bg-sky-500/12 text-sky-400 truncate max-w-[65%]"
+                    :title="app.version" x-text="app.version"></span>
             </div>
+
             <div class="flex items-center justify-between gap-2">
-              <span class="text-muted shrink-0">Image</span>
-              <span class="font-mono text-muted truncate" :title="app.image" x-text="app.image"></span>
+              <span class="text-subtle flex items-center gap-1.5 shrink-0">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/>
+                </svg>
+                <span>Image</span>
+              </span>
+              <span class="font-mono-code text-muted truncate max-w-[70%]"
+                    :title="app.image" x-text="shortImage(app.image)"></span>
             </div>
           </div>
 
-          <!-- Action Buttons -->
-          <div class="flex items-center gap-1.5 pt-1">
-            <a x-show="app.port_map && app.status === 'running'"
-               :href="buildWebUrl(app)" target="_blank" rel="noopener"
-               class="glass-btn-primary flex-1 text-center py-2 px-2.5 rounded-xl text-xs font-semibold">
-              <span x-text="t('open')"></span> ↗
-            </a>
+          <!-- Action Bar (Balanced layout with 100% crisp SVG icons) -->
+          <div class="flex items-center gap-2 pt-0.5">
+            <!-- Trường hợp 1: Có WebUI & đang chạy -->
+            <template x-if="app.port_map && app.status === 'running'">
+              <div class="flex items-center gap-1.5 w-full">
+                <a :href="buildWebUrl(app)" target="_blank" rel="noopener"
+                   class="glass-btn-primary flex-1 h-9 px-3 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5">
+                  <span x-text="t('open')"></span>
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>
+                  </svg>
+                </a>
 
-            <button @click="runAction(app, app.status === 'running' ? 'stop' : 'start')"
-                    :disabled="busyId === app.id"
-                    class="glass-btn py-2 px-2.5 rounded-xl text-xs font-medium disabled:opacity-50"
-                    :class="(!app.port_map || app.status !== 'running') ? 'flex-1' : ''"
-                    :title="app.status === 'running' ? t('stop') : t('start')">
-              <span x-show="busyId !== app.id" x-text="app.status === 'running' ? '⏹' : '▶ ' + t('start')"></span>
-              <span x-show="busyId === app.id" class="animate-spin inline-block">↻</span>
-            </button>
+                <button @click="runAction(app, 'stop')" :disabled="busyId === app.id" :title="t('stop')"
+                        class="glass-btn w-9 h-9 rounded-xl flex items-center justify-center text-rose-400 hover:bg-rose-500/15 hover:border-rose-400/35 disabled:opacity-50">
+                  <svg x-show="busyId !== app.id" class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                    <rect x="6" y="6" width="12" height="12" rx="2.5"/>
+                  </svg>
+                  <svg x-show="busyId === app.id" x-cloak class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+                    <path class="opacity-85" fill="currentColor" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"></path>
+                  </svg>
+                </button>
 
-            <button @click="runAction(app, 'restart')"
-                    :disabled="busyId === app.id"
-                    class="glass-btn py-2 px-2.5 rounded-xl text-xs font-medium disabled:opacity-50"
-                    :title="t('restart')">↻</button>
+                <button @click="runAction(app, 'restart')" :disabled="busyId === app.id" :title="t('restart')"
+                        class="glass-btn w-9 h-9 rounded-xl flex items-center justify-center text-sky-400 hover:bg-sky-500/15 hover:border-sky-400/35 disabled:opacity-50">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M20.49 9A9 9 0 005.64 5.64L4 9m16 6l-1.64 3.36A9 9 0 013.51 15"/>
+                  </svg>
+                </button>
 
-            <button @click="openLogs(app)"
-                    class="glass-btn py-2 px-2.5 rounded-xl text-xs font-medium"
-                    :title="t('logs')">Logs</button>
+                <button @click="openLogs(app)" :title="t('logs')"
+                        class="glass-btn w-9 h-9 rounded-xl flex items-center justify-center text-muted hover:text-[var(--text-primary)]">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z"/>
+                  </svg>
+                </button>
+              </div>
+            </template>
+
+            <!-- Trường hợp 2: Không có WebUI hoặc đang dừng (Chia 3 nút đều nhau, có chữ + icon rõ ràng) -->
+            <template x-if="!app.port_map || app.status !== 'running'">
+              <div class="grid grid-cols-3 gap-1.5 w-full">
+                <button @click="runAction(app, app.status === 'running' ? 'stop' : 'start')"
+                        :disabled="busyId === app.id"
+                        class="h-9 px-2 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
+                        :class="app.status === 'running'
+                          ? 'glass-btn text-rose-400 hover:bg-rose-500/15 hover:border-rose-400/35'
+                          : 'glass-btn-primary'">
+                  <template x-if="busyId === app.id">
+                    <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+                      <path class="opacity-85" fill="currentColor" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"></path>
+                    </svg>
+                  </template>
+                  <template x-if="busyId !== app.id && app.status === 'running'">
+                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg>
+                  </template>
+                  <template x-if="busyId !== app.id && app.status !== 'running'">
+                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5.14v14l11-7-11-7z"/></svg>
+                  </template>
+                  <span x-text="app.status === 'running' ? t('stop') : t('start')"></span>
+                </button>
+
+                <button @click="runAction(app, 'restart')" :disabled="busyId === app.id"
+                        class="glass-btn h-9 px-2 rounded-xl text-xs font-medium inline-flex items-center justify-center gap-1.5 text-sky-400 disabled:opacity-50">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M20.49 9A9 9 0 005.64 5.64L4 9m16 6l-1.64 3.36A9 9 0 013.51 15"/>
+                  </svg>
+                  <span x-text="t('restartShort')"></span>
+                </button>
+
+                <button @click="openLogs(app)"
+                        class="glass-btn h-9 px-2 rounded-xl text-xs font-medium inline-flex items-center justify-center gap-1.5 text-muted hover:text-[var(--text-primary)]">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z"/>
+                  </svg>
+                  <span>Logs</span>
+                </button>
+              </div>
+            </template>
           </div>
         </div>
       </template>
@@ -182,35 +301,56 @@
 
     <!-- Empty State -->
     <div x-show="!loading && filteredApps.length === 0" x-cloak
-         class="glass-panel rounded-3xl p-12 text-center text-muted text-sm"
-         x-text="t('noApps')"></div>
+         class="glass-panel rounded-[24px] p-12 text-center">
+      <div class="w-12 h-12 rounded-2xl glass-inset mx-auto mb-3 flex items-center justify-center text-subtle">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/>
+        </svg>
+      </div>
+      <p class="text-sm font-medium text-muted" x-text="t('noApps')"></p>
+    </div>
   </main>
 
   <!-- Live Logs Glass Modal -->
-  <div x-show="logModal.open" x-cloak
-       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-       @keydown.escape.window="closeLogs()">
-    <div class="glass-panel w-full max-w-4xl rounded-3xl p-5 flex flex-col max-h-[85vh]">
-      <div class="flex items-center justify-between gap-3 pb-3 border-b border-white/10">
-        <div class="min-w-0">
-          <h3 class="font-bold text-base truncate" x-text="`Live Logs — ${logModal.title}`"></h3>
-          <p class="text-xs text-muted font-mono" x-text="logModal.containerName"></p>
+  <div x-show="logModal.open" x-cloak x-transition.opacity
+       class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/65 backdrop-blur-md"
+       @click.self="closeLogs()" @keydown.escape.window="closeLogs()">
+    <div class="glass-panel w-full max-w-4xl rounded-t-[28px] sm:rounded-[28px] p-5 flex flex-col h-[82dvh] sm:max-h-[84vh]"
+         style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
+      <div class="flex items-center justify-between gap-3 pb-3.5 border-b border-[var(--glass-border)]">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-400/30 flex items-center justify-center text-emerald-400 shrink-0">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z"/>
+            </svg>
+          </div>
+          <div class="min-w-0">
+            <h3 class="font-bold text-sm sm:text-base truncate" x-text="logModal.title"></h3>
+            <p class="text-[11px] text-muted font-mono-code truncate" x-text="logModal.containerName"></p>
+          </div>
         </div>
-        <div class="flex items-center gap-2">
-          <button @click="logModal.lines = ''" class="glass-btn px-3 py-1.5 rounded-xl text-xs" x-text="t('clear')"></button>
-          <button @click="closeLogs()" class="glass-btn px-3 py-1.5 rounded-xl text-xs text-rose-400">✕</button>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button @click="copyLogs()" class="glass-btn px-3 py-1.5 rounded-xl text-xs font-medium" x-text="t('copy')"></button>
+          <button @click="logModal.lines = ''" class="glass-btn px-3 py-1.5 rounded-xl text-xs font-medium" x-text="t('clear')"></button>
+          <button @click="closeLogs()" class="glass-btn w-8 h-8 rounded-xl flex items-center justify-center text-rose-400">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
         </div>
       </div>
 
       <pre x-ref="logBox"
-           class="glass-terminal rounded-2xl p-4 mt-4 flex-1 overflow-auto text-xs text-emerald-300/95 leading-relaxed whitespace-pre-wrap break-all"
+           class="glass-terminal font-mono-code rounded-2xl p-4 mt-4 flex-1 overflow-auto text-[11px] sm:text-xs text-emerald-300/95 leading-relaxed whitespace-pre-wrap break-all"
            x-text="logModal.lines || t('connectingLogs')"></pre>
     </div>
   </div>
 
-  <!-- Toast Notification -->
+  <!-- Floating Glass Toast -->
   <div x-show="toast.show" x-cloak x-transition
-       class="fixed bottom-5 right-5 z-50 glass-panel px-4 py-3 rounded-2xl text-xs font-medium border-sky-400/40">
+       class="fixed left-1/2 -translate-x-1/2 z-50 glass-panel px-4 py-2.5 rounded-2xl text-xs font-semibold border-sky-400/40 flex items-center gap-2 shadow-xl"
+       style="bottom: calc(1.25rem + env(safe-area-inset-bottom));">
+    <span class="w-2 h-2 rounded-full bg-sky-400"></span>
     <span x-text="toast.message"></span>
   </div>
 
@@ -218,20 +358,33 @@
     function dashboardApp() {
       const dict = {
         en: {
-          apps: 'apps', running: 'running', refresh: 'Refresh', logout: 'Logout',
+          running: 'running', statusRunning: 'Running', refresh: 'Refresh', logout: 'Logout',
           searchPlaceholder: 'Search apps, images, containers...',
           all: 'All', tabRunning: 'Running', tabStopped: 'Stopped', tabCasaos: 'CasaOS', tabDocker: 'Docker',
-          version: 'Version', open: 'Open', start: 'Start', stop: 'Stop', restart: 'Restart', logs: 'Logs',
-          noApps: 'No matching containers found.', clear: 'Clear', connectingLogs: 'Connecting to log stream...'
+          version: 'Version', open: 'Open Web', start: 'Start', stop: 'Stop',
+          restart: 'Restart', restartShort: 'Restart', logs: 'Live Logs',
+          noApps: 'No matching containers found.', clear: 'Clear', copy: 'Copy',
+          copied: 'Logs copied', connectingLogs: 'Connecting to live log stream...'
         },
         vi: {
-          apps: 'ứng dụng', running: 'đang chạy', refresh: 'Làm mới', logout: 'Thoát',
+          running: 'đang chạy', statusRunning: 'Đang chạy', refresh: 'Làm mới', logout: 'Đăng xuất',
           searchPlaceholder: 'Tìm theo tên app, image, container...',
           all: 'Tất cả', tabRunning: 'Đang chạy', tabStopped: 'Đã dừng', tabCasaos: 'CasaOS', tabDocker: 'Docker thuần',
-          version: 'Phiên bản', open: 'Mở Web', start: 'Chạy', stop: 'Dừng', restart: 'Khởi động lại', logs: 'Xem Logs',
-          noApps: 'Không tìm thấy container nào phù hợp.', clear: 'Xoá màn hình', connectingLogs: 'Đang kết nối luồng log...'
+          version: 'Phiên bản', open: 'Mở Web', start: 'Chạy', stop: 'Dừng',
+          restart: 'Khởi động lại', restartShort: 'Restart', logs: 'Xem Logs',
+          noApps: 'Không tìm thấy container nào phù hợp.', clear: 'Xoá', copy: 'Sao chép',
+          copied: 'Đã sao chép logs', connectingLogs: 'Đang kết nối luồng log trực tiếp...'
         }
       };
+
+      const gradients = [
+        'bg-gradient-to-br from-sky-500 to-indigo-600',
+        'bg-gradient-to-br from-emerald-500 to-teal-600',
+        'bg-gradient-to-br from-violet-500 to-fuchsia-600',
+        'bg-gradient-to-br from-amber-500 to-orange-600',
+        'bg-gradient-to-br from-cyan-500 to-blue-600',
+        'bg-gradient-to-br from-rose-500 to-pink-600'
+      ];
 
       return {
         lang: localStorage.getItem('amp_lang') || 'vi',
@@ -259,10 +412,24 @@
         init() { this.loadApps(); },
 
         handleShortcut(e) {
-          if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
+          if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && this.$refs.searchInput) {
             e.preventDefault();
             this.$refs.searchInput.focus();
           }
+        },
+
+        isSelfApp(app) {
+          return (app.name || '').toLowerCase().includes('appmanager-pro');
+        },
+
+        avatarGradient(title) {
+          let hash = 0;
+          for (let i = 0; i < title.length; i++) hash = title.charCodeAt(i) + ((hash << 5) - hash);
+          return gradients[Math.abs(hash) % gradients.length];
+        },
+
+        shortImage(img) {
+          return (img || '').replace(/^docker\.io\/(library\/)?/, '');
         },
 
         toggleLang() {
@@ -273,14 +440,17 @@
         toggleTheme() {
           this.theme = this.theme === 'dark' ? 'light' : 'dark';
           localStorage.setItem('amp_theme', this.theme);
-          document.documentElement.classList.toggle('light', this.theme === 'light');
-          document.documentElement.classList.toggle('dark', this.theme === 'dark');
+          const isLight = this.theme === 'light';
+          document.documentElement.classList.toggle('light', isLight);
+          document.documentElement.classList.toggle('dark', !isLight);
+          document.getElementById('meta-theme-color').setAttribute('content', isLight ? '#e6effb' : '#050814');
         },
 
         showToast(msg) {
           this.toast.message = msg;
           this.toast.show = true;
-          setTimeout(() => { this.toast.show = false; }, 2600);
+          clearTimeout(this._toastTimer);
+          this._toastTimer = setTimeout(() => { this.toast.show = false; }, 2400);
         },
 
         countForTab(tabId) {
@@ -360,6 +530,14 @@
               if (box) box.scrollTop = box.scrollHeight;
             });
           };
+        },
+
+        async copyLogs() {
+          if (!this.logModal.lines) return;
+          try {
+            await navigator.clipboard.writeText(this.logModal.lines);
+            this.showToast(this.t('copied'));
+          } catch (_) {}
         },
 
         closeLogs() {
