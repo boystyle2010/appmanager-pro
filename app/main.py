@@ -2,7 +2,7 @@ import asyncio
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -23,6 +23,15 @@ from app.core.auth import (
     verify_password,
     verify_websocket_user,
 )
+from app.core.compose_manager import (
+    get_compose_state,
+    merge_ui_into_yaml,
+    parse_yaml_to_ui,
+    rollback_compose,
+    save_and_apply_compose,
+    uninstall_app,
+    validate_compose_yaml,
+)
 from app.core.database import (
     get_app_pref,
     get_public_settings,
@@ -35,6 +44,7 @@ from app.core.database import (
     set_setting,
 )
 from app.core.docker_client import (
+    APP_VERSION,
     container_action,
     get_app_by_name,
     get_docker_client,
@@ -60,7 +70,7 @@ async def lifespan(_: FastAPI):
     stop_scheduler()
 
 
-app = FastAPI(title="AppManager Pro", version="0.2.1", lifespan=lifespan)
+app = FastAPI(title="AppManager Pro", version=APP_VERSION, lifespan=lifespan)
 
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 if ASSETS_DIR.exists():
@@ -95,6 +105,31 @@ class SettingsPayload(BaseModel):
     github_token: Optional[str] = None
 
 
+class ComposeToYamlPayload(BaseModel):
+    base_yaml: str
+    ui: dict[str, Any]
+
+
+class ComposeToUiPayload(BaseModel):
+    raw_yaml: str
+    selected_service: Optional[str] = None
+
+
+class ComposeYamlPayload(BaseModel):
+    raw_yaml: str
+
+
+class RollbackPayload(BaseModel):
+    filename: str
+
+
+class UninstallPayload(BaseModel):
+    remove_compose: bool = True
+    remove_images: bool = False
+    remove_appdata: bool = False
+    confirm_name: str = ""
+
+
 # ---------------- PWA Manifest & Pages ----------------
 
 @app.get("/manifest.json")
@@ -105,8 +140,8 @@ async def pwa_manifest():
             "short_name": "AppManager",
             "start_url": "/",
             "display": "standalone",
-            "background_color": "#0a1122",
-            "theme_color": "#0a1122",
+            "background_color": "#090f1d",
+            "theme_color": "#090f1d",
             "icons": [
                 {"src": "/assets/icon.png", "sizes": "512x512", "type": "image/png"}
             ],
@@ -202,7 +237,6 @@ async def api_app_details(
         raise HTTPException(status_code=404, detail="App not found")
 
     cache = get_update_cache_item(container_name)
-    # Nếu chưa từng check app này, check ngay lần đầu mở modal
     if not cache or not cache.get("checked_at"):
         cache = await check_one_app_by_name(container_name) or {}
         app_info = await asyncio.to_thread(get_app_by_name, container_name) or app_info
@@ -231,6 +265,92 @@ async def api_save_app_prefs(
     if payload.custom_repo is not None:
         await check_one_app_by_name(container_name)
     return {"ok": True, "pref": pref}
+
+
+# ---------------- Compose Visual UI / YAML Editor & Rollback ----------------
+
+@app.get("/api/apps/{container_name}/compose")
+async def api_get_compose(
+    container_name: str, service: Optional[str] = None, _: str = Depends(require_user)
+):
+    try:
+        return await get_compose_state(container_name, service=service)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/apps/{container_name}/compose/to-yaml")
+async def api_compose_to_yaml(
+    container_name: str, payload: ComposeToYamlPayload, _: str = Depends(require_user)
+):
+    try:
+        merged = merge_ui_into_yaml(payload.base_yaml, payload.ui)
+        return {"ok": True, "raw_yaml": merged}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/apps/{container_name}/compose/to-ui")
+async def api_compose_to_ui(
+    container_name: str, payload: ComposeToUiPayload, _: str = Depends(require_user)
+):
+    try:
+        ui = parse_yaml_to_ui(payload.raw_yaml, preferred_service=payload.selected_service)
+        return {"ok": True, "ui": ui}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/apps/{container_name}/compose/validate")
+async def api_validate_compose(
+    container_name: str, payload: ComposeYamlPayload, _: str = Depends(require_user)
+):
+    app_info = await asyncio.to_thread(get_app_by_name, container_name)
+    if not app_info or not app_info.get("compose_path"):
+        raise HTTPException(status_code=404, detail="Compose file not found")
+    compose_dir = str(Path(app_info["compose_path"]).parent)
+    ok, msg = await validate_compose_yaml(payload.raw_yaml, compose_dir)
+    return {"ok": ok, "message": msg}
+
+
+@app.post("/api/apps/{container_name}/compose/apply")
+async def api_apply_compose(
+    container_name: str, payload: ComposeYamlPayload, _: str = Depends(require_user)
+):
+    res = await save_and_apply_compose(container_name, payload.raw_yaml)
+    if not res.get("ok"):
+        raise HTTPException(status_code=400, detail=res.get("error") or "Apply failed")
+    return res
+
+
+@app.post("/api/apps/{container_name}/compose/rollback")
+async def api_rollback_compose(
+    container_name: str, payload: RollbackPayload, _: str = Depends(require_user)
+):
+    res = await rollback_compose(container_name, payload.filename)
+    if not res.get("ok"):
+        raise HTTPException(status_code=400, detail=res.get("error") or "Rollback failed")
+    return res
+
+
+# ---------------- Smart Uninstall & Actions ----------------
+
+@app.post("/api/apps/{container_name}/uninstall")
+async def api_uninstall_app(
+    container_name: str, payload: UninstallPayload, _: str = Depends(require_user)
+):
+    res = await uninstall_app(
+        container_name,
+        remove_compose=payload.remove_compose,
+        remove_images=payload.remove_images,
+        remove_appdata=payload.remove_appdata,
+        confirm_name=payload.confirm_name,
+    )
+    if not res.get("ok"):
+        raise HTTPException(status_code=400, detail=res.get("error") or "Uninstall failed")
+    return res
 
 
 @app.post("/api/apps/{container_id}/{action}")
@@ -265,7 +385,7 @@ async def api_save_settings(payload: SettingsPayload, _: str = Depends(require_u
     return {"ok": True, "settings": get_public_settings()}
 
 
-# ---------------- WebSockets: Live Logs & Live Update ----------------
+# ---------------- WebSockets ----------------
 
 @app.websocket("/ws/logs/{container_id}")
 async def ws_container_logs(websocket: WebSocket, container_id: str):
@@ -340,6 +460,7 @@ async def ws_update_app(websocket: WebSocket, container_name: str):
             await websocket.close()
         except Exception:
             pass
+
 
 @app.websocket("/ws/update-all")
 async def ws_update_all(websocket: WebSocket):
