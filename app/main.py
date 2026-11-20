@@ -46,7 +46,7 @@ from app.core.registry_checker import (
     is_check_running,
 )
 from app.core.scheduler import configure_jobs, start_scheduler, stop_scheduler
-from app.core.updater import update_app_stream
+from app.core.updater import update_all_apps_stream, update_app_stream
 
 BASE_DIR = Path(__file__).resolve().parent
 ASSETS_DIR = BASE_DIR.parent / "assets"
