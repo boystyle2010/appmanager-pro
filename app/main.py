@@ -2,6 +2,7 @@ import asyncio
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -22,8 +23,30 @@ from app.core.auth import (
     verify_password,
     verify_websocket_user,
 )
-from app.core.database import get_user_by_username, has_admin_user, init_db
-from app.core.docker_client import container_action, get_docker_client, list_all_apps
+from app.core.database import (
+    get_app_pref,
+    get_public_settings,
+    get_update_cache_item,
+    get_update_history,
+    get_user_by_username,
+    has_admin_user,
+    init_db,
+    save_app_pref,
+    set_setting,
+)
+from app.core.docker_client import (
+    container_action,
+    get_app_by_name,
+    get_docker_client,
+    list_all_apps,
+)
+from app.core.registry_checker import (
+    check_all_updates,
+    check_one_app_by_name,
+    is_check_running,
+)
+from app.core.scheduler import configure_jobs, start_scheduler, stop_scheduler
+from app.core.updater import update_app_stream
 
 BASE_DIR = Path(__file__).resolve().parent
 ASSETS_DIR = BASE_DIR.parent / "assets"
@@ -32,10 +55,12 @@ ASSETS_DIR = BASE_DIR.parent / "assets"
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
+    start_scheduler()
     yield
+    stop_scheduler()
 
 
-app = FastAPI(title="AppManager Pro", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="AppManager Pro", version="0.2.0", lifespan=lifespan)
 
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 if ASSETS_DIR.exists():
@@ -56,18 +81,46 @@ class LoginPayload(BaseModel):
     remember: bool = True
 
 
-# ---------------- Pages ----------------
+class AppPrefPayload(BaseModel):
+    auto_update: Optional[bool] = None
+    custom_repo: Optional[str] = None
+    skipped_digest: Optional[str] = None
+
+
+class SettingsPayload(BaseModel):
+    check_interval_hours: int = 6
+    auto_update_enabled: bool = False
+    auto_update_time: str = "03:30"
+    prune_old_images: bool = True
+    github_token: Optional[str] = None
+
+
+# ---------------- PWA Manifest & Pages ----------------
+
+@app.get("/manifest.json")
+async def pwa_manifest():
+    return JSONResponse(
+        content={
+            "name": "AppManager Pro",
+            "short_name": "AppManager",
+            "start_url": "/",
+            "display": "standalone",
+            "background_color": "#0a1122",
+            "theme_color": "#0a1122",
+            "icons": [
+                {"src": "/assets/icon.png", "sizes": "512x512", "type": "image/png"}
+            ],
+        }
+    )
+
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard_page(request: Request):
-    if not has_admin_user():
-        return RedirectResponse(url="/login", status_code=302)
-    user = get_current_user_optional(request)
-    if not user:
+    if not has_admin_user() or not get_current_user_optional(request):
         return RedirectResponse(url="/login", status_code=302)
     return templates.TemplateResponse(
         "index.html",
-        {"request": request, "username": user, "version": app.version},
+        {"request": request, "version": app.version},
     )
 
 
@@ -120,15 +173,64 @@ async def api_logout(response: Response):
     return {"ok": True}
 
 
-# ---------------- Docker App APIs ----------------
+# ---------------- Docker & Update APIs ----------------
 
 @app.get("/api/apps")
 async def api_list_apps(_: str = Depends(require_user)):
     try:
-        data = await asyncio.to_thread(list_all_apps)
+        data = await asyncio.to_thread(list_all_apps, True)
+        data["checking_updates"] = is_check_running()
         return JSONResponse(content=data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Docker socket error: {e}")
+
+
+@app.post("/api/updates/check")
+async def api_check_updates(_: str = Depends(require_user)):
+    result = await check_all_updates()
+    return JSONResponse(content=result)
+
+
+@app.get("/api/apps/{container_name}/details")
+async def api_app_details(
+    container_name: str, refresh: bool = False, _: str = Depends(require_user)
+):
+    if refresh:
+        await check_one_app_by_name(container_name)
+    app_info = await asyncio.to_thread(get_app_by_name, container_name)
+    if not app_info:
+        raise HTTPException(status_code=404, detail="App not found")
+
+    cache = get_update_cache_item(container_name)
+    # Nếu chưa từng check app này, check ngay lần đầu mở modal
+    if not cache or not cache.get("checked_at"):
+        cache = await check_one_app_by_name(container_name) or {}
+        app_info = await asyncio.to_thread(get_app_by_name, container_name) or app_info
+
+    pref = get_app_pref(container_name)
+    return {
+        "app": app_info,
+        "changelog": cache.get("changelog") or "",
+        "release_tag": cache.get("release_tag") or "",
+        "release_url": cache.get("release_url") or "",
+        "published_at": cache.get("published_at") or "",
+        "pref": pref,
+    }
+
+
+@app.post("/api/apps/{container_name}/prefs")
+async def api_save_app_prefs(
+    container_name: str, payload: AppPrefPayload, _: str = Depends(require_user)
+):
+    pref = save_app_pref(
+        container_name,
+        auto_update=payload.auto_update,
+        custom_repo=payload.custom_repo,
+        skipped_digest=payload.skipped_digest,
+    )
+    if payload.custom_repo is not None:
+        await check_one_app_by_name(container_name)
+    return {"ok": True, "pref": pref}
 
 
 @app.post("/api/apps/{container_id}/{action}")
@@ -143,7 +245,27 @@ async def api_app_action(container_id: str, action: str, _: str = Depends(requir
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ---------------- WebSocket Live Logs ----------------
+@app.get("/api/settings")
+async def api_get_settings(_: str = Depends(require_user)):
+    return {
+        "settings": get_public_settings(),
+        "history": get_update_history(30),
+    }
+
+
+@app.post("/api/settings")
+async def api_save_settings(payload: SettingsPayload, _: str = Depends(require_user)):
+    set_setting("check_interval_hours", str(max(1, min(168, payload.check_interval_hours))))
+    set_setting("auto_update_enabled", "true" if payload.auto_update_enabled else "false")
+    set_setting("auto_update_time", payload.auto_update_time)
+    set_setting("prune_old_images", "true" if payload.prune_old_images else "false")
+    if payload.github_token is not None:
+        set_setting("github_token", payload.github_token.strip())
+    configure_jobs()
+    return {"ok": True, "settings": get_public_settings()}
+
+
+# ---------------- WebSockets: Live Logs & Live Update ----------------
 
 @app.websocket("/ws/logs/{container_id}")
 async def ws_container_logs(websocket: WebSocket, container_id: str):
@@ -193,3 +315,28 @@ async def ws_container_logs(websocket: WebSocket, container_id: str):
                 log_stream.close()
             except Exception:
                 pass
+
+
+@app.websocket("/ws/update/{container_name}")
+async def ws_update_app(websocket: WebSocket, container_name: str):
+    if not verify_websocket_user(websocket):
+        await websocket.close(code=4401)
+        return
+
+    await websocket.accept()
+
+    async def send_log(text: str):
+        try:
+            await websocket.send_text(text)
+        except Exception:
+            pass
+
+    try:
+        await update_app_stream(container_name, send_log, mode="manual")
+    except WebSocketDisconnect:
+        pass
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
