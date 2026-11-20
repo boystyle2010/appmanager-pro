@@ -1,4 +1,5 @@
 import os
+import socket
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -6,6 +7,8 @@ from typing import Any, Optional
 import docker
 from docker.errors import DockerException, NotFound
 from ruamel.yaml import YAML
+
+from app.core.database import get_all_app_prefs, get_all_update_cache
 
 CASAOS_APPS_DIR = Path(os.getenv("CASAOS_APPS_DIR", "/var/lib/casaos/apps"))
 yaml_parser = YAML(typ="safe")
@@ -29,10 +32,6 @@ def _extract_localized_str(val: Any, fallback: str = "") -> str:
 
 
 def load_casaos_metadata() -> dict[str, dict[str, Any]]:
-    """
-    Quét thư mục /var/lib/casaos/apps để lấy metadata x-casaos (icon, title, port_map, scheme, index).
-    Trả về dict map theo tên thư mục app và tên compose project.
-    """
     apps_meta: dict[str, dict[str, Any]] = {}
     if not CASAOS_APPS_DIR.exists() or not CASAOS_APPS_DIR.is_dir():
         return apps_meta
@@ -78,7 +77,7 @@ def load_casaos_metadata() -> dict[str, dict[str, Any]]:
     return apps_meta
 
 
-def _detect_real_version(image_tags: list[str], labels: dict[str, str], image_labels: dict[str, str]) -> str:
+def detect_real_version(image_tags: list[str], labels: dict[str, str], image_labels: dict[str, str]) -> str:
     merged = {**image_labels, **labels}
     for key in (
         "org.opencontainers.image.version",
@@ -87,12 +86,11 @@ def _detect_real_version(image_tags: list[str], labels: dict[str, str], image_la
         "version",
     ):
         val = merged.get(key)
-        if val and val.lower() not in ("unknown", "none"):
+        if val and str(val).lower() not in ("unknown", "none", ""):
             return str(val).strip()
 
     if image_tags:
-        tag = image_tags[0].split(":")[-1]
-        return tag
+        return image_tags[0].split(":")[-1]
     return "latest"
 
 
@@ -129,10 +127,25 @@ def _parse_uptime(started_at: str, status: str) -> str:
         return ""
 
 
-def list_all_apps() -> dict[str, Any]:
+def _extract_local_digests(container) -> list[str]:
+    digests: list[str] = []
+    try:
+        repo_digests = container.image.attrs.get("RepoDigests") or []
+        for rd in repo_digests:
+            if "@sha256:" in rd:
+                digests.append("sha256:" + rd.split("@sha256:", 1)[1])
+    except Exception:
+        pass
+    return digests
+
+
+def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
     client = get_docker_client()
     casaos_meta_map = load_casaos_metadata()
     is_casaos_env = CASAOS_APPS_DIR.exists()
+    cache_map = get_all_update_cache() if include_cache else {}
+    prefs_map = get_all_app_prefs() if include_cache else {}
+    own_hostname = socket.gethostname()
 
     containers = client.containers.list(all=True)
     items: list[dict[str, Any]] = []
@@ -146,18 +159,20 @@ def list_all_apps() -> dict[str, Any]:
 
         image_tags: list[str] = []
         image_labels: dict[str, str] = {}
+        image_id = ""
         try:
             image_tags = c.image.tags or []
             image_labels = (c.image.attrs.get("Config") or {}).get("Labels") or {}
+            image_id = c.image.id or ""
         except Exception:
             pass
 
         image_ref = config.get("Image") or (image_tags[0] if image_tags else c.image.short_id)
         project = (labels.get("com.docker.compose.project") or "").lower()
         working_dir = labels.get("com.docker.compose.project.working_dir") or ""
+        config_files = labels.get("com.docker.compose.project.config_files") or ""
         service = labels.get("com.docker.compose.service") or ""
 
-        # Khớp với CasaOS metadata nếu có
         meta: Optional[dict[str, Any]] = (
             casaos_meta_map.get(working_dir)
             or casaos_meta_map.get(project)
@@ -176,15 +191,41 @@ def list_all_apps() -> dict[str, Any]:
         )
         scheme = meta["scheme"] if meta else "http"
         index_path = meta["index"] if meta else "/"
-        compose_path = meta["compose_path"] if meta else (
-            f"{working_dir}/docker-compose.yml" if working_dir else ""
-        )
 
-        # Lấy nguồn GitHub từ OCI label (sẵn sàng cho Phase 2 Changelog)
+        compose_path = ""
+        if meta:
+            compose_path = meta["compose_path"]
+        elif config_files:
+            first_cfg = config_files.split(",")[0].strip()
+            if first_cfg and Path(first_cfg).exists():
+                compose_path = first_cfg
+        elif working_dir:
+            for candidate in ("docker-compose.yml", "docker-compose.yaml", "compose.yml"):
+                p = Path(working_dir) / candidate
+                if p.exists():
+                    compose_path = str(p)
+                    break
+
         source_url = (
             image_labels.get("org.opencontainers.image.source")
+            or image_labels.get("org.opencontainers.image.url")
             or labels.get("org.opencontainers.image.source")
             or ""
+        )
+
+        local_digests = _extract_local_digests(c)
+        version = detect_real_version(image_tags, labels, image_labels)
+        cached = cache_map.get(c.name, {})
+        pref = prefs_map.get(c.name, {})
+
+        remote_digest = cached.get("remote_digest") or ""
+        is_skipped = bool(remote_digest and pref.get("skipped_digest") == remote_digest)
+        has_update = bool(cached.get("has_update")) and not is_skipped
+
+        is_self = (
+            c.id.startswith(own_hostname)
+            or c.short_id == own_hostname
+            or c.name.lower() == "appmanager-pro"
         )
 
         status_str = state.get("Status") or c.status or "unknown"
@@ -200,30 +241,68 @@ def list_all_apps() -> dict[str, Any]:
                 "status": status_str,
                 "uptime": _parse_uptime(state.get("StartedAt", ""), status_str),
                 "image": image_ref,
-                "version": _detect_real_version(image_tags, labels, image_labels),
+                "image_id": image_id,
+                "version": version,
+                "local_digests": local_digests,
                 "port_map": port_map,
                 "scheme": scheme,
                 "index": index_path,
                 "compose_path": compose_path,
+                "can_update": bool(compose_path and Path(compose_path).exists()),
                 "project": project,
-                "source_url": source_url,
+                "service": service,
+                "source_url": pref.get("custom_repo") or cached.get("source_url") or source_url,
+                "custom_repo": pref.get("custom_repo") or "",
+                "auto_update": bool(pref.get("auto_update", 0)),
+                "is_self": is_self,
+                # Dữ liệu cập nhật từ cache
+                "has_update": has_update,
+                "is_skipped": is_skipped,
+                "remote_version": cached.get("remote_version") or "",
+                "remote_digest": remote_digest,
+                "local_digest": local_digests[0] if local_digests else (cached.get("local_digest") or ""),
+                "checked_at": cached.get("checked_at") or "",
+                "update_error": cached.get("error") or "",
+                "release_tag": cached.get("release_tag") or "",
+                "release_url": cached.get("release_url") or "",
+                "published_at": cached.get("published_at") or "",
+                "has_changelog": bool(cached.get("changelog")),
             }
         )
 
-    # Sắp xếp: Đang chạy trước -> CasaOS trước -> Theo tên A-Z
-    items.sort(key=lambda x: (x["status"] != "running", x["source"] != "casaos", x["title"].lower()))
+    # Ưu tiên app có bản cập nhật lên đầu -> Đang chạy -> CasaOS -> Tên A-Z
+    items.sort(
+        key=lambda x: (
+            not x["has_update"],
+            x["status"] != "running",
+            x["source"] != "casaos",
+            x["title"].lower(),
+        )
+    )
+
+    last_checked = max((i["checked_at"] for i in items if i["checked_at"]), default="")
 
     return {
         "environment": "casaos" if is_casaos_env else "docker",
+        "last_checked": last_checked,
         "summary": {
             "total": len(items),
             "running": sum(1 for i in items if i["status"] == "running"),
             "stopped": sum(1 for i in items if i["status"] != "running"),
             "casaos": sum(1 for i in items if i["source"] == "casaos"),
             "docker": sum(1 for i in items if i["source"] == "docker"),
+            "updates": sum(1 for i in items if i["has_update"]),
         },
         "apps": items,
     }
+
+
+def get_app_by_name(container_name: str) -> Optional[dict[str, Any]]:
+    data = list_all_apps(include_cache=True)
+    for app in data["apps"]:
+        if app["name"] == container_name or app["id"] == container_name:
+            return app
+    return None
 
 
 def container_action(container_id: str, action: str) -> dict[str, Any]:
