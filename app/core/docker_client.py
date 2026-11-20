@@ -10,7 +10,9 @@ from ruamel.yaml import YAML
 
 from app.core.database import get_all_app_prefs, get_all_update_cache
 
+APP_VERSION = "0.3.0"
 CASAOS_APPS_DIR = Path(os.getenv("CASAOS_APPS_DIR", "/var/lib/casaos/apps"))
+APPDATA_DIR = Path(os.getenv("APPDATA_DIR", "/DATA/AppData"))
 yaml_parser = YAML(typ="safe")
 
 
@@ -105,6 +107,35 @@ def _extract_first_host_port(ports_dict: dict[str, Any]) -> str:
     return ""
 
 
+def _detect_appdata_path(mounts: list[dict[str, Any]], project: str, cname: str) -> str:
+    """Tìm thư mục dữ liệu gốc của app bên trong /DATA/AppData (dùng cho Smart Uninstall)."""
+    try:
+        base = APPDATA_DIR.resolve()
+    except Exception:
+        return ""
+
+    for m in mounts or []:
+        src = m.get("Source") or ""
+        if not src:
+            continue
+        try:
+            p = Path(src).resolve()
+            if base in p.parents:
+                rel = p.relative_to(base)
+                top = base / rel.parts[0]
+                if top.exists() and top.is_dir():
+                    return str(top)
+        except Exception:
+            continue
+
+    for cand in (project, cname):
+        if cand:
+            p = APPDATA_DIR / cand
+            if p.exists() and p.is_dir():
+                return str(p)
+    return ""
+
+
 def _parse_uptime(started_at: str, status: str) -> str:
     if status != "running" or not started_at or started_at.startswith("0001-01-01"):
         return ""
@@ -179,6 +210,12 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
             or casaos_meta_map.get(c.name.lower())
         )
 
+        is_self = (
+            c.id.startswith(own_hostname)
+            or c.short_id == own_hostname
+            or c.name.lower() == "appmanager-pro"
+        )
+
         source = "casaos" if meta else "docker"
         is_main = True if not meta else (not service or service == meta.get("main_service"))
 
@@ -186,6 +223,14 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
             f"{meta['title']} ({service})" if meta else c.name
         )
         icon = meta["icon"] if meta else ""
+
+        # Tự đồng bộ logo & tên đẹp cho chính AppManager Pro dù chạy ở chế độ Docker thuần
+        if is_self:
+            if not icon:
+                icon = "/assets/icon.png"
+            if title.lower() == "appmanager-pro":
+                title = "AppManager Pro"
+
         port_map = (meta["port_map"] if (meta and is_main) else "") or _extract_first_host_port(
             network_settings.get("Ports") or {}
         )
@@ -215,20 +260,22 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
 
         local_digests = _extract_local_digests(c)
         version = detect_real_version(image_tags, labels, image_labels)
+        if is_self and version in ("latest", ""):
+            version = f"v{APP_VERSION}"
+
         cached = cache_map.get(c.name, {})
         pref = prefs_map.get(c.name, {})
 
         remote_digest = cached.get("remote_digest") or ""
-        is_skipped = bool(remote_digest and pref.get("skipped_digest") == remote_digest)
-        has_update = bool(cached.get("has_update")) and not is_skipped
+        target_tag = cached.get("target_tag") or ""
+        skip_token = remote_digest or target_tag
+        raw_has_update = bool(cached.get("has_update"))
+        is_skipped = bool(raw_has_update and skip_token and pref.get("skipped_digest") == skip_token)
+        has_update = raw_has_update and not is_skipped
 
-        is_self = (
-            c.id.startswith(own_hostname)
-            or c.short_id == own_hostname
-            or c.name.lower() == "appmanager-pro"
-        )
-
+        appdata_path = _detect_appdata_path(attrs.get("Mounts") or [], project, c.name)
         status_str = state.get("Status") or c.status or "unknown"
+
         items.append(
             {
                 "id": c.short_id,
@@ -248,6 +295,7 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
                 "scheme": scheme,
                 "index": index_path,
                 "compose_path": compose_path,
+                "appdata_path": appdata_path,
                 "can_update": bool(compose_path and Path(compose_path).exists()),
                 "project": project,
                 "service": service,
@@ -255,11 +303,12 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
                 "custom_repo": pref.get("custom_repo") or "",
                 "auto_update": bool(pref.get("auto_update", 0)),
                 "is_self": is_self,
-                # Dữ liệu cập nhật từ cache
                 "has_update": has_update,
+                "raw_has_update": raw_has_update,
                 "is_skipped": is_skipped,
+                "skip_token": skip_token,
                 "remote_version": cached.get("remote_version") or "",
-                "target_tag": cached.get("target_tag") or "",
+                "target_tag": target_tag,
                 "remote_digest": remote_digest,
                 "local_digest": local_digests[0] if local_digests else (cached.get("local_digest") or ""),
                 "checked_at": cached.get("checked_at") or "",
@@ -271,7 +320,6 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
             }
         )
 
-    # Ưu tiên app có bản cập nhật lên đầu -> Đang chạy -> CasaOS -> Tên A-Z
     items.sort(
         key=lambda x: (
             not x["has_update"],
