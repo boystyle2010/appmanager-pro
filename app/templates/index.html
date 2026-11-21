@@ -767,7 +767,7 @@
                 : `Pinned tag detected — updating will bump docker-compose.yml to ${updateModal.app?.target_tag} (with automatic backup).`"></span>
             </div>
 
-            <div class="glass-inset rounded-2xl p-3.5 flex items-center justify-between gap-3">
+            <div class="glass-inset rounded-2xl p-3.5 sticky top-0 z-20 flex items-center justify-between gap-3" style="background:var(--glass-bg-elevated);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:0 6px 14px -6px rgba(0,0,0,.35)">
               <div class="min-w-0">
                 <p class="text-xs font-semibold" x-text="t('autoUpdateApp')"></p>
                 <p class="text-[11px] text-muted" x-text="t('autoUpdateAppDesc')"></p>
