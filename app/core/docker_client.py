@@ -383,6 +383,8 @@ def container_action(container_id: str, action: str) -> dict[str, Any]:
             c.stop(timeout=15)
         elif action == "restart":
             c.restart(timeout=15)
+        elif action == "kill":
+            c.kill()
         else:
             raise ValueError(f"Unsupported action: {action}")
         c.reload()
@@ -391,7 +393,3 @@ def container_action(container_id: str, action: str) -> dict[str, Any]:
         raise KeyError("Container not found")
     except DockerException as e:
         raise RuntimeError(str(e))
-        elif action == "restart":
-            c.restart(timeout=15)
-        elif action == "kill":
-            c.kill()

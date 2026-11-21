@@ -218,7 +218,7 @@ def extract_github_slug(
 async def fetch_github_release(client: httpx.AsyncClient, slug: str) -> dict[str, str]:
     headers = {
         "Accept": "application/vnd.github+json",
-        "User-Agent": "AppManager-Pro/0.3.2",
+        "User-Agent": "AppManager-Pro/0.4.0",
     }
     gh_token = get_setting("github_token", "").strip()
     if gh_token:
