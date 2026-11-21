@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.5.1
+
+*Released: 2026-11-21*
+
+### 📦 Component & Version Matrix
+
+- **App Release:** Bumped from `v0.5.0` ➡️ `v0.5.1`
+- **Supported Architectures:** `linux/amd64` (x86_64) & `linux/arm64` (ARM64) *(Multi-arch GHCR Image)*
+- **Python Base Image:** `python 3.12` ➡️ `python 3.12.16`
+- **Docker CLI:** `docker 27` ➡️ `docker 27.5.1`
+- **Core Python Stack:** FastAPI `0.115.6` ➡️ `0.115.14` • Uvicorn `0.34.0` ➡️ `0.34.3` • Docker SDK `7.1.0` ➡️ `7.2.0` • ruamel.yaml `0.18.6` ➡️ `0.18.17` • `Argon2 23.1.0` • `itsdangerous 2.2.0` • Jinja2 `3.1.5` ➡️ `3.1.6` • python-multipart `0.0.20` ➡️ `0.0.34` • `HTTPX 0.28.1` • APScheduler `3.10.4` ➡️ `3.11.3`
+- **Frontend Libraries:** Alpine.js `3.14.8` ➡️ `3.17.5` • Tailwind CSS `3.4.17` ➡️ `3.4.19` • marked `15.0.6` ➡️ `15.0.12` • DOMPurify `3.2.3` ➡️ `3.4.18`
+
+### 🚀 What's Changed
+
+- Upgraded **Python Base Image** to `3.12.16`.
+- Upgraded **Docker CLI** to `27.5.1`.
+- Upgraded **FastAPI** to `0.115.14`.
+- Upgraded **Uvicorn** to `0.34.3`.
+- Upgraded **Docker SDK** to `7.2.0`.
+- Upgraded **ruamel.yaml** to `0.18.17`.
+- Upgraded **Jinja2** to `3.1.6`.
+- Upgraded **python-multipart** to `0.0.34`.
+- Upgraded **APScheduler** to `3.11.3`.
+- Upgraded **Alpine.js** to `3.17.5`.
+- Upgraded **Tailwind CSS** to `3.4.19`.
+- Upgraded **marked** to `15.0.12`.
+- Upgraded **DOMPurify** to `3.4.18`.
+- Add files via upload
+- Add files via upload
+- Add files via upload
+- Add files via upload
+- Add files via upload
+- Add files via upload
+- Add files via upload
+- Update release.yml
+- Delete release-please-config.json
+- Delete .release-please-manifest.json
+- Delete .github/workflows/vendor-updates.yml
+- Delete .github/dependabot.yml
+
 ## v0.5.0 (Phase 5 - Safe Updates, Scheduled Cleanup & Self-hosted UI)
 - **Auto-rollback:** after an update the new container is health-checked (crash/restart loop/unhealthy); on failure the previous version is restored automatically (compose backup or previous image re-tag). Old images are only pruned after the new version is healthy. Toggle + check time in Settings.
 - **Scheduled SSD cleanup:** daily/weekly/monthly cleanup of images and build cache with a live estimate, next/last run info and history entries. Containers and volumes are never cleaned automatically.
