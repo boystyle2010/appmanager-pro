@@ -108,6 +108,8 @@ class SettingsPayload(BaseModel):
     auto_update_enabled: bool = False
     auto_update_time: str = "03:30"
     prune_old_images: bool = True
+    auto_rollback: bool = True
+    health_wait_seconds: int = 25
     github_token: Optional[str] = None
 
 
@@ -454,6 +456,8 @@ async def api_save_settings(payload: SettingsPayload, _: str = Depends(require_u
     set_setting("auto_update_enabled", "true" if payload.auto_update_enabled else "false")
     set_setting("auto_update_time", payload.auto_update_time)
     set_setting("prune_old_images", "true" if payload.prune_old_images else "false")
+    set_setting("auto_rollback", "true" if payload.auto_rollback else "false")
+    set_setting("health_wait_seconds", str(max(10, min(120, payload.health_wait_seconds))))
     if payload.github_token is not None:
         set_setting("github_token", payload.github_token.strip())
     configure_jobs()
