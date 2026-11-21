@@ -6,6 +6,7 @@
 - **Changelog:** cloudflared (and similar) now read real notes from `RELEASE_NOTES` instead of SHA256-only releases; layout fixes (fixed frames, horizontal scroll inside changelog).
 - **Self-hosted UI libraries:** Tailwind, Alpine.js, marked, DOMPurify and fonts are downloaded at image build (`scripts/fetch_vendor.py`) with automatic CDN fallback.
 - **Code structure:** dashboard JavaScript moved out of `index.html` into `static/js/app.js` and translations into `static/js/i18n.js`.
+- **CI/CD (fully automatic):** one GitHub Actions workflow checks for new base images / Python packages / frontend libraries every day, commits the updates (signed by GitHub), writes this changelog, builds & signs the multi-arch image and publishes the GitHub Release.
 
 ## v0.4.0 (Phase 4 - Task Manager, Storage Cleanup & Deploy)
 - **Task Manager:** Live CPU / RAM / Network / PIDs per container over WebSocket (`/ws/task-manager`), sorted by load.
