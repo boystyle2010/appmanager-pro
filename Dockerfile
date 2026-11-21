@@ -26,6 +26,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ ./app/
 COPY assets/ ./assets/
 
+# Tải sẵn Tailwind/Alpine/marked/DOMPurify/font về image để không phụ thuộc CDN lúc chạy
+# (lỗi tải chỉ cảnh báo; trang tự dùng CDN dự phòng nếu thiếu file)
+COPY scripts/ ./scripts/
+RUN python scripts/fetch_vendor.py /app/app/static/vendor
+
 RUN mkdir -p /app/data
 
 EXPOSE 8000
