@@ -59,7 +59,7 @@ from app.core.registry_checker import (
     check_one_app_by_name,
     is_check_running,
 )
-from app.core.scheduler import configure_jobs, start_scheduler, stop_scheduler
+from app.core.scheduler import configure_jobs, get_auto_prune_next_run, start_scheduler, stop_scheduler
 from app.core.system_monitor import collect_task_manager_snapshot
 from app.core.system_prune import get_docker_disk_usage, prune_docker_resources
 from app.core.updater import update_all_apps_stream, update_app_stream
@@ -110,6 +110,12 @@ class SettingsPayload(BaseModel):
     prune_old_images: bool = True
     auto_rollback: bool = True
     health_wait_seconds: int = 25
+    auto_prune_enabled: bool = False
+    auto_prune_freq: str = "weekly"
+    auto_prune_weekday: int = 6
+    auto_prune_time: str = "04:00"
+    auto_prune_images: str = "dangling"
+    auto_prune_cache: bool = True
     github_token: Optional[str] = None
 
 
@@ -445,7 +451,7 @@ async def api_app_action(container_id: str, action: str, _: str = Depends(requir
 @app.get("/api/settings")
 async def api_get_settings(_: str = Depends(require_user)):
     return {
-        "settings": get_public_settings(),
+        "settings": {**get_public_settings(), "auto_prune_next_run": get_auto_prune_next_run()},
         "history": get_update_history(30),
     }
 
@@ -458,10 +464,16 @@ async def api_save_settings(payload: SettingsPayload, _: str = Depends(require_u
     set_setting("prune_old_images", "true" if payload.prune_old_images else "false")
     set_setting("auto_rollback", "true" if payload.auto_rollback else "false")
     set_setting("health_wait_seconds", str(max(10, min(120, payload.health_wait_seconds))))
+    set_setting("auto_prune_enabled", "true" if payload.auto_prune_enabled else "false")
+    set_setting("auto_prune_freq", payload.auto_prune_freq if payload.auto_prune_freq in ("daily", "weekly", "monthly") else "weekly")
+    set_setting("auto_prune_weekday", str(max(0, min(6, payload.auto_prune_weekday))))
+    set_setting("auto_prune_time", payload.auto_prune_time if len(payload.auto_prune_time) == 5 and payload.auto_prune_time[2] == ":" else "04:00")
+    set_setting("auto_prune_images", payload.auto_prune_images if payload.auto_prune_images in ("off", "dangling", "all") else "dangling")
+    set_setting("auto_prune_cache", "true" if payload.auto_prune_cache else "false")
     if payload.github_token is not None:
         set_setting("github_token", payload.github_token.strip())
     configure_jobs()
-    return {"ok": True, "settings": get_public_settings()}
+    return {"ok": True, "settings": {**get_public_settings(), "auto_prune_next_run": get_auto_prune_next_run()}}
 
 
 # ---------------- WebSockets ----------------
