@@ -29,9 +29,9 @@
     /* Changelog: cố định trong khung, tự xuống dòng, không tràn ngang */
     .changelog-md {
       max-width: 100%; min-width: 0;
-      overflow-x: auto; overflow-y: visible; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch;
+      overflow-x: auto; overflow-y: auto; flex: 1 1 auto; min-height: 0; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
       overflow-wrap: normal; word-break: normal; hyphens: none; text-align: left;
-      padding-bottom: 1.25rem; width: 100%; contain: inline-size; touch-action: pan-x pan-y;
+      padding-bottom: .5rem; width: 100%; contain: inline-size; touch-action: pan-x pan-y;
       font-size: 12px; line-height: 1.55;
     }
     .changelog-md ul, .changelog-md ol { padding-left: 1.05rem; margin: .35rem 0; }
@@ -752,11 +752,11 @@
         </button>
       </div>
 
-      <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-4 space-y-3.5">
+      <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-4 flex flex-col gap-3.5">
         <div x-show="updateModal.loading" class="py-10 text-center text-xs text-muted" x-text="t('loadingDetails')"></div>
 
         <template x-if="!updateModal.loading && !updateModal.updating && !updateModal.updateLogs">
-          <div class="space-y-3.5">
+          <div class="flex flex-col gap-3.5 flex-1 min-h-0">
             <div x-show="updateModal.app?.target_tag"
                  class="rounded-2xl px-3.5 py-2.5 bg-amber-500/12 border border-amber-400/30 text-[11px] text-amber-300 flex items-center gap-2">
               <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -767,7 +767,7 @@
                 : `Pinned tag detected — updating will bump docker-compose.yml to ${updateModal.app?.target_tag} (with automatic backup).`"></span>
             </div>
 
-            <div class="glass-inset rounded-2xl p-3.5 sticky z-20 flex items-center justify-between gap-3" style="top:-1rem;background:var(--glass-bg-elevated);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:0 6px 14px -6px rgba(0,0,0,.35)">
+            <div class="glass-inset rounded-2xl p-3.5 shrink-0 flex items-center justify-between gap-3">
               <div class="min-w-0">
                 <p class="text-xs font-semibold" x-text="t('autoUpdateApp')"></p>
                 <p class="text-[11px] text-muted" x-text="t('autoUpdateAppDesc')"></p>
@@ -778,7 +778,7 @@
               </label>
             </div>
 
-            <div class="glass-inset rounded-2xl p-4 space-y-3 min-w-0" style="overflow:clip">
+            <div class="glass-inset rounded-2xl p-4 flex flex-col gap-3 min-w-0 min-h-0" :class="updateModal.changelogHtml ? 'flex-1' : ''" style="overflow:clip">
               <div class="flex items-center justify-between gap-2 flex-wrap">
                 <div class="flex items-center gap-2">
                   <span class="text-xs font-bold uppercase tracking-wider text-sky-400">Changelog</span>
