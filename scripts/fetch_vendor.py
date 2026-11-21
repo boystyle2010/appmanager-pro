@@ -15,10 +15,10 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
 
 LIBS = {
-    "tailwind.js": "https://cdn.tailwindcss.com/3.4.19",
-    "marked.min.js": "https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js",
-    "purify.min.js": "https://cdn.jsdelivr.net/npm/dompurify@3.4.18/dist/purify.min.js",
-    "alpine.min.js": "https://cdn.jsdelivr.net/npm/alpinejs@3.17.5/dist/cdn.min.js",
+    "tailwind.js": "https://cdn.tailwindcss.com/3.4.17",
+    "marked.min.js": "https://cdn.jsdelivr.net/npm/marked@15.0.6/marked.min.js",
+    "purify.min.js": "https://cdn.jsdelivr.net/npm/dompurify@3.2.3/dist/purify.min.js",
+    "alpine.min.js": "https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js",
 }
 FONT_CSS = {
     "fonts.css": "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500"
@@ -33,19 +33,40 @@ def get(url: str) -> bytes:
         return r.read()
 
 
+EXPECT = {  # chuỗi phải có trong file thì mới coi là hợp lệ (tránh lưu nhầm trang lỗi HTML)
+    "tailwind.js": b"tailwind",
+    "marked.min.js": b"marked",
+    "purify.min.js": b"DOMPurify",
+    "alpine.min.js": b"Alpine",
+}
+FALLBACK_URLS = {"tailwind.js": "https://cdn.tailwindcss.com"}  # bản không ghim phiên bản
+
+
+def valid_js(name: str, data: bytes) -> bool:
+    head = data[:200].lstrip().lower()
+    return len(data) > 5000 and not head.startswith(b"<") and EXPECT[name] in data
+
+
 def main() -> int:
     failed = 0
     for name, url in LIBS.items():
-        try:
-            data = get(url)
-            if len(data) < 1000:
-                raise ValueError("file quá nhỏ")
-            (OUT / name).write_bytes(data)
-            print(f"ok   {name} ({len(data)//1024} KB)")
-        except Exception as exc:
+        ok = False
+        for u in [url, FALLBACK_URLS.get(name)]:
+            if not u:
+                continue
+            try:
+                data = get(u)
+                if not valid_js(name, data):
+                    raise ValueError("nội dung không hợp lệ (không phải JavaScript mong đợi)")
+                (OUT / name).write_bytes(data)
+                print(f"ok   {name} <- {u} ({len(data)//1024} KB)")
+                ok = True
+                break
+            except Exception as exc:
+                print(f"WARN {name} <- {u}: {exc}")
+        if not ok:
             failed += 1
             (OUT / name).unlink(missing_ok=True)
-            print(f"WARN {name}: {exc}")
 
     for name, url in FONT_CSS.items():
         try:
