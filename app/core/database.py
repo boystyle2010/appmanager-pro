@@ -142,6 +142,8 @@ def get_public_settings() -> dict[str, Any]:
         "auto_update_enabled": get_setting("auto_update_enabled", "false").lower() == "true",
         "auto_update_time": get_setting("auto_update_time", "03:30"),
         "prune_old_images": get_setting("prune_old_images", "true").lower() == "true",
+        "auto_rollback": get_setting("auto_rollback", "true").lower() == "true",
+        "health_wait_seconds": int(get_setting("health_wait_seconds", "25") or 25),
         "has_github_token": bool(get_setting("github_token", "").strip()),
     }
 
