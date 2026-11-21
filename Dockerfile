@@ -1,7 +1,7 @@
 # Lấy Docker CLI & Compose v2 binary chính chủ (tương thích hoàn hảo amd64 & arm64)
 FROM docker:27-cli AS docker-cli
 
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
