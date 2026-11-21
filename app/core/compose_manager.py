@@ -19,9 +19,7 @@ from app.core.updater import _trigger_self_update_helper
 
 BACKUPS_ROOT = DATA_DIR / "backups"
 SECRET_KEY_WORDS = ("PASS", "SECRET", "TOKEN", "API_KEY", "APIKEY", "AUTH_KEY", "PRIVATE_KEY")
-APP_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}$")
-
-DeployEventCallback = Callable[[dict[str, Any]], Awaitable[None]]
+LogCallback = Callable[[str], Awaitable[None]]
 
 
 def _make_yaml() -> YAML:
@@ -176,10 +174,6 @@ def parse_yaml_to_ui(raw_yaml: str, preferred_service: Optional[str] = None) -> 
         if isinstance(e, dict) and e.get("container"):
             x_envs_desc[str(e["container"])] = _extract_localized(e.get("description"), "")
 
-    ports = [_parse_port_entry(p) for p in (svc.get("ports") or [])]
-    volumes = [_parse_volume_entry(v) for v in (svc.get("volumes") or [])]
-    environment = _parse_env_entries(svc.get("environment"), x_envs_desc)
-
     return {
         "selected_service": selected,
         "services": service_names,
@@ -189,9 +183,9 @@ def parse_yaml_to_ui(raw_yaml: str, preferred_service: Optional[str] = None) -> 
             "restart": str(svc.get("restart") or "unless-stopped"),
             "network_mode": str(svc.get("network_mode") or ""),
             "privileged": bool(svc.get("privileged", False)),
-            "ports": ports,
-            "volumes": volumes,
-            "environment": environment,
+            "ports": [_parse_port_entry(p) for p in (svc.get("ports") or [])],
+            "volumes": [_parse_volume_entry(v) for v in (svc.get("volumes") or [])],
+            "environment": _parse_env_entries(svc.get("environment"), x_envs_desc),
         },
         "casaos": {
             "has_block": bool(x_root),
@@ -342,6 +336,96 @@ def merge_ui_into_yaml(base_yaml: str, ui_data: dict[str, Any]) -> str:
     return buf.getvalue()
 
 
+def sanitize_app_id(raw: str) -> str:
+    slug = re.sub(r"[^a-z0-9_-]+", "-", (raw or "").strip().lower()).strip("-_")
+    return slug
+
+
+def generate_deploy_yaml(form: dict[str, Any]) -> str:
+    """Sinh docker-compose.yml chuẩn CasaOS từ Visual Form của + Deploy App."""
+    app_id = sanitize_app_id(form.get("app_id") or form.get("title") or "my-app") or "my-app"
+    title = (form.get("title") or app_id).strip()
+    image = (form.get("image") or "").strip()
+    if not image:
+        raise ValueError("Docker image is required (e.g. nginx:latest)")
+
+    service_cfg: dict[str, Any] = {
+        "image": image,
+        "container_name": app_id,
+        "restart": (form.get("restart") or "unless-stopped").strip(),
+    }
+
+    net_mode = (form.get("network_mode") or "").strip()
+    if net_mode:
+        service_cfg["network_mode"] = net_mode
+    if form.get("privileged"):
+        service_cfg["privileged"] = True
+
+    ports = []
+    first_host_port = ""
+    for p in form.get("ports") or []:
+        c_port = str(p.get("container") or "").strip()
+        h_port = str(p.get("host") or "").strip()
+        proto = str(p.get("protocol") or "tcp").strip().lower() or "tcp"
+        if not c_port:
+            continue
+        if not first_host_port and h_port:
+            first_host_port = h_port
+        if c_port.isdigit() and ":" not in h_port:
+            item: dict[str, Any] = {"target": int(c_port), "protocol": proto}
+            if h_port:
+                item["published"] = h_port
+            ports.append(item)
+        else:
+            base = f"{h_port}:{c_port}" if h_port else c_port
+            ports.append(f"{base}/{proto}" if proto != "tcp" else base)
+    if ports:
+        service_cfg["ports"] = ports
+
+    volumes = []
+    for v in form.get("volumes") or []:
+        src = str(v.get("source") or "").strip()
+        dst = str(v.get("target") or "").strip()
+        if not dst:
+            continue
+        val = f"{src}:{dst}" if src else dst
+        if v.get("read_only"):
+            val += ":ro"
+        volumes.append(val)
+    if volumes:
+        service_cfg["volumes"] = volumes
+
+    envs = []
+    for e in form.get("environment") or []:
+        k = str(e.get("key") or "").strip()
+        if not k:
+            continue
+        v = str(e.get("value") or "")
+        envs.append(f"{k}={v}")
+    if envs:
+        service_cfg["environment"] = envs
+
+    compose: dict[str, Any] = {
+        "name": app_id,
+        "services": {app_id: service_cfg},
+        "x-casaos": {
+            "architectures": ["amd64", "arm64"],
+            "main": app_id,
+            "category": (form.get("category") or "Utilities").strip(),
+            "icon": (form.get("icon") or "").strip(),
+            "index": "/",
+            "port_map": str(form.get("port_map") or first_host_port or "").strip(),
+            "scheme": "http",
+            "title": {"en_US": title},
+        },
+    }
+
+    ryaml = _make_yaml()
+    buf = io.StringIO()
+    ryaml.dump(compose, buf)
+    return buf.getvalue()
+
+
 async def validate_compose_yaml(yaml_text: str, compose_dir: str) -> tuple[bool, str]:
     try:
         ryaml = _make_yaml()
@@ -351,16 +435,12 @@ async def validate_compose_yaml(yaml_text: str, compose_dir: str) -> tuple[bool,
     except Exception as exc:
         return False, f"YAML syntax error: {exc}"
 
+    Path(compose_dir).mkdir(parents=True, exist_ok=True)
     tmp_file = Path(compose_dir) / ".appmanager-validate.tmp.yml"
     try:
         tmp_file.write_text(yaml_text, encoding="utf-8")
         proc = await asyncio.create_subprocess_exec(
-            "docker",
-            "compose",
-            "-f",
-            str(tmp_file),
-            "config",
-            "-q",
+            "docker", "compose", "-f", str(tmp_file), "config", "-q",
             cwd=compose_dir,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
@@ -374,6 +454,93 @@ async def validate_compose_yaml(yaml_text: str, compose_dir: str) -> tuple[bool,
             tmp_file.unlink(missing_ok=True)
         except Exception:
             pass
+
+
+async def deploy_new_app_stream(
+    app_id_raw: str,
+    raw_yaml: str,
+    send_log: LogCallback,
+) -> dict[str, Any]:
+    """Lưu docker-compose.yml mới chuẩn CasaOS/Docker và kéo image khởi chạy live."""
+    try:
+        ryaml = _make_yaml()
+        parsed = ryaml.load(raw_yaml) or {}
+        if not isinstance(parsed, dict) or not parsed.get("services"):
+            await send_log("[ERROR] YAML must include a valid 'services' block.\n")
+            return {"ok": False, "error": "Invalid YAML"}
+    except Exception as exc:
+        await send_log(f"[ERROR] YAML syntax error: {exc}\n")
+        return {"ok": False, "error": str(exc)}
+
+    inferred_name = app_id_raw or str(parsed.get("name") or next(iter(parsed["services"].keys())))
+    app_id = sanitize_app_id(inferred_name)
+    if not app_id or len(app_id) < 2:
+        await send_log("[ERROR] Invalid App ID. Use lowercase letters, numbers, or hyphens.\n")
+        return {"ok": False, "error": "Invalid App ID"}
+
+    # Tự chọn thư mục chuẩn theo môi trường (CasaOS -> /var/lib/casaos/apps/<id>)
+    if CASAOS_APPS_DIR.exists():
+        root_dir = CASAOS_APPS_DIR
+    elif APPDATA_DIR.exists():
+        root_dir = APPDATA_DIR
+    else:
+        root_dir = DATA_DIR / "stacks"
+
+    target_dir = root_dir / app_id
+    compose_path = target_dir / "docker-compose.yml"
+    if compose_path.exists():
+        msg = f"App folder already exists: {target_dir}"
+        await send_log(f"[ERROR] {msg}\n")
+        return {"ok": False, "error": msg}
+
+    # Validate cú pháp trước khi tạo thư mục thật
+    ok_valid, valid_msg = await validate_compose_yaml(raw_yaml, str(DATA_DIR))
+    if not ok_valid:
+        await send_log(f"[ERROR] Compose validation failed:\n{valid_msg}\n")
+        return {"ok": False, "error": valid_msg}
+
+    created_dir = not target_dir.exists()
+    target_dir.mkdir(parents=True, exist_ok=True)
+    compose_path.write_text(raw_yaml, encoding="utf-8")
+    await send_log(f"==> Saved compose file: {compose_path}\n\n")
+
+    async def _stream_cmd(cmd: list[str]) -> int:
+        await send_log(f"$ {' '.join(cmd)}\n")
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            cwd=str(target_dir),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        assert proc.stdout is not None
+        while True:
+            line = await proc.stdout.readline()
+            if not line:
+                break
+            await send_log(line.decode("utf-8", errors="replace"))
+        return await proc.wait()
+
+    rc_pull = await _stream_cmd(["docker", "compose", "-f", str(compose_path), "pull"])
+    if rc_pull != 0:
+        if created_dir:
+            shutil.rmtree(target_dir, ignore_errors=True)
+        else:
+            compose_path.unlink(missing_ok=True)
+        await send_log(f"\n[ERROR] Pull failed (exit {rc_pull}). Cleaned up compose file.\n")
+        return {"ok": False, "error": f"Pull failed (exit {rc_pull})"}
+
+    await send_log("\n")
+    rc_up = await _stream_cmd(["docker", "compose", "-f", str(compose_path), "up", "-d"])
+    if rc_up != 0:
+        if created_dir:
+            shutil.rmtree(target_dir, ignore_errors=True)
+        else:
+            compose_path.unlink(missing_ok=True)
+        await send_log(f"\n[ERROR] Deploy failed (exit {rc_up}). Cleaned up compose file.\n")
+        return {"ok": False, "error": f"Up failed (exit {rc_up})"}
+
+    await send_log(f"\n✅ App '{app_id}' deployed successfully!\n")
+    return {"ok": True, "app_id": app_id, "compose_path": str(compose_path)}
 
 
 async def get_compose_state(container_name: str, service: Optional[str] = None) -> dict[str, Any]:
@@ -429,13 +596,7 @@ async def save_and_apply_compose(container_name: str, raw_yaml: str) -> dict[str
             return {"ok": False, "error": f"Self-recreate failed: {exc}"}
 
     proc = await asyncio.create_subprocess_exec(
-        "docker",
-        "compose",
-        "-f",
-        compose_path,
-        "up",
-        "-d",
-        "--remove-orphans",
+        "docker", "compose", "-f", compose_path, "up", "-d", "--remove-orphans",
         cwd=compose_dir,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
@@ -468,225 +629,6 @@ async def rollback_compose(container_name: str, backup_filename: str) -> dict[st
     backup_yaml = target.read_text(encoding="utf-8")
     return await save_and_apply_compose(container_name, backup_yaml)
 
-
-# ---------------- + Deploy New App ----------------
-
-def _slugify_name(name: str) -> str:
-    s = re.sub(r"[^a-z0-9_-]+", "-", (name or "").strip().lower()).strip("-_")
-    return s[:62]
-
-
-def _resolve_deploy_base_dir() -> Path:
-    if CASAOS_APPS_DIR.exists() and CASAOS_APPS_DIR.is_dir():
-        return CASAOS_APPS_DIR
-    stacks = APPDATA_DIR / "stacks"
-    stacks.mkdir(parents=True, exist_ok=True)
-    return stacks
-
-
-def generate_deploy_yaml(form: dict[str, Any]) -> tuple[str, str]:
-    """Sinh docker-compose.yml chuẩn CasaOS từ biểu mẫu tạo nhanh."""
-    raw_name = (form.get("app_name") or form.get("title") or "").strip()
-    slug = _slugify_name(raw_name)
-    if not slug or not APP_SLUG_RE.match(slug):
-        raise ValueError("App ID must start with a letter/number and contain only a-z, 0-9, -, _.")
-
-    image = (form.get("image") or "").strip()
-    if not image:
-        raise ValueError("Docker image is required (e.g. nginx:latest).")
-
-    title = (form.get("title") or slug).strip()
-    restart = (form.get("restart") or "unless-stopped").strip()
-    network_mode = (form.get("network_mode") or "").strip()
-    icon = (form.get("icon") or "").strip()
-    scheme = (form.get("scheme") or "http").strip()
-    index_path = (form.get("index") or "/").strip() or "/"
-    category = (form.get("category") or "Utilities").strip()
-
-    svc: dict[str, Any] = {
-        "image": image,
-        "container_name": slug,
-        "restart": restart,
-    }
-    if network_mode:
-        svc["network_mode"] = network_mode
-    if form.get("privileged"):
-        svc["privileged"] = True
-
-    ports = []
-    first_host_port = ""
-    for p in form.get("ports") or []:
-        h = str(p.get("host") or "").strip()
-        c = str(p.get("container") or "").strip()
-        proto = str(p.get("protocol") or "tcp").strip().lower() or "tcp"
-        if not c:
-            continue
-        if not first_host_port and h:
-            first_host_port = h
-        if c.isdigit() and ":" not in h:
-            entry: dict[str, Any] = {"target": int(c), "protocol": proto}
-            if h:
-                entry["published"] = h
-            ports.append(entry)
-        else:
-            base = f"{h}:{c}" if h else c
-            ports.append(f"{base}/{proto}" if proto != "tcp" else base)
-    if ports:
-        svc["ports"] = ports
-
-    envs = []
-    for e in form.get("environment") or []:
-        k = str(e.get("key") or "").strip()
-        if not k:
-            continue
-        v = str(e.get("value") or "")
-        envs.append(f"{k}={v}")
-    if envs:
-        svc["environment"] = envs
-
-    vols = []
-    for v in form.get("volumes") or []:
-        src = str(v.get("source") or "").strip()
-        dst = str(v.get("target") or "").strip()
-        if not dst:
-            continue
-        line = f"{src}:{dst}" if src else dst
-        if v.get("read_only"):
-            line += ":ro"
-        vols.append(line)
-    if vols:
-        svc["volumes"] = vols
-
-    port_map = str(form.get("port_map") or first_host_port).strip()
-
-    compose_obj: dict[str, Any] = {
-        "name": slug,
-        "services": {slug: svc},
-        "x-casaos": {
-            "architectures": ["amd64", "arm64"],
-            "main": slug,
-            "category": category,
-            "icon": icon,
-            "index": index_path,
-            "port_map": port_map,
-            "scheme": scheme,
-            "store_app_id": slug,
-            "title": {"en_US": title},
-        },
-    }
-
-    ryaml = _make_yaml()
-    buf = io.StringIO()
-    ryaml.dump(compose_obj, buf)
-    return slug, buf.getvalue()
-
-
-def _infer_slug_from_yaml(raw_yaml: str, provided_name: str) -> str:
-    if provided_name.strip():
-        return _slugify_name(provided_name)
-    ryaml = _make_yaml()
-    data = ryaml.load(raw_yaml) or {}
-    if isinstance(data, dict):
-        if data.get("name"):
-            return _slugify_name(str(data["name"]))
-        svcs = data.get("services") or {}
-        if isinstance(svcs, dict) and svcs:
-            return _slugify_name(next(iter(svcs.keys())))
-    return ""
-
-
-async def validate_new_deploy(app_name: str, raw_yaml: str) -> tuple[bool, str, str]:
-    slug = _infer_slug_from_yaml(raw_yaml, app_name)
-    if not slug or not APP_SLUG_RE.match(slug):
-        return False, "Please provide a valid App ID (lowercase letters, numbers, - or _).", ""
-
-    base_dir = _resolve_deploy_base_dir()
-    app_dir = base_dir / slug
-    if app_dir.exists():
-        return False, f"App folder '{app_dir}' already exists. Choose a different App ID.", slug
-
-    tmp_dir = DATA_DIR / ".deploy-validate"
-    tmp_dir.mkdir(parents=True, exist_ok=True)
-    ok, msg = await validate_compose_yaml(raw_yaml, str(tmp_dir))
-    return ok, msg, slug
-
-
-async def deploy_app_stream(
-    app_name: str,
-    raw_yaml: str,
-    send_event: DeployEventCallback,
-) -> None:
-    ok, msg, slug = await validate_new_deploy(app_name, raw_yaml)
-    if not ok:
-        await send_event({"type": "log", "text": f"[ERROR] {msg}\n"})
-        await send_event({"type": "done", "ok": False, "error": msg})
-        return
-
-    base_dir = _resolve_deploy_base_dir()
-    app_dir = base_dir / slug
-    compose_file = app_dir / "docker-compose.yml"
-    created_dir = False
-
-    try:
-        app_dir.mkdir(parents=True, exist_ok=False)
-        created_dir = True
-        compose_file.write_text(raw_yaml, encoding="utf-8")
-        await send_event({"type": "log", "text": f"==> Created {compose_file}\n"})
-
-        # Tự tạo sẵn các thư mục mount nằm trong APPDATA_DIR để tránh Docker tạo quyền root rỗng
-        try:
-            ryaml = _make_yaml()
-            parsed = ryaml.load(raw_yaml) or {}
-            base_appdata = APPDATA_DIR.resolve()
-            for svc in (parsed.get("services") or {}).values():
-                if not isinstance(svc, dict):
-                    continue
-                for v in svc.get("volumes") or []:
-                    pv = _parse_volume_entry(v)
-                    src = pv.get("source") or ""
-                    if src.startswith(str(base_appdata)) and not Path(src).exists():
-                        # Chỉ tạo nếu không giống tên file có phần mở rộng
-                        if "." not in Path(src).name:
-                            Path(src).mkdir(parents=True, exist_ok=True)
-        except Exception:
-            pass
-
-        async def _stream_cmd(cmd: list[str]) -> int:
-            await send_event({"type": "log", "text": f"\n$ {' '.join(cmd)}\n"})
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                cwd=str(app_dir),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-            )
-            assert proc.stdout is not None
-            while True:
-                line = await proc.stdout.readline()
-                if not line:
-                    break
-                await send_event({"type": "log", "text": line.decode("utf-8", errors="replace")})
-            return await proc.wait()
-
-        rc_pull = await _stream_cmd(["docker", "compose", "-f", str(compose_file), "pull"])
-        if rc_pull != 0:
-            raise RuntimeError(f"docker compose pull failed (exit {rc_pull})")
-
-        rc_up = await _stream_cmd(["docker", "compose", "-f", str(compose_file), "up", "-d"])
-        if rc_up != 0:
-            raise RuntimeError(f"docker compose up failed (exit {rc_up})")
-
-        await send_event({"type": "log", "text": f"\n✅ Deployed '{slug}' successfully!\n"})
-        await send_event({"type": "done", "ok": True, "app_name": slug})
-
-    except Exception as exc:
-        if created_dir and app_dir.exists():
-            shutil.rmtree(app_dir, ignore_errors=True)
-            await send_event({"type": "log", "text": f"\n==> Cleaned up failed deployment folder {app_dir}\n"})
-        await send_event({"type": "log", "text": f"[ERROR] {exc}\n"})
-        await send_event({"type": "done", "ok": False, "error": str(exc)})
-
-
-# ---------------- Smart Uninstall ----------------
 
 def _is_safe_subpath(target: Path, parent: Path) -> bool:
     try:
@@ -748,14 +690,18 @@ async def uninstall_app(
 
     if remove_compose and compose_path:
         cdir = Path(compose_path).parent
-        if _is_safe_subpath(cdir, CASAOS_APPS_DIR) or _is_safe_subpath(cdir, APPDATA_DIR / "stacks"):
+        if _is_safe_subpath(cdir, CASAOS_APPS_DIR):
             await asyncio.to_thread(shutil.rmtree, cdir, True)
-            logs.append(f"Removed app compose folder: {cdir}")
+            logs.append(f"Removed CasaOS app folder: {cdir}")
+        else:
+            logs.append(f"Skipped compose folder removal (outside CasaOS apps dir): {cdir}")
 
     if remove_appdata and appdata_path:
         adir = Path(appdata_path)
         if _is_safe_subpath(adir, APPDATA_DIR) and adir.exists():
             await asyncio.to_thread(shutil.rmtree, adir, True)
             logs.append(f"Deleted AppData folder: {adir}")
+        else:
+            logs.append(f"Skipped AppData deletion (unsafe or missing path): {adir}")
 
     return {"ok": True, "logs": "\n".join(x for x in logs if x)}
