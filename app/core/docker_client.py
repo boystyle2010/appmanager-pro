@@ -11,7 +11,7 @@ from ruamel.yaml import YAML
 
 from app.core.database import get_all_app_prefs, get_all_update_cache
 
-APP_VERSION = "0.5.1"
+APP_VERSION = "0.5.2"
 CASAOS_APPS_DIR = Path(os.getenv("CASAOS_APPS_DIR", "/var/lib/casaos/apps"))
 APPDATA_DIR = Path(os.getenv("APPDATA_DIR", "/DATA/AppData"))
 yaml_parser = YAML(typ="safe")
