@@ -1344,6 +1344,24 @@
                 <div class="w-11 h-6 bg-slate-600/60 rounded-full peer peer-checked:bg-sky-500 relative transition after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5"></div>
               </label>
             </div>
+<div class="glass-inset rounded-2xl p-4 space-y-3">
+              <div class="flex items-center justify-between gap-3">
+                <div class="min-w-0">
+                  <p class="text-xs font-semibold" x-text="t('autoRollback')"></p>
+                  <p class="text-[11px] text-muted mt-0.5" x-text="t('autoRollbackDesc')"></p>
+                </div>
+                <label class="inline-flex items-center cursor-pointer shrink-0">
+                  <input type="checkbox" x-model="settingsForm.auto_rollback" class="sr-only peer" />
+                  <div class="w-11 h-6 bg-slate-600/60 rounded-full peer peer-checked:bg-sky-500 relative transition after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5"></div>
+              
+                </label>
+              </div>
+              <div x-show="settingsForm.auto_rollback" x-cloak class="flex items-center justify-between gap-3">
+                <label class="text-[11px] text-muted" x-text="t('healthWait')"></label>
+                <input type="number" min="10" max="120" x-model.number="settingsForm.health_wait_seconds"
+                       class="glass-input w-24 rounded-xl px-3 py-2 text-xs font-mono-code text-center" />
+              </div>
+            </div>
             <div class="glass-inset rounded-2xl p-3.5">
               <label class="block text-[11px] font-semibold text-muted mb-1.5" x-text="t('githubTokenLabel')"></label>
               <input type="password" x-model="settingsForm.github_token"
@@ -1493,7 +1511,7 @@
                   <div class="flex items-center gap-2">
                     <span class="font-semibold truncate" x-text="h.app_title"></span>
                     <span class="text-[10px] px-1.5 py-0.5 rounded uppercase font-semibold"
-                          :class="h.status === 'success' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'"
+                          :class="h.status === 'success' ? 'bg-emerald-500/20 text-emerald-400' : (h.status === 'rolled_back' ? 'bg-amber-500/20 text-amber-300' : 'bg-rose-500/20 text-rose-400')"
                           x-text="h.status"></span>
                     <span class="text-[10px] text-subtle uppercase" x-text="h.mode"></span>
                   </div>
@@ -1780,6 +1798,7 @@
           appearance: 'Appearance', dark: 'Dark', light: 'Light', language: 'Language',
           enableAutoUpdate: 'Enable Scheduled Auto-Update', enableAutoUpdateDesc: 'Only updates apps with Auto-Update toggled ON',
           autoUpdateTime: 'Daily Update Time', checkInterval: 'Silent Check (hrs)',
+          autoRollback: 'Auto-rollback failed updates', autoRollbackDesc: 'If the new version crashes, restore the previous one automatically', healthWait: 'Health check time (seconds)',
           pruneOldImages: 'Auto-clean old images', pruneOldImagesDesc: 'Free SSD space right after each successful update',
           githubTokenLabel: 'GitHub Token (Optional — avoids rate limits & supports private repos)',
           saveSettings: 'Save Settings', noHistory: 'No update history yet.', noApps: 'No matching containers found.',
@@ -1841,6 +1860,7 @@
           appearance: 'Giao diện', dark: 'Tối', light: 'Sáng', language: 'Ngôn ngữ',
           enableAutoUpdate: 'Bật tự động cập nhật theo lịch', enableAutoUpdateDesc: 'Chỉ tự cập nhật những app bạn đã bật nút Auto riêng',
           autoUpdateTime: 'Giờ chạy mỗi ngày', checkInterval: 'Quét ngầm (giờ)',
+          autoRollback: 'Tự quay về bản cũ khi update lỗi', autoRollbackDesc: 'Nếu bản mới bị sập, tự khôi phục bản trước đó', healthWait: 'Thời gian kiểm tra (giây)',
           pruneOldImages: 'Tự xoá image cũ sau khi update', pruneOldImagesDesc: 'Giải phóng dung lượng SSD tự động sau mỗi lần cập nhật',
           githubTokenLabel: 'GitHub Token (Tuỳ chọn — tránh giới hạn API & đọc repo Private)',
           saveSettings: 'Lưu cài đặt', noHistory: 'Chưa có lịch sử cập nhật nào.', noApps: 'Không tìm thấy container nào phù hợp.',
@@ -1906,7 +1926,7 @@
         settingsModal: { open: false, tab: 'schedule' },
         settingsForm: {
           check_interval_hours: 6, auto_update_enabled: false,
-          auto_update_time: '03:30', prune_old_images: true,
+          auto_update_time: '03:30', prune_old_images: true, auto_rollback: true, health_wait_seconds: 25,
           github_token: '', has_github_token: false
         },
         storageState: { loading: false, pruning: false, data: null, lastFreed: '' },
@@ -2872,7 +2892,9 @@
             check_interval_hours: Math.max(1, Math.min(168, parseInt(f.check_interval_hours, 10) || 6)),
             auto_update_enabled: !!f.auto_update_enabled,
             auto_update_time: f.auto_update_time || '03:30',
-            prune_old_images: !!f.prune_old_images
+            prune_old_images: !!f.prune_old_images,
+            auto_rollback: !!f.auto_rollback,
+            health_wait_seconds: Math.max(10, Math.min(120, parseInt(f.health_wait_seconds, 10) || 25))
           };
           if ((f.github_token || '').trim()) payload.github_token = f.github_token.trim();
           try {
