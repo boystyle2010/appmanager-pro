@@ -1,92 +1,134 @@
-name: Build & Release AppManager Pro
+name: Auto Update, Build & Release
 
+# Chạy: mỗi ngày (kiểm tra bản mới của base image/thư viện), mỗi lần bạn push lên main, hoặc bấm tay.
 on:
+  schedule:
+    - cron: "0 10 * * *"
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
-  schedule:
-    - cron: "0 9 * * 1"   # Thứ Hai hằng tuần: build lại để nhận bản vá của base image & thư viện đã merge
   workflow_dispatch:
+    inputs:
+      force_release:
+        description: "Tạo release mới dù không có thành phần nào cập nhật"
+        type: boolean
+        default: false
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: auto-release
   cancel-in-progress: false
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+permissions:
+  contents: read
 
 jobs:
-  # ───────────────────────── 1. Kiểm tra mã nguồn ─────────────────────────
-  test:
-    name: Check source
+  # ═══════ 1. Kiểm tra bản mới → sửa file → viết changelog → commit (GitHub ký) ═══════
+  update:
+    name: Check updates & commit
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
+    outputs:
+      changed: ${{ steps.upd.outputs.changed }}
+      version: ${{ steps.upd.outputs.version }}
+      head_sha: ${{ steps.head.outputs.sha }}
+      short_sha: ${{ steps.head.outputs.short }}
+      image: ${{ steps.head.outputs.image }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Python syntax
-        run: python -m compileall -q app scripts
-      - name: Internal imports, templates, static files
+
+      - name: Tools
+        run: pip install --quiet jinja2 packaging
+
+      - name: Check source (before update)
         run: |
-          pip install --quiet jinja2
+          python -m compileall -q app scripts
           python scripts/check_project.py
-      - name: JavaScript syntax
-        run: |
           node --check app/static/js/app.js
           node --check app/static/js/i18n.js
 
-  # ───────────────── 2. release-please: PR changelog + tạo Release ─────────────────
-  release:
-    name: Changelog & Release
-    needs: test
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-      issues: write
-    outputs:
-      release_created: ${{ steps.rp.outputs.release_created }}
-      tag_name: ${{ steps.rp.outputs.tag_name }}
-      version: ${{ steps.rp.outputs.version }}
-      major: ${{ steps.rp.outputs.major }}
-      minor: ${{ steps.rp.outputs.minor }}
-    steps:
-      - uses: googleapis/release-please-action@v4
-        id: rp
-        with:
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
+      # Thử khởi động app với thư viện hiện tại; nếu môi trường CI không import được thì bỏ qua bước thử sau khi nâng
+      - name: Baseline smoke test
+        id: baseline
+        continue-on-error: true
+        run: |
+          python -m venv "$RUNNER_TEMP/venv-base"
+          "$RUNNER_TEMP/venv-base/bin/pip" install --quiet -r requirements.txt
+          APP_DATA_DIR="$RUNNER_TEMP/data-base" "$RUNNER_TEMP/venv-base/bin/python" -c "import app.main"
 
-  # ───────────── 3. Build image trên GitHub, ký (attestation) & push GHCR ─────────────
-  build-and-push:
+      - name: Look for updates & write changelog
+        id: upd
+        env:
+          FORCE_RELEASE: ${{ github.event.inputs.force_release }}
+        run: python scripts/auto_update.py check
+
+      - name: Verify updated version
+        if: steps.upd.outputs.changed == 'true'
+        run: |
+          python -m compileall -q app scripts
+          python scripts/check_project.py
+          node --check app/static/js/app.js
+          node --check app/static/js/i18n.js
+          if [ "${{ steps.baseline.outcome }}" = "success" ]; then
+            python -m venv "$RUNNER_TEMP/venv-new"
+            "$RUNNER_TEMP/venv-new/bin/pip" install --quiet -r requirements.txt
+            APP_DATA_DIR="$RUNNER_TEMP/data-new" "$RUNNER_TEMP/venv-new/bin/python" -c "import app.main"
+          fi
+
+      - name: Commit (signed by GitHub)
+        if: steps.upd.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.upd.outputs.version }}
+          SUMMARY: ${{ steps.upd.outputs.summary }}
+        run: |
+          python scripts/signed_commit.py --branch main \
+            --message "chore(deps): update components to v${VERSION}"$'\n\n'"${SUMMARY}" \
+            --files-from release/changed_files.txt > new_sha.txt
+
+      - name: Resolve head
+        id: head
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHA=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "short=${SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+  # ═══════ 2. Build image trên GitHub, ký (attestation) & đẩy lên GHCR ═══════
+  build:
     name: Build, sign & push image
-    needs: [test, release]
-    if: github.event_name != 'pull_request'
+    needs: update
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-      id-token: write      # chữ ký Sigstore do GitHub cấp
-      attestations: write  # lưu attestation vào repo
+      id-token: write
+      attestations: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.update.outputs.head_sha }}
 
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+      - uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -94,12 +136,11 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ needs.update.outputs.image }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix=build-,format=short
-            type=raw,value=${{ needs.release.outputs.version }},enable=${{ needs.release.outputs.release_created == 'true' }}
-            type=raw,value=${{ needs.release.outputs.major }}.${{ needs.release.outputs.minor }},enable=${{ needs.release.outputs.release_created == 'true' }}
+            type=raw,value=latest
+            type=raw,value=build-${{ needs.update.outputs.short_sha }}
+            type=raw,value=${{ needs.update.outputs.version }},enable=${{ needs.update.outputs.changed == 'true' }}
 
       - name: Build and push multi-arch image
         id: build
@@ -108,7 +149,7 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          provenance: false   # giữ image index gọn; chữ ký do bước attest bên dưới tạo
+          provenance: false
           sbom: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -118,27 +159,50 @@ jobs:
       - name: Sign image (GitHub build provenance attestation)
         uses: actions/attest@v4
         with:
-          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-name: ${{ needs.update.outputs.image }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
-  # ───────── 4. Tự merge PR Dependabot khi chỉ là bản vá (patch) và kiểm tra đã đạt ─────────
-  dependabot-automerge:
-    name: Auto-merge Dependabot patch
-    needs: test
-    if: github.event_name == 'pull_request' && github.actor == 'dependabot[bot]'
+  # ═══════ 3. Thêm mục Package Integrity vào changelog & tạo GitHub Release ═══════
+  release:
+    name: Publish GitHub Release
+    needs: [update, build]
+    if: needs.update.outputs.changed == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
     steps:
-      - id: meta
-        uses: dependabot/fetch-metadata@v2
+      - uses: actions/checkout@v4
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Merge patch updates
-        if: steps.meta.outputs.update-type == 'version-update:semver-patch'
-        run: gh pr merge --squash "$PR_URL"
+          ref: ${{ needs.update.outputs.head_sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Add Package Integrity to changelog
+        run: |
+          python scripts/auto_update.py integrity \
+            --image "${{ needs.update.outputs.image }}" \
+            --digest "${{ needs.build.outputs.digest }}" \
+            --version "${{ needs.update.outputs.version }}" \
+            --repo "$GITHUB_REPOSITORY"
+
+      - name: Commit changelog (signed by GitHub)
+        id: commit
         env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHA=$(python scripts/signed_commit.py --branch main \
+            --message "docs: package integrity for v${{ needs.update.outputs.version }}" \
+            --files-from release/changed_files.txt)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ needs.update.outputs.version }}" \
+            --target "${{ steps.commit.outputs.sha }}" \
+            --title "v${{ needs.update.outputs.version }}" \
+            --notes-file release/body.md \
+            --latest
