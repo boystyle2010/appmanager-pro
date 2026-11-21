@@ -1,6 +1,11 @@
 from typing import Any
 
-from app.core.docker_client import get_docker_client
+import docker
+
+
+# Client riêng cho thao tác dọn dẹp: df/prune trên máy nhiều image có thể chạy > 60 giây (mặc định của docker-py)
+def get_docker_client() -> docker.DockerClient:
+    return docker.from_env(timeout=600)
 
 
 def format_bytes(num_bytes: int) -> str:
@@ -32,8 +37,9 @@ def get_docker_disk_usage() -> dict[str, Any]:
     for img in images:
         sz = max(0, int(img.get("Size") or 0))
         shared = max(0, int(img.get("SharedSize") or 0))
-        effective = max(0, sz - shared) if shared > 0 and shared < sz else sz
-        img_total_size += effective
+        # SharedSize = -1 nghĩa là Docker chưa tính -> dùng Size; ngược lại chỉ tính phần layer riêng của image
+        raw_shared = img.get("SharedSize")
+        effective = sz if raw_shared is None or int(raw_shared) < 0 else max(0, sz - shared)
 
         used_by = int(img.get("Containers") or 0)
         if used_by == 0:
@@ -70,6 +76,12 @@ def get_docker_disk_usage() -> dict[str, Any]:
         if ref == 0:
             unused_vol_count += 1
             unused_vol_size += vsz
+
+    # Tổng dung lượng image thật sự trên đĩa (layer chung chỉ tính 1 lần) - giống `docker system df`
+    layers_size = int(df.get("LayersSize") or 0)
+    img_total_size = layers_size if layers_size > 0 else img_total_size + sum(
+        max(0, int(i.get("SharedSize") or 0)) for i in images
+    )
 
     total_reclaimable = unused_img_size + stopped_size + cache_reclaimable + unused_vol_size
 
