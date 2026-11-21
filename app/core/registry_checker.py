@@ -39,7 +39,7 @@ GENERIC_VERSION_WORDS = {
 }
 
 NON_TAG_CHANGELOG_SOURCES = {
-    "CHANGELOG.md", "changelog.md", "HISTORY.md", "RELEASES.md", "NEWS", "Commits",
+    "CHANGELOG.md", "changelog.md", "HISTORY.md", "RELEASES.md", "RELEASE_NOTES", "RELEASE_NOTES.md", "CHANGES.md", "NEWS", "Commits",
 }
 
 KNOWN_IMAGE_REPOS: dict[str, str] = {
@@ -215,6 +215,59 @@ def extract_github_slug(
     return None
 
 
+_HASH_RE = re.compile(r"[a-f0-9]{40,}", re.I)
+_CHECKSUM_HEAD_RE = re.compile(
+    r"^[#>*_\s-]*(sha-?\d*\s*)?(sha-?256|sha-?512|md5)?\s*(checksums?|hashes|digests?)\b", re.I
+)
+
+
+def strip_checksums(md: str) -> str:
+    """Bỏ phần 'SHA256 Checksums' (danh sách hash) khỏi release notes; trả về '' nếu không còn nội dung thật."""
+    out: list[str] = []
+    skipping = False
+    for line in (md or "").splitlines():
+        t = line.strip()
+        if _CHECKSUM_HEAD_RE.match(t) or re.match(r"^[#>*_\s-]*sha-?(256|512)\b", t, re.I):
+            skipping = True
+            continue
+        if skipping:
+            if t == "" or t.startswith("```") or t.startswith("|") or _HASH_RE.search(t):
+                continue
+            skipping = False
+        if _HASH_RE.search(t) and len(t) < 160:
+            continue
+        out.append(line)
+    text = re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip()
+    # Chỉ còn tiêu đề kiểu "Release 2026.5.0" (không có nội dung thật) -> coi như rỗng
+    meaningful = [l for l in text.splitlines() if l.strip() and not re.match(r"^[#\s]*release\s+v?[\d.]+\s*$", l.strip(), re.I)]
+    return text if meaningful else ""
+
+
+_VERSION_LINE_RE = re.compile(r"^v?\d+(?:\.\d+){1,3}[A-Za-z0-9.+-]*$")
+
+
+def summarize_release_notes(text: str, max_blocks: int = 3) -> str:
+    """
+    Với file kiểu cloudflared RELEASE_NOTES / CHANGES.md (dòng phiên bản đứng riêng, bên dưới là các dòng '- ...'),
+    chỉ lấy vài phiên bản mới nhất và đổi thành Markdown gọn: '### 2026.11.1' + danh sách gạch đầu dòng.
+    Nếu file không có dạng này thì trả nguyên văn.
+    """
+    lines = (text or "").splitlines()
+    first = next((l.strip() for l in lines if l.strip()), "")
+    if not _VERSION_LINE_RE.match(first):
+        return text
+    blocks: list[list[str]] = []
+    for line in lines:
+        t = line.strip()
+        if _VERSION_LINE_RE.match(t):
+            if len(blocks) >= max_blocks:
+                break
+            blocks.append([f"### {t}", ""])
+        elif t and blocks:
+            blocks[-1].append(t if t.startswith(("-", "*")) else f"- {t}")
+    return "\n\n".join("\n".join(b).strip() for b in blocks)
+
+
 async def fetch_github_release(client: httpx.AsyncClient, slug: str) -> dict[str, str]:
     headers = {
         "Accept": "application/vnd.github+json",
@@ -260,7 +313,7 @@ async def fetch_github_release(client: httpx.AsyncClient, slug: str) -> dict[str
             out["release_tag"] = str(data.get("tag_name") or "")
             out["release_url"] = str(data.get("html_url") or out["release_url"])
             out["published_at"] = str(data.get("published_at") or "")
-            body = str(data.get("body") or "").strip()
+            body = strip_checksums(str(data.get("body") or "").strip())
             if body:
                 out["changelog"] = body
                 return out
@@ -275,13 +328,13 @@ async def fetch_github_release(client: httpx.AsyncClient, slug: str) -> dict[str
         default_branch = (repo_resp.json() if repo_resp.status_code == 200 else {}).get("default_branch", "main")
 
         raw_headers = {**headers, "Accept": "application/vnd.github.raw+json"}
-        for fname in ("CHANGELOG.md", "changelog.md", "HISTORY.md", "RELEASES.md", "NEWS"):
+        for fname in ("CHANGELOG.md", "changelog.md", "HISTORY.md", "RELEASES.md", "RELEASE_NOTES", "RELEASE_NOTES.md", "CHANGES.md", "NEWS"):
             c_resp = await client.get(
                 f"https://api.github.com/repos/{slug}/contents/{fname}",
                 headers=raw_headers,
             )
             if c_resp.status_code == 200 and c_resp.text.strip():
-                text = c_resp.text.strip()
+                text = summarize_release_notes(c_resp.text.strip())
                 if len(text) > 7000:
                     text = text[:7000] + "\n\n---\n*Truncated — view full changelog on GitHub.*"
                 out["release_tag"] = out["release_tag"] or fname
