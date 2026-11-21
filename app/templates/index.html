@@ -82,6 +82,12 @@
           </button>
 
           <div class="glass-dock h-9 rounded-xl flex items-center overflow-hidden divide-x divide-[var(--glass-border)]">
+            <button @click="openTaskManager()" :title="t('taskManager')"
+                    class="w-9 h-full flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:bg-[var(--glass-surface-hover)] transition">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.5h3.75l2.25-7.5 4.5 12 2.25-4.5H21"/>
+              </svg>
+            </button>
             <button @click="openSettings()" :title="t('settings')"
                     class="w-9 h-full flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:bg-[var(--glass-surface-hover)] transition">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24">
@@ -1429,6 +1435,82 @@
     </div>
   </div>
 
+  <!-- MODAL 8: Task Manager (live CPU / RAM / Network) -->
+  <div x-show="taskModal.open" x-cloak x-transition.opacity
+       class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/65 backdrop-blur-md"
+       @click.self="closeTaskManager()" @keydown.escape.window="if (!confirmModal.open) closeTaskManager()">
+    <div class="glass-panel w-full max-w-4xl rounded-t-[28px] sm:rounded-[28px] p-5 flex flex-col h-[82dvh] sm:max-h-[84vh]"
+         style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
+      <div class="sheet-handle sm:hidden"></div>
+      <div class="flex items-center justify-between gap-3 pb-3.5 border-b border-[var(--glass-border)]">
+        <div class="min-w-0">
+          <h3 class="font-bold text-sm sm:text-base" x-text="t('taskManager')"></h3>
+          <p class="text-[11px] text-muted" x-text="taskModal.connected ? t('tmLive') : t('connectingLogs')"></p>
+        </div>
+        <button @click="closeTaskManager()" aria-label="Close"
+                class="glass-btn w-8 h-8 rounded-full flex items-center justify-center text-muted hover:text-[var(--text-primary)] shrink-0">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <template x-if="taskModal.data">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-4">
+          <div class="glass-inset rounded-2xl p-3">
+            <p class="text-[10.5px] text-muted" x-text="t('tmCpu')"></p>
+            <p class="text-lg font-bold font-mono-code" x-text="`${taskModal.data.host.containers_cpu_pct}%`"></p>
+            <p class="text-[10px] text-subtle" x-text="`${taskModal.data.host.cpus} vCPU`"></p>
+          </div>
+          <div class="glass-inset rounded-2xl p-3">
+            <p class="text-[10.5px] text-muted" x-text="t('tmRam')"></p>
+            <p class="text-lg font-bold font-mono-code" x-text="taskModal.data.host.containers_mem_text"></p>
+            <p class="text-[10px] text-subtle" x-text="`${taskModal.data.host.containers_mem_pct}% / ${taskModal.data.host.mem_total_text}`"></p>
+          </div>
+          <div class="glass-inset rounded-2xl p-3">
+            <p class="text-[10.5px] text-muted" x-text="t('tmContainers')"></p>
+            <p class="text-lg font-bold font-mono-code" x-text="`${taskModal.data.host.running}/${taskModal.data.host.total}`"></p>
+            <p class="text-[10px] text-subtle" x-text="t('running')"></p>
+          </div>
+          <div class="glass-inset rounded-2xl p-3">
+            <p class="text-[10.5px] text-muted" x-text="t('tmMemBar')"></p>
+            <div class="h-2 rounded-full bg-[var(--glass-surface)] overflow-hidden mt-2.5">
+              <div class="h-full rounded-full bg-gradient-to-r from-sky-400 to-indigo-500 transition-all duration-500"
+                   :style="`width: ${Math.min(100, taskModal.data.host.containers_mem_pct)}%`"></div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <div class="flex-1 overflow-auto mt-4 -mx-1 px-1">
+        <div class="hidden sm:grid grid-cols-[1fr_70px_110px_110px_50px] gap-3 px-3 pb-2 text-[10.5px] font-semibold text-muted uppercase">
+          <span x-text="t('tmName')"></span><span>CPU</span><span>RAM</span><span>Net ↓/↑</span><span>PIDs</span>
+        </div>
+        <div class="space-y-2">
+          <template x-for="row in taskRows" :key="row.id">
+            <div class="glass-inset rounded-2xl px-3 py-2.5 grid grid-cols-2 sm:grid-cols-[1fr_70px_110px_110px_50px] gap-x-3 gap-y-1 items-center text-xs"
+                 :class="row.status !== 'running' ? 'opacity-55' : ''">
+              <div class="flex items-center gap-2.5 min-w-0 col-span-2 sm:col-span-1">
+                <template x-if="row.icon"><img :src="row.icon" class="w-6 h-6 rounded-md object-contain shrink-0" /></template>
+                <div class="min-w-0">
+                  <p class="font-semibold truncate" x-text="row.title"></p>
+                  <p class="font-mono-code text-[10px] text-muted truncate" x-text="row.name"></p>
+                </div>
+              </div>
+              <span class="font-mono-code" x-text="row.status === 'running' ? `${row.cpu_pct}%` : '—'"></span>
+              <div class="min-w-0">
+                <span class="font-mono-code" x-text="row.status === 'running' ? row.mem_text : '—'"></span>
+                <div class="h-1 rounded-full bg-[var(--glass-surface)] overflow-hidden mt-1" x-show="row.status === 'running'">
+                  <div class="h-full bg-sky-400" :style="`width: ${Math.min(100, row.mem_pct)}%`"></div>
+                </div>
+              </div>
+              <span class="font-mono-code text-[11px]" x-text="row.status === 'running' ? `${row.net_rx_text} / ${row.net_tx_text}` : '—'"></span>
+              <span class="font-mono-code" x-text="row.status === 'running' ? row.pids : '—'"></span>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL 6: Live Logs -->
   <div x-show="logModal.open" x-cloak x-transition.opacity
        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/65 backdrop-blur-md"
@@ -1558,7 +1640,9 @@
           pruneOldImages: 'Auto-clean old images', pruneOldImagesDesc: 'Free SSD space right after each successful update',
           githubTokenLabel: 'GitHub Token (Optional — avoids rate limits & supports private repos)',
           saveSettings: 'Save Settings', noHistory: 'No update history yet.', noApps: 'No matching containers found.',
-          clear: 'Clear', connectingLogs: 'Connecting to live stream...'
+          clear: 'Clear', connectingLogs: 'Connecting to live stream...',
+          taskManager: 'Task Manager', tmLive: 'Live • updates every 2s', tmCpu: 'Containers CPU', tmRam: 'Containers RAM',
+          tmContainers: 'Containers', tmMemBar: 'RAM of host', tmName: 'Container'
         },
         vi: {
           running: 'đang chạy', statusRunning: 'Đang chạy',
@@ -1614,7 +1698,9 @@
           pruneOldImages: 'Tự xoá image cũ sau khi update', pruneOldImagesDesc: 'Giải phóng dung lượng SSD tự động sau mỗi lần cập nhật',
           githubTokenLabel: 'GitHub Token (Tuỳ chọn — tránh giới hạn API & đọc repo Private)',
           saveSettings: 'Lưu cài đặt', noHistory: 'Chưa có lịch sử cập nhật nào.', noApps: 'Không tìm thấy container nào phù hợp.',
-          clear: 'Xoá', connectingLogs: 'Đang kết nối luồng log trực tiếp...'
+          clear: 'Xoá', connectingLogs: 'Đang kết nối luồng log trực tiếp...',
+          taskManager: 'Trình quản lý tác vụ', tmLive: 'Trực tiếp • cập nhật mỗi 2 giây', tmCpu: 'CPU container', tmRam: 'RAM container',
+          tmContainers: 'Container', tmMemBar: 'RAM máy chủ', tmName: 'Container'
         }
       };
 
@@ -1666,6 +1752,7 @@
           removeCompose: true, removeImages: false, removeAppdata: false,
           confirmName: '', error: ''
         },
+        taskModal: { open: false, connected: false, data: null, ws: null },
         settingsModal: { open: false, tab: 'schedule' },
         settingsForm: {
           check_interval_hours: 6, auto_update_enabled: false,
@@ -1806,7 +1893,7 @@
         async _generateDeployYamlFromQuick() {
           const res = await fetch('/api/deploy/generate', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(this.deployModal.quick)
+            body: JSON.stringify({ ...this.deployModal.quick, app_id: this.deployModal.quick.app_name })
           });
           const data = await res.json();
           if (!res.ok) {
@@ -1814,7 +1901,7 @@
             this.deployModal.feedback = data.detail || 'Invalid form values';
             return false;
           }
-          this.deployModal.appName = data.app_name;
+          this.deployModal.appName = data.app_id || this.deployModal.quick.app_name;
           this.deployModal.rawYaml = data.raw_yaml;
           return true;
         },
@@ -1826,14 +1913,11 @@
           }
           const res = await fetch('/api/deploy/validate', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ app_name: this.deployModal.appName, raw_yaml: this.deployModal.rawYaml })
+            body: JSON.stringify({ raw_yaml: this.deployModal.rawYaml })
           });
           const data = await res.json();
           this.deployModal.feedbackOk = !!data.ok;
           this.deployModal.feedback = data.message || data.detail || '';
-          if (data.ok && data.app_name && !this.deployModal.appName) {
-            this.deployModal.appName = data.app_name;
-          }
         },
 
         async startDeploy() {
@@ -1855,33 +1939,34 @@
           const ws = new WebSocket(`${proto}//${window.location.host}/ws/deploy`);
           this.deployModal.ws = ws;
 
+          let deployOk = false;
           ws.onopen = () => {
             ws.send(JSON.stringify({
-              app_name: this.deployModal.appName,
+              app_id: this.deployModal.appName,
               raw_yaml: this.deployModal.rawYaml
             }));
           };
 
           ws.onmessage = (event) => {
-            try {
-              const msg = JSON.parse(event.data);
-              if (msg.type === 'log') {
-                this.deployModal.logs += msg.text;
-                this.$nextTick(() => { const b = this.$refs.deployLogBox; if (b) b.scrollTop = b.scrollHeight; });
-              } else if (msg.type === 'done') {
-                this.deployModal.deploying = false;
-                this.deployModal.done = true;
-                if (msg.ok) {
-                  this.showToast(this.lang === 'vi' ? `Đã cài ${msg.app_name} thành công ✓` : `Deployed ${msg.app_name} ✓`);
-                  this.loadApps();
-                }
-              }
-            } catch (_) {}
+            let text = String(event.data);
+            if (text.includes('__DEPLOY_OK__')) {
+              deployOk = true;
+              text = text.replace('__DEPLOY_OK__\n', '').replace('__DEPLOY_OK__', '');
+            }
+            this.deployModal.logs += text;
+            this.$nextTick(() => { const b = this.$refs.deployLogBox; if (b) b.scrollTop = b.scrollHeight; });
           };
 
-          ws.onclose = () => {
+          ws.onclose = (event) => {
             this.deployModal.deploying = false;
+            this.deployModal.done = true;
             this.deployModal.ws = null;
+            if (event.code === 4401) { window.location.href = '/login'; return; }
+            if (deployOk) {
+              const name = this.deployModal.appName || '';
+              this.showToast(this.lang === 'vi' ? `Đã cài ${name} thành công ✓` : `Deployed ${name} ✓`);
+              this.loadApps();
+            }
           };
         },
 
@@ -2081,3 +2166,487 @@
 
         async saveCustomRepo() {
           if (!this.updateModal.app) return;
+          const repo = (this.updateModal.customRepo || '').trim();
+          const name = this.updateModal.app.name;
+          this.updateModal.loading = true;
+          try {
+            const { res, data } = await this._postJson(`/api/apps/${encodeURIComponent(name)}/prefs`, { custom_repo: repo });
+            if (!res.ok) throw new Error(data.detail || 'Failed to save repository');
+            await this._fetchAppDetails(name, false);
+            await this.loadApps();
+            this.showToast(this.lang === 'vi' ? 'Đã lưu nguồn GitHub' : 'Repository saved');
+          } catch (err) {
+            this.showToast(err.message);
+          } finally {
+            this.updateModal.loading = false;
+          }
+        },
+
+        closeUpdateModal() {
+          if (this.updateModal.updating) {
+            this.showToast(this.t('updatingWait'));
+            return;
+          }
+          this.updateModal.open = false;
+        },
+
+        // ---------------- Helpers ----------------
+        wsUrl(path) {
+          const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          return `${proto}//${window.location.host}${path}`;
+        },
+
+        async _postJson(url, body) {
+          const res = await fetch(url, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body || {})
+          });
+          let data = {};
+          try { data = await res.json(); } catch (_) {}
+          if (res.status === 401) { window.location.href = '/login'; }
+          return { res, data };
+        },
+
+        _scrollRef(name) {
+          this.$nextTick(() => { const b = this.$refs[name]; if (b) b.scrollTop = b.scrollHeight; });
+        },
+
+        // Sau self-update: chờ container khởi động lại rồi tải lại trang
+        async _waitAndReload() {
+          this.showToast(this.lang === 'vi' ? 'AppManager Pro đang khởi động lại...' : 'AppManager Pro is restarting...');
+          await new Promise(r => setTimeout(r, 8000));
+          for (let i = 0; i < 40; i++) {
+            try {
+              const res = await fetch('/manifest.json', { cache: 'no-store' });
+              if (res.ok) { window.location.reload(); return; }
+            } catch (_) {}
+            await new Promise(r => setTimeout(r, 2000));
+          }
+          window.location.reload();
+        },
+
+        // ---------------- Start / Stop / Restart ----------------
+        async runAction(app, action) {
+          this.busyId = app.id;
+          try {
+            const { res, data } = await this._postJson(`/api/apps/${encodeURIComponent(app.id)}/${action}`);
+            if (!res.ok) throw new Error(data.detail || 'Action failed');
+            const label = { start: this.t('start'), stop: this.t('stop'), restart: this.t('restart') }[action] || action;
+            this.showToast(`${app.title}: ${label} ✓`);
+            await this.loadApps();
+          } catch (err) {
+            this.showToast(err.message);
+          } finally {
+            this.busyId = null;
+          }
+        },
+
+        // ---------------- Live Logs ----------------
+        openLogs(app) {
+          if (this.logModal.ws) { try { this.logModal.ws.close(); } catch (_) {} }
+          const ws = new WebSocket(this.wsUrl(`/ws/logs/${encodeURIComponent(app.name)}`));
+          this.logModal = { open: true, title: app.title, containerName: app.name, lines: '', ws };
+          ws.onmessage = (event) => {
+            if (this.logModal.ws !== ws) return;
+            let next = this.logModal.lines + event.data;
+            if (next.length > 200000) next = next.slice(-150000);
+            this.logModal.lines = next;
+            const box = this.$refs.logBox;
+            const nearBottom = !box || (box.scrollHeight - box.scrollTop - box.clientHeight < 80);
+            if (nearBottom) this._scrollRef('logBox');
+          };
+          ws.onclose = (event) => {
+            if (this.logModal.ws !== ws) return;
+            if (event.code === 4401) { window.location.href = '/login'; }
+          };
+        },
+
+        closeLogs() {
+          if (this.logModal.ws) { try { this.logModal.ws.close(); } catch (_) {} }
+          this.logModal.ws = null;
+          this.logModal.open = false;
+        },
+
+        // ---------------- Update 1 app (WebSocket Terminal) ----------------
+        startAppUpdate() {
+          const app = this.updateModal.app;
+          if (!app || this.updateModal.updating) return;
+          this.updateModal.updating = true;
+          this.updateModal.updateLogs = '';
+          let selfUpdate = false;
+
+          const ws = new WebSocket(this.wsUrl(`/ws/update/${encodeURIComponent(app.name)}`));
+          this.updateModal.ws = ws;
+
+          ws.onmessage = (event) => {
+            let text = event.data;
+            if (text.includes('__SELF_UPDATE_RELOAD__')) {
+              selfUpdate = true;
+              text = text.replace('__SELF_UPDATE_RELOAD__\n', '').replace('__SELF_UPDATE_RELOAD__', '');
+            }
+            this.updateModal.updateLogs += text;
+            this._scrollRef('updateLogBox');
+          };
+
+          ws.onclose = async (event) => {
+            this.updateModal.updating = false;
+            this.updateModal.ws = null;
+            if (event.code === 4401) { window.location.href = '/login'; return; }
+            if (selfUpdate) { this._waitAndReload(); return; }
+            await this.loadApps();
+            if (this.updateModal.open && this.updateModal.app) {
+              await this._fetchAppDetails(this.updateModal.app.name, false);
+            }
+          };
+
+          ws.onerror = () => {
+            this.updateModal.updateLogs += '\n[ERROR] WebSocket connection failed.\n';
+          };
+        },
+
+        // ---------------- Update All (Batch) ----------------
+        startBatchUpdate() {
+          if (this.batchModal.running) return;
+          this.batchModal = { open: true, running: true, items: [], doneCount: 0, succeeded: 0, failed: 0, logs: '', ws: null };
+          let selfUpdate = false;
+
+          const ws = new WebSocket(this.wsUrl('/ws/update-all'));
+          this.batchModal.ws = ws;
+
+          ws.onmessage = (event) => {
+            let msg;
+            try { msg = JSON.parse(event.data); } catch (_) { return; }
+            const m = this.batchModal;
+
+            if (msg.type === 'init') {
+              m.items = (msg.apps || []).map(a => ({ ...a, status: 'pending' }));
+            } else if (msg.type === 'app_start') {
+              if (m.items[msg.index]) m.items[msg.index].status = 'running';
+            } else if (msg.type === 'log') {
+              let text = msg.text || '';
+              if (text.includes('__SELF_UPDATE_RELOAD__')) {
+                selfUpdate = true;
+                text = text.replace('__SELF_UPDATE_RELOAD__\n', '').replace('__SELF_UPDATE_RELOAD__', '');
+              }
+              m.logs += text;
+              this._scrollRef('batchLogBox');
+            } else if (msg.type === 'app_done') {
+              const item = m.items[msg.index];
+              if (item) {
+                item.status = msg.ok ? 'success' : 'failed';
+                if (msg.to_version) item.to_version = msg.to_version;
+              }
+              m.doneCount += 1;
+            } else if (msg.type === 'complete') {
+              m.succeeded = msg.succeeded || 0;
+              m.failed = msg.failed || 0;
+              m.running = false;
+              if (msg.self_update) selfUpdate = true;
+            }
+          };
+
+          ws.onclose = async (event) => {
+            this.batchModal.running = false;
+            this.batchModal.ws = null;
+            if (event.code === 4401) { window.location.href = '/login'; return; }
+            if (selfUpdate) { this._waitAndReload(); return; }
+            await this.loadApps();
+          };
+        },
+
+        closeBatchModal() {
+          if (this.batchModal.running) return;
+          if (this.batchModal.ws) { try { this.batchModal.ws.close(); } catch (_) {} }
+          this.batchModal.open = false;
+        },
+
+        // ---------------- Edit App (Visual UI <-> YAML) ----------------
+        async openEditModal(app) {
+          this.editModal = {
+            open: true, loading: true, saving: false, tab: 'ui',
+            app, composePath: '', rawYaml: '', ui: null, lastService: '', yamlTouched: false,
+            backups: [], feedback: '', feedbackOk: true,
+            sec: { container: true, ports: true, volumes: false, env: false, casaos: false }
+          };
+          await this._loadCompose(app.name);
+        },
+
+        async _loadCompose(name, service) {
+          this.editModal.loading = true;
+          try {
+            const q = service ? `?service=${encodeURIComponent(service)}` : '';
+            const res = await fetch(`/api/apps/${encodeURIComponent(name)}/compose${q}`);
+            if (res.status === 401) { window.location.href = '/login'; return; }
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Cannot load docker-compose.yml');
+            this.editModal.composePath = data.compose_path || '';
+            this.editModal.rawYaml = data.raw_yaml || '';
+            this.editModal.ui = data.ui || null;
+            this.editModal.lastService = data.ui?.selected_service || '';
+            this.editModal.backups = data.backups || [];
+            this.editModal.yamlTouched = false;
+            if (!data.ui) this.editModal.tab = 'yaml';
+          } catch (err) {
+            this.editModal.feedbackOk = false;
+            this.editModal.feedback = err.message;
+            this.editModal.tab = 'yaml';
+          } finally {
+            this.editModal.loading = false;
+          }
+        },
+
+        closeEditModal() {
+          if (this.editModal.saving) return;
+          this.editModal.open = false;
+        },
+
+        // UI -> YAML (giữ nguyên comment & x-casaos nhờ ruamel.yaml)
+        async _syncUiToYaml() {
+          const m = this.editModal;
+          if (!m.ui) return true;
+          const { res, data } = await this._postJson(
+            `/api/apps/${encodeURIComponent(m.app.name)}/compose/to-yaml`,
+            { base_yaml: m.rawYaml, ui: JSON.parse(JSON.stringify(m.ui)) }
+          );
+          if (!res.ok) {
+            m.feedbackOk = false; m.feedback = data.detail || 'Cannot convert UI to YAML';
+            return false;
+          }
+          m.rawYaml = data.raw_yaml;
+          return true;
+        },
+
+        // YAML -> UI
+        async _syncYamlToUi() {
+          const m = this.editModal;
+          const { res, data } = await this._postJson(
+            `/api/apps/${encodeURIComponent(m.app.name)}/compose/to-ui`,
+            { raw_yaml: m.rawYaml, selected_service: m.lastService || m.ui?.selected_service || null }
+          );
+          if (!res.ok) {
+            m.feedbackOk = false; m.feedback = data.detail || 'Invalid YAML';
+            return false;
+          }
+          m.ui = data.ui;
+          m.lastService = data.ui?.selected_service || '';
+          m.yamlTouched = false;
+          return true;
+        },
+
+        async switchEditTab(next) {
+          const m = this.editModal;
+          if (next === m.tab || m.loading) return;
+          m.feedback = '';
+
+          if (m.tab === 'ui' && next !== 'ui') {
+            if (!(await this._syncUiToYaml())) return;
+          }
+          if (m.tab === 'yaml') m.yamlTouched = true;
+          if (next === 'ui' && (m.yamlTouched || !m.ui)) {
+            if (!(await this._syncYamlToUi())) return;
+          }
+          m.tab = next;
+        },
+
+        async reloadServiceUi() {
+          const m = this.editModal;
+          if (!m.ui) return;
+          const target = m.ui.selected_service;
+          const prev = m.lastService || target;
+          m.feedback = '';
+          try {
+            if (prev !== target) {
+              // Lưu lại thay đổi của service cũ vào YAML trước khi chuyển sang service mới
+              const snapshot = JSON.parse(JSON.stringify(m.ui));
+              snapshot.selected_service = prev;
+              const { res, data } = await this._postJson(
+                `/api/apps/${encodeURIComponent(m.app.name)}/compose/to-yaml`,
+                { base_yaml: m.rawYaml, ui: snapshot }
+              );
+              if (!res.ok) throw new Error(data.detail || 'Cannot convert UI to YAML');
+              m.rawYaml = data.raw_yaml;
+            }
+            const { res: r2, data: d2 } = await this._postJson(
+              `/api/apps/${encodeURIComponent(m.app.name)}/compose/to-ui`,
+              { raw_yaml: m.rawYaml, selected_service: target }
+            );
+            if (!r2.ok) throw new Error(d2.detail || 'Invalid YAML');
+            m.ui = d2.ui;
+            m.lastService = d2.ui?.selected_service || '';
+          } catch (err) {
+            m.feedbackOk = false; m.feedback = err.message;
+          }
+        },
+
+        async validateCompose() {
+          const m = this.editModal;
+          m.feedback = '';
+          if (m.tab === 'ui' && !(await this._syncUiToYaml())) return;
+          m.saving = true;
+          try {
+            const { res, data } = await this._postJson(
+              `/api/apps/${encodeURIComponent(m.app.name)}/compose/validate`,
+              { raw_yaml: m.rawYaml }
+            );
+            m.feedbackOk = !!data.ok;
+            m.feedback = data.message || data.detail || (res.ok ? '' : 'Validation failed');
+          } catch (err) {
+            m.feedbackOk = false; m.feedback = err.message;
+          } finally {
+            m.saving = false;
+          }
+        },
+
+        async applyCompose() {
+          const m = this.editModal;
+          m.feedback = '';
+          if (m.tab === 'ui' && !(await this._syncUiToYaml())) return;
+          m.saving = true;
+          try {
+            const { res, data } = await this._postJson(
+              `/api/apps/${encodeURIComponent(m.app.name)}/compose/apply`,
+              { raw_yaml: m.rawYaml }
+            );
+            if (!res.ok) throw new Error(data.detail || 'Apply failed');
+            if (data.backups) m.backups = data.backups;
+            m.feedbackOk = true;
+            m.feedback = this.lang === 'vi' ? 'Đã lưu & áp dụng cấu hình ✓' : 'Configuration saved & applied ✓';
+            this.showToast(m.feedback);
+            if (data.self_update) { this._waitAndReload(); return; }
+            await this.loadApps();
+            const fresh = this.apps.find(a => a.name === m.app.name);
+            if (fresh) m.app = fresh;
+            await this._loadCompose(m.app.name, m.lastService);
+            m.feedbackOk = true;
+            m.feedback = this.lang === 'vi' ? 'Đã lưu & áp dụng cấu hình ✓' : 'Configuration saved & applied ✓';
+          } catch (err) {
+            m.feedbackOk = false; m.feedback = err.message;
+          } finally {
+            m.saving = false;
+          }
+        },
+
+        async rollbackCompose(filename) {
+          const m = this.editModal;
+          m.feedback = '';
+          m.saving = true;
+          try {
+            const { res, data } = await this._postJson(
+              `/api/apps/${encodeURIComponent(m.app.name)}/compose/rollback`,
+              { filename }
+            );
+            if (!res.ok) throw new Error(data.detail || 'Rollback failed');
+            this.showToast(this.lang === 'vi' ? 'Đã khôi phục cấu hình ✓' : 'Configuration restored ✓');
+            if (data.self_update) { this._waitAndReload(); return; }
+            await this.loadApps();
+            await this._loadCompose(m.app.name, m.lastService);
+            m.tab = 'ui';
+            m.feedbackOk = true;
+            m.feedback = this.lang === 'vi' ? `Đã khôi phục từ ${filename} ✓` : `Restored from ${filename} ✓`;
+          } catch (err) {
+            m.feedbackOk = false; m.feedback = err.message;
+          } finally {
+            m.saving = false;
+          }
+        },
+
+        // ---------------- Smart Uninstall ----------------
+        openUninstallModal(app) {
+          this.uninstallModal = {
+            open: true, running: false, app,
+            removeCompose: true, removeImages: false, removeAppdata: false,
+            confirmName: '', error: ''
+          };
+        },
+
+        async confirmUninstall() {
+          const u = this.uninstallModal;
+          if (!u.app || u.running) return;
+          u.running = true; u.error = '';
+          try {
+            const { res, data } = await this._postJson(
+              `/api/apps/${encodeURIComponent(u.app.name)}/uninstall`,
+              {
+                remove_compose: u.removeCompose, remove_images: u.removeImages,
+                remove_appdata: u.removeAppdata, confirm_name: u.confirmName
+              }
+            );
+            if (!res.ok) throw new Error(data.detail || 'Uninstall failed');
+            const title = u.app.title;
+            u.open = false;
+            this.showToast(this.lang === 'vi' ? `Đã gỡ ${title} ✓` : `${title} uninstalled ✓`);
+            await this.loadApps();
+          } catch (err) {
+            u.error = err.message;
+          } finally {
+            u.running = false;
+          }
+        },
+
+        // ---------------- Task Manager (WebSocket /ws/task-manager) ----------------
+        get taskRows() {
+          const rows = (this.taskModal.data && this.taskModal.data.tasks) || [];
+          return [...rows].sort((a, b) =>
+            (b.status === 'running') - (a.status === 'running') ||
+            b.cpu_pct - a.cpu_pct || b.mem_bytes - a.mem_bytes);
+        },
+
+        openTaskManager() {
+          if (this.taskModal.ws) { try { this.taskModal.ws.close(); } catch (_) {} }
+          const ws = new WebSocket(this.wsUrl('/ws/task-manager'));
+          this.taskModal = { open: true, connected: false, data: null, ws };
+          ws.onmessage = (event) => {
+            if (this.taskModal.ws !== ws) return;
+            try { this.taskModal.data = JSON.parse(event.data); this.taskModal.connected = true; } catch (_) {}
+          };
+          ws.onclose = (event) => {
+            if (this.taskModal.ws !== ws) return;
+            this.taskModal.connected = false;
+            if (event.code === 4401) window.location.href = '/login';
+          };
+        },
+
+        closeTaskManager() {
+          if (this.taskModal.ws) { try { this.taskModal.ws.close(); } catch (_) {} }
+          this.taskModal = { open: false, connected: false, data: null, ws: null };
+        },
+
+        // ---------------- Settings ----------------
+        async openSettings() {
+          this.settingsModal = { open: true, tab: 'schedule' };
+          try {
+            const res = await fetch('/api/settings');
+            if (res.status === 401) { window.location.href = '/login'; return; }
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Failed to load settings');
+            this.settingsForm = { ...data.settings, github_token: '' };
+            this.updateHistory = data.history || [];
+          } catch (err) { this.showToast(err.message); }
+        },
+
+        async saveSettings() {
+          const f = this.settingsForm;
+          const payload = {
+            check_interval_hours: Math.max(1, Math.min(168, parseInt(f.check_interval_hours, 10) || 6)),
+            auto_update_enabled: !!f.auto_update_enabled,
+            auto_update_time: f.auto_update_time || '03:30',
+            prune_old_images: !!f.prune_old_images
+          };
+          if ((f.github_token || '').trim()) payload.github_token = f.github_token.trim();
+          try {
+            const { res, data } = await this._postJson('/api/settings', payload);
+            if (!res.ok) throw new Error(data.detail || 'Failed to save settings');
+            this.settingsForm = { ...data.settings, github_token: '' };
+            this.showToast(this.lang === 'vi' ? 'Đã lưu cài đặt ✓' : 'Settings saved ✓');
+          } catch (err) { this.showToast(err.message); }
+        },
+
+        async logout() {
+          try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (_) {}
+          window.location.href = '/login';
+        }
+      };
+    }
+  </script>
+</body>
+</html>
