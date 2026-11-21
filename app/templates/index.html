@@ -34,20 +34,20 @@
   <div class="page-layer safe-bottom">
     <!-- Slim Sticky Glass Header -->
     <header class="glass-header sticky top-0 z-40">
-      <div class="max-w-7xl mx-auto px-3.5 sm:px-4 h-[60px] flex items-center justify-between gap-2.5">
+      <div class="max-w-7xl mx-auto px-3.5 sm:px-4 h-[60px] flex items-center justify-between gap-3">
         <div class="flex items-center gap-2.5 min-w-0">
           <div class="brand-squircle w-9 h-9 shrink-0">
             <img src="/assets/icon.png?v=2" alt="App Manager Pro" />
           </div>
           <div class="min-w-0">
             <div class="flex items-center gap-1.5">
-              <h1 class="font-bold text-[15px] leading-[1.3] tracking-tight truncate">App Manager</h1>
+              <h1 class="font-bold text-[15px] leading-5 tracking-tight whitespace-nowrap">App Manager</h1>
               <span class="pro-badge">PRO</span>
             </div>
-            <p class="text-[11px] text-muted flex items-center gap-1.5 mt-1">
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399] shrink-0 -translate-y-[1px]"></span>
-              <span class="leading-none" x-text="`${summary.running}/${summary.total} ${t('running')}`"></span>
-              <span x-show="lastChecked" class="hidden sm:inline text-subtle leading-none" x-text="`• ${formatRelativeTime(lastChecked)}`"></span>
+            <p class="text-[11px] text-muted flex items-center gap-1.5 h-4 leading-4">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399] shrink-0"></span>
+              <span class="leading-4 whitespace-nowrap" x-text="`${summary.running}/${summary.total} ${t('running')}`"></span>
+              <span x-show="lastChecked" class="hidden sm:inline text-subtle leading-4" x-text="`• ${formatRelativeTime(lastChecked)}`"></span>
             </p>
           </div>
         </div>
@@ -63,30 +63,21 @@
           </div>
         </div>
 
-        <!-- Right Controls: + Deploy | Check | Settings & Logout -->
         <div class="flex items-center gap-1.5 shrink-0">
+          <!-- Desktop only: Deploy + Check (mobile có ở hàng tìm kiếm) -->
           <button @click="openDeployModal()" :title="t('deployApp')"
-                  class="glass-btn-primary h-9 w-9 sm:w-auto sm:px-3 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5">
-            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
-            </svg>
-            <span class="hidden sm:inline" x-text="t('deployShort')"></span>
+                  class="hidden md:inline-flex glass-btn-primary h-9 px-3 rounded-xl text-xs font-semibold items-center justify-center gap-1.5">
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+            <span x-text="t('deployShort')"></span>
           </button>
-
           <button @click="checkUpdates(false)" :disabled="checkingUpdates" :title="t('checkShort')"
-                  class="glass-btn h-9 px-2.5 sm:px-3 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 text-sky-400 border-sky-400/25 disabled:opacity-70">
-            <svg class="w-3.5 h-3.5" :class="checkingUpdates ? 'animate-spin' : ''" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M20.49 9A9 9 0 005.64 5.64L4 9m16 6l-1.64 3.36A9 9 0 013.51 15"/>
-            </svg>
-            <span class="hidden min-[400px]:inline" x-text="checkingUpdates ? t('checkingShort') : t('checkShort')"></span>
+                  class="hidden md:inline-flex glass-btn h-9 w-9 rounded-xl items-center justify-center text-sky-400 disabled:opacity-70">
+            <svg class="w-4 h-4" :class="checkingUpdates ? 'animate-spin' : ''" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M20.49 9A9 9 0 005.64 5.64L4 9m16 6l-1.64 3.36A9 9 0 013.51 15"/></svg>
           </button>
 
           <div class="glass-dock h-9 rounded-xl flex items-center overflow-hidden divide-x divide-[var(--glass-border)]">
-            <button @click="openTaskManager()" :title="t('taskManager')"
-                    class="w-9 h-full flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:bg-[var(--glass-surface-hover)] transition">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.5h3.75l2.25-7.5 4.5 12 2.25-4.5H21"/>
-              </svg>
+            <button @click="openTaskManager()" :title="t('taskManager')" class="w-9 h-full flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:bg-[var(--glass-surface-hover)] transition">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.5h3.75l2.25-7.5 4.5 12 2.25-4.5H21"/></svg>
             </button>
             <button @click="openSettings()" :title="t('settings')"
                     class="w-9 h-full flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:bg-[var(--glass-surface-hover)] transition">
@@ -154,21 +145,27 @@
         </div>
       </div>
 
-      <!-- Mobile Search -->
-      <div class="md:hidden mb-3">
-        <div class="relative">
+      <!-- Mobile: Search + Check + Deploy -->
+      <div class="md:hidden mb-3 flex items-center gap-2">
+        <div class="relative flex-1 min-w-0">
           <svg class="w-4 h-4 text-subtle absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <circle cx="11" cy="11" r="7"/><path stroke-linecap="round" d="M20 20l-3.5-3.5"/>
           </svg>
           <input type="text" x-model="search" :placeholder="t('searchPlaceholder')"
-                 class="glass-input w-full rounded-2xl pl-10 pr-10 py-2.5 text-sm" />
+                 class="glass-input w-full h-11 rounded-2xl pl-10 pr-9 text-sm" />
           <button x-show="search" x-cloak @click="search = ''" aria-label="Clear search"
-                  class="absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-subtle hover:text-[var(--text-primary)]">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-            </svg>
+                  class="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-subtle hover:text-[var(--text-primary)]">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
         </div>
+        <button @click="checkUpdates(false)" :disabled="checkingUpdates" :title="t('checkShort')" aria-label="Check updates"
+                class="glass-btn h-11 w-11 rounded-2xl shrink-0 flex items-center justify-center text-sky-400 disabled:opacity-70">
+          <svg class="w-[18px] h-[18px]" :class="checkingUpdates ? 'animate-spin' : ''" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M20.49 9A9 9 0 005.64 5.64L4 9m16 6l-1.64 3.36A9 9 0 013.51 15"/></svg>
+        </button>
+        <button @click="openDeployModal()" :title="t('deployApp')" aria-label="Deploy"
+                class="glass-btn-primary h-11 w-11 rounded-2xl shrink-0 flex items-center justify-center">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+        </button>
       </div>
 
       <!-- Filter Pills -->
@@ -1330,71 +1327,109 @@
 
             <template x-if="storageState.data">
               <div class="space-y-3">
-                <!-- Reclaimable SSD Hero Card -->
-                <div class="rounded-2xl p-4 bg-gradient-to-br from-sky-500/15 via-indigo-500/10 to-transparent border border-sky-400/25 flex items-center justify-between gap-3">
-                  <div>
-                    <p class="text-[11px] font-semibold uppercase tracking-wider text-sky-400" x-text="t('reclaimableSpace')"></p>
-                    <p class="text-2xl font-bold font-mono-code mt-1" x-text="storageState.data.total_reclaimable"></p>
-                    <p class="text-[11px] text-muted mt-0.5"
-                       x-text="`${storageState.data.images.total_count} images (${storageState.data.images.total_size})`"></p>
+                <!-- Hero: tổng dung lượng thu hồi + thanh phân bổ -->
+                <div class="rounded-2xl p-4 bg-gradient-to-br from-sky-500/15 via-indigo-500/10 to-transparent border border-sky-400/25 space-y-3.5">
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                      <p class="text-[10.5px] font-semibold uppercase tracking-wider text-sky-400" x-text="t('reclaimableSpace')"></p>
+                      <p class="text-[28px] leading-9 font-bold font-mono-code mt-0.5" x-text="storageState.data.total_reclaimable"></p>
+                      <p class="text-[11px] text-muted" x-text="`${storageState.data.images.total_count} images • ${storageState.data.images.total_size}`"></p>
+                    </div>
+                    <button @click="loadStorage()" :disabled="storageState.loading" aria-label="Rescan"
+                            class="glass-btn w-9 h-9 rounded-xl flex items-center justify-center text-sky-400 shrink-0">
+                      <svg class="w-4 h-4" :class="storageState.loading ? 'animate-spin' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M20.49 9A9 9 0 005.64 5.64L4 9m16 6l-1.64 3.36A9 9 0 013.51 15"/></svg>
+                    </button>
                   </div>
-                  <button @click="loadStorage()" :disabled="storageState.loading"
-                          class="glass-btn w-9 h-9 rounded-xl flex items-center justify-center text-sky-400">
-                    <svg class="w-4 h-4" :class="storageState.loading ? 'animate-spin' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M20.49 9A9 9 0 005.64 5.64L4 9m16 6l-1.64 3.36A9 9 0 013.51 15"/>
-                    </svg>
-                  </button>
+                  <div class="flex h-2.5 rounded-full overflow-hidden bg-[var(--glass-surface-hover)]">
+                    <template x-for="seg in storageSegments" :key="seg.key">
+                      <div class="h-full transition-all duration-500" :class="seg.cls" :style="`width:${seg.pct}%`"></div>
+                    </template>
+                  </div>
+                  <div class="flex flex-wrap gap-x-3.5 gap-y-1">
+                    <template x-for="seg in storageSegments" :key="'l'+seg.key">
+                      <span class="inline-flex items-center gap-1.5 text-[10.5px] text-muted"><i class="w-2 h-2 rounded-full" :class="seg.cls"></i><span x-text="`${t(seg.label)} ${seg.text}`"></span></span>
+                    </template>
+                  </div>
                 </div>
 
-                <!-- Prune Options -->
+                <!-- Các mục dọn dẹp -->
                 <div class="space-y-2 text-xs">
-                  <!-- Unused Images -->
-                  <div class="glass-inset rounded-2xl p-3.5 space-y-2.5">
-                    <label class="flex items-center justify-between gap-3 cursor-pointer">
-                      <div class="min-w-0">
-                        <p class="font-semibold" x-text="t('pruneImagesTitle')"></p>
-                        <p class="text-[11px] text-muted font-mono-code mt-0.5"
-                           x-text="pruneOpts.all_unused_images
-                             ? `${storageState.data.images.unused_count} unused • ${storageState.data.images.unused_size}`
-                             : `${storageState.data.images.dangling_count} dangling • ${storageState.data.images.dangling_size}`"></p>
+                  <div class="glass-inset rounded-2xl p-3.5 space-y-2.5" :class="pruneOpts.prune_images ? 'ring-1 ring-sky-400/40' : ''">
+                    <label class="flex items-center gap-3 cursor-pointer">
+                      <div class="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-400/30 text-sky-400 flex items-center justify-center shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/></svg>
                       </div>
-                      <input type="checkbox" x-model="pruneOpts.prune_images" class="w-4 h-4 accent-sky-500 shrink-0" />
+                      <div class="min-w-0 flex-1">
+                        <p class="font-semibold text-[13px] leading-5 truncate" x-text="t('pruneImagesTitle')"></p>
+                        <p class="text-[11px] text-muted font-mono-code leading-4 truncate" x-text="pruneOpts.all_unused_images ? `${storageState.data.images.unused_count} unused` : `${storageState.data.images.dangling_count} dangling`"></p>
+                      </div>
+                      <div class="text-right shrink-0">
+                        <p class="font-bold text-[13px] font-mono-code" x-text="pruneOpts.all_unused_images ? storageState.data.images.unused_size : storageState.data.images.dangling_size"></p>
+                      </div>
+                      <input type="checkbox" x-model="pruneOpts.prune_images" class="sr-only peer" />
+                      <div class="w-11 h-6 bg-slate-600/60 rounded-full peer peer-checked:bg-emerald-500 relative transition after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5 shrink-0"></div>
                     </label>
-                    <label x-show="pruneOpts.prune_images" class="flex items-center gap-2 text-[11px] text-amber-300/90 pl-0.5 cursor-pointer">
-                      <input type="checkbox" x-model="pruneOpts.all_unused_images" class="w-3.5 h-3.5 accent-amber-500" />
-                      <span x-text="t('pruneAllUnusedImages')"></span>
+                    <div x-show="pruneOpts.prune_images" x-cloak class="grid grid-cols-2 gap-1 p-1 rounded-xl bg-[var(--glass-surface)]">
+                      <button type="button" @click="pruneOpts.all_unused_images = false" class="py-1.5 rounded-lg text-[11px] font-semibold transition"
+                              :class="!pruneOpts.all_unused_images ? 'glass-btn-primary' : 'text-muted'" x-text="t('pruneDangling')"></button>
+                      <button type="button" @click="pruneOpts.all_unused_images = true" class="py-1.5 rounded-lg text-[11px] font-semibold transition"
+                              :class="pruneOpts.all_unused_images ? 'glass-btn-update' : 'text-muted'" x-text="t('pruneAllShort')"></button>
+                    </div>
+                    <p x-show="pruneOpts.prune_images && pruneOpts.all_unused_images" x-cloak class="text-[10.5px] text-amber-300/90 leading-snug" x-text="t('pruneAllUnusedImages')"></p>
+                  </div>
+
+                  <div class="glass-inset rounded-2xl p-3.5 space-y-2.5" :class="pruneOpts.prune_build_cache ? 'ring-1 ring-violet-400/40' : ''">
+                    <label class="flex items-center gap-3 cursor-pointer">
+                      <div class="w-10 h-10 rounded-xl bg-violet-500/15 border border-violet-400/30 text-violet-400 flex items-center justify-center shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375"/></svg>
+                      </div>
+                      <div class="min-w-0 flex-1">
+                        <p class="font-semibold text-[13px] leading-5 truncate" x-text="t('pruneCacheTitle')"></p>
+                        <p class="text-[11px] text-muted font-mono-code leading-4 truncate" x-text="`${storageState.data.build_cache.count} items`"></p>
+                      </div>
+                      <div class="text-right shrink-0">
+                        <p class="font-bold text-[13px] font-mono-code" x-text="storageState.data.build_cache.reclaimable_size"></p>
+                      </div>
+                      <input type="checkbox" x-model="pruneOpts.prune_build_cache" class="sr-only peer" />
+                      <div class="w-11 h-6 bg-slate-600/60 rounded-full peer peer-checked:bg-emerald-500 relative transition after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5 shrink-0"></div>
                     </label>
                   </div>
 
-                  <!-- Build Cache -->
-                  <label class="glass-inset rounded-2xl p-3.5 flex items-center justify-between gap-3 cursor-pointer">
-                    <div class="min-w-0">
-                      <p class="font-semibold" x-text="t('pruneCacheTitle')"></p>
-                      <p class="text-[11px] text-muted font-mono-code mt-0.5"
-                         x-text="`${storageState.data.build_cache.count} items • ${storageState.data.build_cache.reclaimable_size}`"></p>
-                    </div>
-                    <input type="checkbox" x-model="pruneOpts.prune_build_cache" class="w-4 h-4 accent-sky-500 shrink-0" />
-                  </label>
+                  <div class="glass-inset rounded-2xl p-3.5 space-y-2.5" :class="pruneOpts.prune_containers ? 'ring-1 ring-amber-400/40' : ''">
+                    <label class="flex items-center gap-3 cursor-pointer">
+                      <div class="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-400/30 text-amber-400 flex items-center justify-center shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/></svg>
+                      </div>
+                      <div class="min-w-0 flex-1">
+                        <p class="font-semibold text-[13px] leading-5 truncate" x-text="t('pruneContainersTitle')"></p>
+                        <p class="text-[11px] text-muted font-mono-code leading-4 truncate" x-text="`${storageState.data.containers.stopped_count} stopped`"></p>
+                      </div>
+                      <div class="text-right shrink-0">
+                        <p class="font-bold text-[13px] font-mono-code" x-text="storageState.data.containers.reclaimable_size"></p>
+                      </div>
+                      <input type="checkbox" x-model="pruneOpts.prune_containers" class="sr-only peer" />
+                      <div class="w-11 h-6 bg-slate-600/60 rounded-full peer peer-checked:bg-emerald-500 relative transition after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5 shrink-0"></div>
+                    </label>
+                  </div>
 
-                  <!-- Stopped Containers -->
-                  <label class="glass-inset rounded-2xl p-3.5 flex items-center justify-between gap-3 cursor-pointer">
-                    <div class="min-w-0">
-                      <p class="font-semibold" x-text="t('pruneContainersTitle')"></p>
-                      <p class="text-[11px] text-muted font-mono-code mt-0.5"
-                         x-text="`${storageState.data.containers.stopped_count} stopped • ${storageState.data.containers.reclaimable_size}`"></p>
-                    </div>
-                    <input type="checkbox" x-model="pruneOpts.prune_containers" class="w-4 h-4 accent-amber-500 shrink-0" />
-                  </label>
+                  <div class="glass-inset rounded-2xl p-3.5 space-y-2.5" :class="pruneOpts.prune_volumes ? 'ring-1 ring-rose-400/40' : ''">
+                    <label class="flex items-center gap-3 cursor-pointer">
+                      <div class="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-400/30 text-rose-400 flex items-center justify-center shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z"/></svg>
+                      </div>
+                      <div class="min-w-0 flex-1">
+                        <p class="font-semibold text-[13px] leading-5 truncate" x-text="t('pruneVolumesTitle')"></p>
+                        <p class="text-[11px] text-muted font-mono-code leading-4 truncate" x-text="`${storageState.data.volumes.unused_count} unused`"></p>
+                      </div>
+                      <div class="text-right shrink-0">
+                        <p class="font-bold text-[13px] font-mono-code" x-text="storageState.data.volumes.reclaimable_size"></p>
+                      </div>
+                      <input type="checkbox" x-model="pruneOpts.prune_volumes" class="sr-only peer" />
+                      <div class="w-11 h-6 bg-slate-600/60 rounded-full peer peer-checked:bg-emerald-500 relative transition after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5 shrink-0"></div>
+                    </label>
+                    <p x-show="pruneOpts.prune_volumes" x-cloak class="text-[10.5px] text-rose-300 leading-snug" x-text="t('pruneVolumesWarn')"></p>
+                  </div>
 
-                  <!-- Unused Volumes -->
-                  <label class="glass-inset rounded-2xl p-3.5 flex items-center justify-between gap-3 cursor-pointer">
-                    <div class="min-w-0">
-                      <p class="font-semibold text-amber-300" x-text="t('pruneVolumesTitle')"></p>
-                      <p class="text-[11px] text-muted font-mono-code mt-0.5"
-                         x-text="`${storageState.data.volumes.unused_count} unused • ${storageState.data.volumes.reclaimable_size}`"></p>
-                    </div>
-                    <input type="checkbox" x-model="pruneOpts.prune_volumes" class="w-4 h-4 accent-rose-500 shrink-0" />
-                  </label>
                 </div>
 
                 <div x-show="storageState.lastFreed" x-cloak
@@ -1402,9 +1437,11 @@
                      x-text="storageState.lastFreed"></div>
 
                 <button @click="confirmPrune()"
-                        :disabled="storageState.pruning || (!pruneOpts.prune_images && !pruneOpts.prune_build_cache && !pruneOpts.prune_containers && !pruneOpts.prune_volumes)"
-                        class="glass-btn-update w-full py-3 rounded-2xl text-xs font-semibold disabled:opacity-45"
-                        x-text="storageState.pruning ? t('pruningWait') : t('pruneNowBtn')"></button>
+                        :disabled="storageState.pruning || pruneEstimateBytes < 0"
+                        class="glass-btn-update w-full py-3.5 rounded-2xl text-[13px] font-semibold disabled:opacity-45 flex items-center justify-center gap-2">
+                  <svg class="w-4 h-4" :class="storageState.pruning ? 'animate-pulse' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
+                  <span x-text="storageState.pruning ? t('pruningWait') : `${t('pruneNowBtn')} • ≈ ${formatBytesJs(Math.max(0, pruneEstimateBytes))}`"></span>
+                </button>
               </div>
             </template>
           </div>
@@ -1435,78 +1472,148 @@
     </div>
   </div>
 
-  <!-- MODAL 8: Task Manager (live CPU / RAM / Network) -->
+  <!-- MODAL 8: Task Manager (live) -->
   <div x-show="taskModal.open" x-cloak x-transition.opacity
        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/65 backdrop-blur-md"
        @click.self="closeTaskManager()" @keydown.escape.window="if (!confirmModal.open) closeTaskManager()">
-    <div class="glass-panel w-full max-w-4xl rounded-t-[28px] sm:rounded-[28px] p-5 flex flex-col h-[82dvh] sm:max-h-[84vh]"
-         style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
+    <div class="glass-panel w-full max-w-3xl rounded-t-[28px] sm:rounded-[28px] p-4 sm:p-5 flex flex-col h-[88dvh] sm:h-auto sm:max-h-[86vh]"
+         style="padding-bottom: calc(1rem + env(safe-area-inset-bottom));">
       <div class="sheet-handle sm:hidden"></div>
-      <div class="flex items-center justify-between gap-3 pb-3.5 border-b border-[var(--glass-border)]">
-        <div class="min-w-0">
-          <h3 class="font-bold text-sm sm:text-base" x-text="t('taskManager')"></h3>
-          <p class="text-[11px] text-muted" x-text="taskModal.connected ? t('tmLive') : t('connectingLogs')"></p>
+
+      <div class="flex items-center justify-between gap-3 pb-3">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-9 h-9 rounded-xl bg-sky-500/15 border border-sky-400/30 text-sky-400 flex items-center justify-center shrink-0">
+            <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.5h3.75l2.25-7.5 4.5 12 2.25-4.5H21"/></svg>
+          </div>
+          <div class="min-w-0">
+            <h3 class="font-bold text-[15px] leading-5" x-text="t('taskManager')"></h3>
+            <p class="text-[11px] text-muted flex items-center gap-1.5 h-4 leading-4">
+              <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="taskModal.connected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'"></span>
+              <span x-text="taskModal.connected ? t('tmLive') : t('connectingLogs')"></span>
+            </p>
+          </div>
         </div>
         <button @click="closeTaskManager()" aria-label="Close"
-                class="glass-btn w-8 h-8 rounded-full flex items-center justify-center text-muted hover:text-[var(--text-primary)] shrink-0">
+                class="glass-btn w-9 h-9 rounded-full flex items-center justify-center text-muted shrink-0">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
       </div>
 
       <template x-if="taskModal.data">
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-4">
-          <div class="glass-inset rounded-2xl p-3">
-            <p class="text-[10.5px] text-muted" x-text="t('tmCpu')"></p>
-            <p class="text-lg font-bold font-mono-code" x-text="`${taskModal.data.host.containers_cpu_pct}%`"></p>
-            <p class="text-[10px] text-subtle" x-text="`${taskModal.data.host.cpus} vCPU`"></p>
-          </div>
-          <div class="glass-inset rounded-2xl p-3">
-            <p class="text-[10.5px] text-muted" x-text="t('tmRam')"></p>
-            <p class="text-lg font-bold font-mono-code" x-text="taskModal.data.host.containers_mem_text"></p>
-            <p class="text-[10px] text-subtle" x-text="`${taskModal.data.host.containers_mem_pct}% / ${taskModal.data.host.mem_total_text}`"></p>
-          </div>
-          <div class="glass-inset rounded-2xl p-3">
-            <p class="text-[10.5px] text-muted" x-text="t('tmContainers')"></p>
-            <p class="text-lg font-bold font-mono-code" x-text="`${taskModal.data.host.running}/${taskModal.data.host.total}`"></p>
-            <p class="text-[10px] text-subtle" x-text="t('running')"></p>
-          </div>
-          <div class="glass-inset rounded-2xl p-3">
-            <p class="text-[10.5px] text-muted" x-text="t('tmMemBar')"></p>
-            <div class="h-2 rounded-full bg-[var(--glass-surface)] overflow-hidden mt-2.5">
-              <div class="h-full rounded-full bg-gradient-to-r from-sky-400 to-indigo-500 transition-all duration-500"
-                   :style="`width: ${Math.min(100, taskModal.data.host.containers_mem_pct)}%`"></div>
+        <div class="grid grid-cols-3 gap-2 pb-3">
+          <div class="glass-inset rounded-2xl p-3 flex items-center gap-3">
+            <div class="relative w-12 h-12 shrink-0 rounded-full"
+                 :style="`background: conic-gradient(#38bdf8 ${Math.min(100, taskModal.data.host.containers_cpu_pct / Math.max(1, taskModal.data.host.cpus))*3.6}deg, var(--glass-surface-hover) 0deg)`">
+              <div class="absolute inset-[5px] rounded-full bg-[var(--glass-bg-elevated)] flex items-center justify-center">
+                <span class="text-[10px] font-bold font-mono-code" x-text="`${Math.round(taskModal.data.host.containers_cpu_pct / Math.max(1, taskModal.data.host.cpus))}%`"></span>
+              </div>
+            </div>
+            <div class="min-w-0">
+              <p class="text-[10.5px] text-muted uppercase tracking-wide" x-text="t('tmCpu')"></p>
+              <p class="text-[11px] font-mono-code text-subtle truncate" x-text="`${taskModal.data.host.containers_cpu_pct}% / ${taskModal.data.host.cpus} vCPU`"></p>
             </div>
           </div>
+
+          <div class="glass-inset rounded-2xl p-3 flex items-center gap-3">
+            <div class="relative w-12 h-12 shrink-0 rounded-full"
+                 :style="`background: conic-gradient(#a78bfa ${Math.min(100, taskModal.data.host.containers_mem_pct)*3.6}deg, var(--glass-surface-hover) 0deg)`">
+              <div class="absolute inset-[5px] rounded-full bg-[var(--glass-bg-elevated)] flex items-center justify-center">
+                <span class="text-[10px] font-bold font-mono-code" x-text="`${Math.round(taskModal.data.host.containers_mem_pct)}%`"></span>
+              </div>
+            </div>
+            <div class="min-w-0">
+              <p class="text-[10.5px] text-muted uppercase tracking-wide" x-text="t('tmRam')"></p>
+              <p class="text-[11px] font-mono-code text-subtle truncate" x-text="`${taskModal.data.host.containers_mem_text} / ${taskModal.data.host.mem_total_text}`"></p>
+            </div>
+          </div>
+
+          <div class="glass-inset rounded-2xl p-3 flex items-center gap-3">
+            <div class="relative w-12 h-12 shrink-0 rounded-full"
+                 :style="`background: conic-gradient(#34d399 ${Math.min(100, taskModal.data.host.total ? taskModal.data.host.running / taskModal.data.host.total * 100 : 0)*3.6}deg, var(--glass-surface-hover) 0deg)`">
+              <div class="absolute inset-[5px] rounded-full bg-[var(--glass-bg-elevated)] flex items-center justify-center">
+                <span class="text-[10px] font-bold font-mono-code" x-text="`${taskModal.data.host.running}/${taskModal.data.host.total}`"></span>
+              </div>
+            </div>
+            <div class="min-w-0">
+              <p class="text-[10.5px] text-muted uppercase tracking-wide" x-text="t('tmContainers')"></p>
+              <p class="text-[11px] font-mono-code text-subtle truncate" x-text="`${taskModal.data.host.running} ${t('running')} / ${taskModal.data.host.total}`"></p>
+            </div>
+          </div>
+
         </div>
       </template>
 
-      <div class="flex-1 overflow-auto mt-4 -mx-1 px-1">
-        <div class="hidden sm:grid grid-cols-[1fr_70px_110px_110px_50px] gap-3 px-3 pb-2 text-[10.5px] font-semibold text-muted uppercase">
-          <span x-text="t('tmName')"></span><span>CPU</span><span>RAM</span><span>Net ↓/↑</span><span>PIDs</span>
-        </div>
-        <div class="space-y-2">
-          <template x-for="row in taskRows" :key="row.id">
-            <div class="glass-inset rounded-2xl px-3 py-2.5 grid grid-cols-2 sm:grid-cols-[1fr_70px_110px_110px_50px] gap-x-3 gap-y-1 items-center text-xs"
-                 :class="row.status !== 'running' ? 'opacity-55' : ''">
-              <div class="flex items-center gap-2.5 min-w-0 col-span-2 sm:col-span-1">
-                <template x-if="row.icon"><img :src="row.icon" class="w-6 h-6 rounded-md object-contain shrink-0" /></template>
-                <div class="min-w-0">
-                  <p class="font-semibold truncate" x-text="row.title"></p>
-                  <p class="font-mono-code text-[10px] text-muted truncate" x-text="row.name"></p>
-                </div>
+      <!-- Sort chips -->
+      <div class="flex items-center gap-1.5 pb-2.5 overflow-x-auto no-scrollbar">
+        <template x-for="opt in [['cpu','CPU'],['mem','RAM'],['name', t('tmName')]]" :key="opt[0]">
+          <button @click="taskSort = opt[0]"
+                  class="shrink-0 px-3 py-1.5 rounded-xl text-[11px] font-semibold transition"
+                  :class="taskSort === opt[0] ? 'glass-btn-primary' : 'glass-btn text-muted'"
+                  x-text="opt[1]"></button>
+        </template>
+      </div>
+
+      <div class="flex-1 overflow-y-auto -mx-1 px-1 space-y-2.5 min-h-0">
+        <div x-show="!taskModal.data" class="py-10 text-center text-xs text-muted" x-text="t('connectingLogs')"></div>
+
+        <template x-for="row in taskRows" :key="row.id">
+          <div class="glass-inset rounded-2xl p-3 space-y-2.5" :class="row.status !== 'running' ? 'opacity-70' : ''">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div class="w-9 h-9 rounded-xl glass-icon-box p-1 shrink-0 flex items-center justify-center overflow-hidden">
+                <template x-if="row.icon"><img :src="row.icon" class="w-full h-full object-contain rounded" /></template>
+                <template x-if="!row.icon"><span class="text-xs font-bold" x-text="(row.title || '?').slice(0,1).toUpperCase()"></span></template>
               </div>
-              <span class="font-mono-code" x-text="row.status === 'running' ? `${row.cpu_pct}%` : '—'"></span>
-              <div class="min-w-0">
-                <span class="font-mono-code" x-text="row.status === 'running' ? row.mem_text : '—'"></span>
-                <div class="h-1 rounded-full bg-[var(--glass-surface)] overflow-hidden mt-1" x-show="row.status === 'running'">
-                  <div class="h-full bg-sky-400" :style="`width: ${Math.min(100, row.mem_pct)}%`"></div>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-1.5 h-5">
+                  <p class="font-semibold text-[13px] leading-5 truncate" x-text="row.title"></p>
+                  <span x-show="row.is_self" class="shrink-0 px-1.5 rounded text-[9px] font-bold leading-4 bg-sky-500/15 text-sky-400 border border-sky-400/30" x-text="t('tmSelf')"></span>
                 </div>
+                <p class="text-[10.5px] font-mono-code text-muted truncate leading-4" x-text="row.name"></p>
               </div>
-              <span class="font-mono-code text-[11px]" x-text="row.status === 'running' ? `${row.net_rx_text} / ${row.net_tx_text}` : '—'"></span>
-              <span class="font-mono-code" x-text="row.status === 'running' ? row.pids : '—'"></span>
+              <span class="shrink-0 inline-flex items-center gap-1.5 text-[10.5px] font-semibold px-2 h-5 rounded-full"
+                    :class="row.status === 'running' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-500/20 text-muted'">
+                <span class="w-1.5 h-1.5 rounded-full" :class="row.status === 'running' ? 'bg-emerald-400' : 'bg-slate-400'"></span>
+                <span x-text="row.status === 'running' ? t('statusRunning') : row.status"></span>
+              </span>
             </div>
-          </template>
-        </div>
+
+            <template x-if="row.status === 'running'">
+              <div class="grid grid-cols-2 gap-x-4 gap-y-2">
+                <div>
+                  <div class="flex items-baseline justify-between text-[10.5px]"><span class="text-muted">CPU</span><span class="font-mono-code font-semibold" x-text="`${row.cpu_pct}%`"></span></div>
+                  <div class="h-1.5 rounded-full bg-[var(--glass-surface-hover)] overflow-hidden mt-1"><div class="h-full rounded-full bg-sky-400 transition-all duration-500" :style="`width:${Math.min(100, row.cpu_pct)}%`"></div></div>
+                </div>
+                <div>
+                  <div class="flex items-baseline justify-between text-[10.5px]"><span class="text-muted">RAM</span><span class="font-mono-code font-semibold" x-text="row.mem_text"></span></div>
+                  <div class="h-1.5 rounded-full bg-[var(--glass-surface-hover)] overflow-hidden mt-1"><div class="h-full rounded-full bg-violet-400 transition-all duration-500" :style="`width:${Math.min(100, row.mem_pct)}%`"></div></div>
+                </div>
+                <p class="text-[10.5px] text-muted font-mono-code col-span-2 flex items-center justify-between">
+                  <span x-text="`↓ ${row.net_rx_text}  ↑ ${row.net_tx_text}`"></span>
+                  <span x-text="`PIDs ${row.pids}`"></span>
+                </p>
+              </div>
+            </template>
+
+            <div x-show="!row.is_self" class="grid gap-2 pt-0.5" :class="row.status === 'running' ? 'grid-cols-3' : 'grid-cols-1'">
+              <template x-if="row.status !== 'running'">
+                <button @click="runAction(row, 'start')" :disabled="busyId === row.id"
+                        class="glass-btn-primary py-2 rounded-xl text-[11.5px] font-semibold disabled:opacity-50" x-text="t('start')"></button>
+              </template>
+              <template x-if="row.status === 'running'">
+                <button @click="confirmRestart(row)" :disabled="busyId === row.id"
+                        class="glass-btn py-2 rounded-xl text-[11.5px] font-semibold text-sky-400 disabled:opacity-50" x-text="t('restart')"></button>
+              </template>
+              <template x-if="row.status === 'running'">
+                <button @click="confirmStop(row)" :disabled="busyId === row.id"
+                        class="glass-btn py-2 rounded-xl text-[11.5px] font-semibold text-amber-300 disabled:opacity-50" x-text="t('stop')"></button>
+              </template>
+              <template x-if="row.status === 'running'">
+                <button @click="confirmKill(row)" :disabled="busyId === row.id"
+                        class="glass-btn py-2 rounded-xl text-[11.5px] font-semibold text-rose-400 disabled:opacity-50" x-text="t('kill')"></button>
+              </template>
+            </div>
+          </div>
+        </template>
       </div>
     </div>
   </div>
@@ -1642,7 +1749,10 @@
           saveSettings: 'Save Settings', noHistory: 'No update history yet.', noApps: 'No matching containers found.',
           clear: 'Clear', connectingLogs: 'Connecting to live stream...',
           taskManager: 'Task Manager', tmLive: 'Live • updates every 2s', tmCpu: 'Containers CPU', tmRam: 'Containers RAM',
-          tmContainers: 'Containers', tmMemBar: 'RAM of host', tmName: 'Container'
+          tmContainers: 'Containers', tmMemBar: 'RAM of host', tmName: 'Name', tmSelf: 'THIS APP',
+          kill: 'Kill', confirmKillTitle: 'Force Kill Container?', confirmKillMsg: 'will be killed immediately (SIGKILL) without graceful shutdown. Unsaved data may be lost.',
+          pruneDangling: 'Dangling only', pruneAllShort: 'All unused', pruneVolumesWarn: 'Warning: data inside unused volumes will be permanently deleted.',
+          segImages: 'Images', segCache: 'Cache', segContainers: 'Containers', segVolumes: 'Volumes'
         },
         vi: {
           running: 'đang chạy', statusRunning: 'Đang chạy',
@@ -1700,7 +1810,10 @@
           saveSettings: 'Lưu cài đặt', noHistory: 'Chưa có lịch sử cập nhật nào.', noApps: 'Không tìm thấy container nào phù hợp.',
           clear: 'Xoá', connectingLogs: 'Đang kết nối luồng log trực tiếp...',
           taskManager: 'Trình quản lý tác vụ', tmLive: 'Trực tiếp • cập nhật mỗi 2 giây', tmCpu: 'CPU container', tmRam: 'RAM container',
-          tmContainers: 'Container', tmMemBar: 'RAM máy chủ', tmName: 'Container'
+          tmContainers: 'Container', tmMemBar: 'RAM máy chủ', tmName: 'Tên', tmSelf: 'APP NÀY',
+          kill: 'Kill', confirmKillTitle: 'Buộc dừng (Kill) container?', confirmKillMsg: 'sẽ bị dừng ngay lập tức (SIGKILL), không tắt an toàn. Dữ liệu chưa lưu có thể mất.',
+          pruneDangling: 'Chỉ layer rác', pruneAllShort: 'Tất cả image thừa', pruneVolumesWarn: 'Cảnh báo: dữ liệu trong volume không dùng sẽ bị xoá vĩnh viễn.',
+          segImages: 'Image', segCache: 'Cache', segContainers: 'Container', segVolumes: 'Volume'
         }
       };
 
@@ -1753,6 +1866,7 @@
           confirmName: '', error: ''
         },
         taskModal: { open: false, connected: false, data: null, ws: null },
+        taskSort: 'cpu',
         settingsModal: { open: false, tab: 'schedule' },
         settingsForm: {
           check_interval_hours: 6, auto_update_enabled: false,
@@ -2231,7 +2345,7 @@
           try {
             const { res, data } = await this._postJson(`/api/apps/${encodeURIComponent(app.id)}/${action}`);
             if (!res.ok) throw new Error(data.detail || 'Action failed');
-            const label = { start: this.t('start'), stop: this.t('stop'), restart: this.t('restart') }[action] || action;
+            const label = { start: this.t('start'), stop: this.t('stop'), restart: this.t('restart'), kill: this.t('kill') }[action] || action;
             this.showToast(`${app.title}: ${label} ✓`);
             await this.loadApps();
           } catch (err) {
@@ -2586,9 +2700,57 @@
         // ---------------- Task Manager (WebSocket /ws/task-manager) ----------------
         get taskRows() {
           const rows = (this.taskModal.data && this.taskModal.data.tasks) || [];
-          return [...rows].sort((a, b) =>
-            (b.status === 'running') - (a.status === 'running') ||
-            b.cpu_pct - a.cpu_pct || b.mem_bytes - a.mem_bytes);
+          const by = this.taskSort;
+          return [...rows].sort((a, b) => {
+            const run = (b.status === 'running') - (a.status === 'running');
+            if (run) return run;
+            if (by === 'name') return (a.title || '').localeCompare(b.title || '');
+            if (by === 'mem') return b.mem_bytes - a.mem_bytes;
+            return b.cpu_pct - a.cpu_pct || b.mem_bytes - a.mem_bytes;
+          });
+        },
+
+        formatBytesJs(n) {
+          let v = Math.max(0, Number(n) || 0);
+          const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+          let i = 0;
+          while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+          return i === 0 ? `${Math.round(v)} B` : `${v.toFixed(2)} ${u[i]}`;
+        },
+
+        // Ước tính dung lượng sẽ giải phóng theo các mục đang chọn (-1 = chưa chọn mục nào)
+        get pruneEstimateBytes() {
+          const d = this.storageState.data, o = this.pruneOpts;
+          if (!d) return -1;
+          if (!o.prune_images && !o.prune_build_cache && !o.prune_containers && !o.prune_volumes) return -1;
+          let sum = 0;
+          if (o.prune_images) sum += o.all_unused_images ? d.images.unused_bytes : d.images.dangling_bytes;
+          if (o.prune_build_cache) sum += d.build_cache.reclaimable_bytes;
+          if (o.prune_containers) sum += d.containers.reclaimable_bytes;
+          if (o.prune_volumes) sum += d.volumes.reclaimable_bytes;
+          return sum;
+        },
+
+        // Thanh phân bổ dung lượng thu hồi
+        get storageSegments() {
+          const d = this.storageState.data;
+          if (!d) return [];
+          const parts = [
+            { key: 'img', label: 'segImages', bytes: d.images.unused_bytes, text: d.images.unused_size, cls: 'bg-sky-400' },
+            { key: 'cache', label: 'segCache', bytes: d.build_cache.reclaimable_bytes, text: d.build_cache.reclaimable_size, cls: 'bg-violet-400' },
+            { key: 'cnt', label: 'segContainers', bytes: d.containers.reclaimable_bytes, text: d.containers.reclaimable_size, cls: 'bg-amber-400' },
+            { key: 'vol', label: 'segVolumes', bytes: d.volumes.reclaimable_bytes, text: d.volumes.reclaimable_size, cls: 'bg-rose-400' },
+          ];
+          const total = parts.reduce((a, p) => a + p.bytes, 0) || 1;
+          return parts.map(p => ({ ...p, pct: Math.round((p.bytes / total) * 1000) / 10 }));
+        },
+
+        confirmKill(app) {
+          this.askConfirm({
+            tone: 'danger', title: this.t('confirmKillTitle'),
+            message: `"${app.title}" ${this.t('confirmKillMsg')}`,
+            confirmLabel: this.t('kill'), onConfirm: () => this.runAction(app, 'kill')
+          });
         },
 
         openTaskManager() {
