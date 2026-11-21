@@ -13,6 +13,12 @@
 - **Core Python Stack:** FastAPI `0.115.6` ➡️ `0.115.14` • Uvicorn `0.34.0` ➡️ `0.34.3` • Docker SDK `7.1.0` ➡️ `7.2.0` • ruamel.yaml `0.18.6` ➡️ `0.18.17` • `Argon2 23.1.0` • `itsdangerous 2.2.0` • Jinja2 `3.1.5` ➡️ `3.1.6` • python-multipart `0.0.20` ➡️ `0.0.34` • `HTTPX 0.28.1` • APScheduler `3.10.4` ➡️ `3.11.3`
 - **Frontend Libraries:** Alpine.js `3.14.8` ➡️ `3.17.5` • Tailwind CSS `3.4.17` ➡️ `3.4.19` • marked `15.0.6` ➡️ `15.0.12` • DOMPurify `3.2.3` ➡️ `3.4.18`
 
+### 🔐 Package Integrity (GHCR Multi-Arch)
+
+- **Version Tag:** `ghcr.io/boystyle2010/appmanager-pro:0.5.1` (`sha256:59b772160c4a7baf34743afd63938a772233b82245ade9f917cf7377a29f3d8c`)
+- **Latest Tag:** `ghcr.io/boystyle2010/appmanager-pro:latest`
+- **Provenance:** signed by GitHub — verify with `gh attestation verify oci://ghcr.io/boystyle2010/appmanager-pro@sha256:59b772160c4a7baf34743afd63938a772233b82245ade9f917cf7377a29f3d8c -R boystyle2010/appmanager-pro`
+
 ### 🚀 What's Changed
 
 - Upgraded **Python Base Image** to `3.12.16`.
