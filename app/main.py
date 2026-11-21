@@ -30,11 +30,13 @@ from app.core.compose_manager import (
     merge_ui_into_yaml,
     parse_yaml_to_ui,
     rollback_compose,
+    sanitize_app_id,
     save_and_apply_compose,
     uninstall_app,
     validate_compose_yaml,
 )
 from app.core.database import (
+    DATA_DIR,
     get_app_pref,
     get_public_settings,
     get_update_cache_item,
@@ -58,11 +60,8 @@ from app.core.registry_checker import (
     is_check_running,
 )
 from app.core.scheduler import configure_jobs, start_scheduler, stop_scheduler
-from app.core.system_monitor import (
-    collect_task_manager_snapshot,
-    get_docker_disk_usage,
-    prune_docker_resources,
-)
+from app.core.system_monitor import collect_task_manager_snapshot
+from app.core.system_prune import get_docker_disk_usage, prune_docker_resources
 from app.core.updater import update_all_apps_stream, update_app_stream
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -138,11 +137,15 @@ class UninstallPayload(BaseModel):
 
 
 class PrunePayload(BaseModel):
-    dangling_images: bool = True
-    unused_images: bool = False
-    stopped_containers: bool = False
-    build_cache: bool = True
-    unused_volumes: bool = False
+    prune_images: bool = True
+    all_unused_images: bool = False
+    prune_build_cache: bool = True
+    prune_containers: bool = False
+    prune_volumes: bool = False
+
+
+class DeployValidatePayload(BaseModel):
+    raw_yaml: str
 
 
 class DeployFormPayload(BaseModel):
@@ -304,9 +307,16 @@ async def api_save_app_prefs(
 async def api_deploy_generate(payload: DeployFormPayload, _: str = Depends(require_user)):
     try:
         yaml_text = generate_deploy_yaml(payload.model_dump())
-        return {"ok": True, "raw_yaml": yaml_text}
+        app_id = sanitize_app_id(payload.app_id or payload.title or "my-app") or "my-app"
+        return {"ok": True, "raw_yaml": yaml_text, "app_id": app_id}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/deploy/validate")
+async def api_deploy_validate(payload: DeployValidatePayload, _: str = Depends(require_user)):
+    ok, msg = await validate_compose_yaml(payload.raw_yaml, str(DATA_DIR))
+    return {"ok": ok, "message": msg}
 
 
 @app.get("/api/system/storage")
@@ -320,12 +330,13 @@ async def api_system_storage(_: str = Depends(require_user)):
 @app.post("/api/system/prune")
 async def api_system_prune(payload: PrunePayload, _: str = Depends(require_user)):
     try:
-        return await prune_docker_resources(
-            dangling_images=payload.dangling_images,
-            unused_images=payload.unused_images,
-            stopped_containers=payload.stopped_containers,
-            build_cache=payload.build_cache,
-            unused_volumes=payload.unused_volumes,
+        return await asyncio.to_thread(
+            prune_docker_resources,
+            prune_images=payload.prune_images,
+            all_unused_images=payload.all_unused_images,
+            prune_build_cache=payload.prune_build_cache,
+            prune_containers=payload.prune_containers,
+            prune_volumes=payload.prune_volumes,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prune failed: {e}")
