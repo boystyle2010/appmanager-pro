@@ -41,6 +41,110 @@ def _prune_old_image_sync(old_image_id: str, new_image_id: str) -> str:
         return ""
 
 
+def _split_image_ref(ref: str) -> tuple[str, str]:
+    """'ghcr.io/a/b:tag' -> ('ghcr.io/a/b', 'tag'); không có tag -> 'latest'. Digest (@sha256) -> ('', '')."""
+    if not ref or "@" in ref:
+        return "", ""
+    last = ref.rsplit("/", 1)[-1]
+    if ":" in last:
+        repo, tag = ref.rsplit(":", 1)
+        return repo, tag
+    return ref, "latest"
+
+
+def _probe_container_sync(name: str) -> dict[str, Any]:
+    client = get_docker_client()
+    c = client.containers.get(name)
+    c.reload()
+    st = c.attrs.get("State", {}) or {}
+    health = ((st.get("Health") or {}).get("Status")) or ""
+    return {
+        "status": st.get("Status", ""),
+        "restarting": bool(st.get("Restarting")),
+        "exit_code": st.get("ExitCode", 0),
+        "restart_count": c.attrs.get("RestartCount", 0) or 0,
+        "health": health,
+    }
+
+
+async def _wait_healthy(name: str, send_log: LogCallback, window: int) -> tuple[bool, str]:
+    """
+    Theo dõi container mới trong `window` giây. Coi là hỏng nếu: thoát với mã lỗi, đang restart liên tục,
+    RestartCount tăng, hoặc healthcheck báo unhealthy. Có healthcheck 'healthy' thì kết luận ngay.
+    """
+    waited = 0
+    last = ""
+    while waited <= window:
+        try:
+            info = await asyncio.to_thread(_probe_container_sync, name)
+        except Exception as exc:
+            return False, f"Container not found after update ({exc})"
+        last = info["status"]
+        if info["health"] == "unhealthy":
+            return False, "Healthcheck reports unhealthy"
+        if info["restarting"] or info["restart_count"] > 0:
+            return False, f"Container keeps restarting (count={info['restart_count']})"
+        if info["status"] in ("exited", "dead"):
+            if info["exit_code"] == 0:
+                return True, "Container finished with exit code 0"
+            return False, f"Container exited with code {info['exit_code']}"
+        if info["health"] == "healthy":
+            return True, "Healthcheck is healthy"
+        await asyncio.sleep(3)
+        waited += 3
+    return (last == "running"), (f"Status after {window}s: {last}")
+
+
+def _retag_image_sync(old_image_id: str, image_ref: str) -> str:
+    repo, tag = _split_image_ref(image_ref)
+    if not repo:
+        return "Image is pinned by digest; cannot retag"
+    client = get_docker_client()
+    img = client.images.get(old_image_id)
+    img.tag(repo, tag=tag)
+    return ""
+
+
+async def _rollback_to_previous(
+    *,
+    compose_path: str,
+    compose_dir: str,
+    service: str,
+    container_name: str,
+    image_ref: str,
+    old_image_id: str,
+    bumped: bool,
+    backup_path: str,
+    send_log: LogCallback,
+    window: int,
+) -> tuple[bool, str]:
+    await send_log("\n==> New version is unhealthy. Rolling back to the previous version...\n")
+    if bumped and backup_path:
+        await asyncio.to_thread(_restore_compose_backup, compose_path, backup_path)
+        await send_log("==> Restored docker-compose.yml from backup.\n")
+    elif old_image_id:
+        try:
+            err = await asyncio.to_thread(_retag_image_sync, old_image_id, image_ref)
+        except Exception as exc:
+            err = str(exc)
+        if err:
+            await send_log(f"[ERROR] Cannot restore previous image: {err}\n")
+            return False, err
+        await send_log(f"==> Previous image {old_image_id[:19]} re-tagged as {image_ref}\n")
+    else:
+        return False, "Previous image is unknown"
+
+    cmd = ["docker", "compose", "-f", compose_path, "up", "-d", "--force-recreate", "--no-deps"]
+    if service:
+        cmd.append(service)
+    await send_log(f"$ {' '.join(cmd)}\n")
+    rc = await _run_cmd_stream(cmd, compose_dir, send_log)
+    if rc != 0:
+        return False, f"Rollback up failed (exit {rc})"
+    ok, reason = await _wait_healthy(container_name, send_log, window)
+    return ok, reason
+
+
 def _trigger_self_update_helper(compose_path: str) -> None:
     compose_dir = str(Path(compose_path).parent)
     client = get_docker_client()
@@ -229,14 +333,41 @@ async def update_app_stream(
         )
         return {"ok": False, "error": f"Recreate failed (exit {rc2})"}
 
-    # Bước 3: Kiểm tra trạng thái & dọn image cũ
-    await asyncio.sleep(3)
+    # Bước 3: Kiểm tra sức khoẻ container mới; hỏng thì tự quay về bản cũ
+    try:
+        window = max(10, min(120, int(get_setting("health_wait_seconds", "25"))))
+    except Exception:
+        window = 25
+    await send_log(f"\n==> Checking the new container for {window}s...\n")
+    healthy, reason = await _wait_healthy(container_name, send_log, window)
+    await send_log(f"==> {reason}\n")
+
+    rolled_back = False
+    if not healthy and get_setting("auto_rollback", "true").lower() == "true":
+        rb_ok, rb_reason = await _rollback_to_previous(
+            compose_path=compose_path, compose_dir=compose_dir, service=service,
+            container_name=container_name, image_ref=app_info["image"],
+            old_image_id=old_image_id, bumped=bumped, backup_path=backup_path,
+            send_log=send_log, window=window,
+        )
+        if rb_ok:
+            rolled_back = True
+            await send_log("\n↩️ Rolled back: the previous version is running again.\n")
+            add_update_history(
+                container_name, title, from_ver, target_ver, mode, "rolled_back",
+                f"Update failed ({reason}); previous version restored",
+            )
+            await check_one_app_by_name(container_name)
+            return {"ok": False, "error": f"Update failed ({reason}); rolled back to {from_ver or 'previous version'}"}
+        await send_log(f"\n[ERROR] Rollback failed: {rb_reason}\n")
+
     refreshed = await asyncio.to_thread(get_app_by_name, container_name)
     new_ver = refreshed["version"] if refreshed else target_ver
     new_image_id = refreshed["image_id"] if refreshed else ""
     new_status = refreshed["status"] if refreshed else "unknown"
 
-    if get_setting("prune_old_images", "true").lower() == "true":
+    # Chỉ xoá image cũ khi bản mới đã chạy ổn (để còn đường quay về)
+    if healthy and get_setting("prune_old_images", "true").lower() == "true":
         prune_msg = await asyncio.to_thread(_prune_old_image_sync, old_image_id, new_image_id)
         if prune_msg:
             await send_log(f"\n==> {prune_msg}\n")
@@ -245,7 +376,7 @@ async def update_app_stream(
     await send_log("==> Refreshing update status...\n")
     await check_one_app_by_name(container_name)
 
-    final_status = "success" if new_status == "running" else "failed"
+    final_status = "success" if (healthy and new_status in ("running", "exited")) else "failed"
     add_update_history(
         container_name,
         title,
