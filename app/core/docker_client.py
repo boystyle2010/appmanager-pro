@@ -11,7 +11,7 @@ from ruamel.yaml import YAML
 
 from app.core.database import get_all_app_prefs, get_all_update_cache
 
-APP_VERSION = "0.3.2"
+APP_VERSION = "0.4.0"
 CASAOS_APPS_DIR = Path(os.getenv("CASAOS_APPS_DIR", "/var/lib/casaos/apps"))
 APPDATA_DIR = Path(os.getenv("APPDATA_DIR", "/DATA/AppData"))
 yaml_parser = YAML(typ="safe")
@@ -391,3 +391,7 @@ def container_action(container_id: str, action: str) -> dict[str, Any]:
         raise KeyError("Container not found")
     except DockerException as e:
         raise RuntimeError(str(e))
+        elif action == "restart":
+            c.restart(timeout=15)
+        elif action == "kill":
+            c.kill()
