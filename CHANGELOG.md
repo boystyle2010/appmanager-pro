@@ -13,6 +13,12 @@
 - **Core Python Stack:** `FastAPI 0.115.14` • `Uvicorn 0.34.3` • `Docker SDK 7.2.0` • `ruamel.yaml 0.18.17` • `Argon2 23.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.28.1` • `APScheduler 3.11.3`
 - **Frontend Libraries:** Alpine.js `3.14.8` ➡️ `3.17.5` • Tailwind CSS `3.4.17` ➡️ `3.4.19` • marked `15.0.6` ➡️ `15.0.12` • DOMPurify `3.2.3` ➡️ `3.4.18`
 
+### 🔐 Package Integrity (GHCR Multi-Arch)
+
+- **Version Tag:** `ghcr.io/boystyle2010/appmanager-pro:0.5.2` (`sha256:198a20426b24cc0b0b26cd45f145e23c0c479fb57b153933e49682d010e64dbc`)
+- **Latest Tag:** `ghcr.io/boystyle2010/appmanager-pro:latest`
+- **Provenance:** signed by GitHub — verify with `gh attestation verify oci://ghcr.io/boystyle2010/appmanager-pro@sha256:198a20426b24cc0b0b26cd45f145e23c0c479fb57b153933e49682d010e64dbc -R boystyle2010/appmanager-pro`
+
 ### 🚀 What's Changed
 
 - Upgraded **Alpine.js** to `3.17.5`.
