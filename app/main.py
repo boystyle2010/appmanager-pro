@@ -24,7 +24,7 @@ from app.core.auth import (
     verify_websocket_user,
 )
 from app.core.compose_manager import (
-    deploy_app_stream,
+    deploy_new_app_stream,
     generate_deploy_yaml,
     get_compose_state,
     merge_ui_into_yaml,
@@ -33,7 +33,6 @@ from app.core.compose_manager import (
     save_and_apply_compose,
     uninstall_app,
     validate_compose_yaml,
-    validate_new_deploy,
 )
 from app.core.database import (
     get_app_pref,
@@ -59,7 +58,11 @@ from app.core.registry_checker import (
     is_check_running,
 )
 from app.core.scheduler import configure_jobs, start_scheduler, stop_scheduler
-from app.core.system_prune import get_docker_disk_usage, prune_docker_resources
+from app.core.system_monitor import (
+    collect_task_manager_snapshot,
+    get_docker_disk_usage,
+    prune_docker_resources,
+)
 from app.core.updater import update_all_apps_stream, update_app_stream
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -134,17 +137,27 @@ class UninstallPayload(BaseModel):
     confirm_name: str = ""
 
 
-class DeployValidatePayload(BaseModel):
-    app_name: str = ""
-    raw_yaml: str
-
-
 class PrunePayload(BaseModel):
-    prune_images: bool = True
-    all_unused_images: bool = False
-    prune_build_cache: bool = True
-    prune_containers: bool = False
-    prune_volumes: bool = False
+    dangling_images: bool = True
+    unused_images: bool = False
+    stopped_containers: bool = False
+    build_cache: bool = True
+    unused_volumes: bool = False
+
+
+class DeployFormPayload(BaseModel):
+    app_id: str = ""
+    title: str = ""
+    image: str
+    restart: str = "unless-stopped"
+    network_mode: str = ""
+    privileged: bool = False
+    icon: str = ""
+    port_map: str = ""
+    category: str = "Utilities"
+    ports: list[dict[str, Any]] = []
+    volumes: list[dict[str, Any]] = []
+    environment: list[dict[str, Any]] = []
 
 
 # ---------------- PWA Manifest & Pages ----------------
@@ -153,7 +166,7 @@ class PrunePayload(BaseModel):
 async def pwa_manifest():
     return JSONResponse(
         content={
-            "name": "App Manager Pro",
+            "name": "AppManager Pro",
             "short_name": "AppManager",
             "start_url": "/",
             "display": "standalone",
@@ -285,48 +298,37 @@ async def api_save_app_prefs(
     return {"ok": True, "pref": pref}
 
 
-# ---------------- + Deploy New App APIs ----------------
+# ---------------- Deploy App, Storage & Prune APIs ----------------
 
 @app.post("/api/deploy/generate")
-async def api_deploy_generate(payload: dict[str, Any], _: str = Depends(require_user)):
+async def api_deploy_generate(payload: DeployFormPayload, _: str = Depends(require_user)):
     try:
-        slug, yaml_text = generate_deploy_yaml(payload)
-        return {"ok": True, "app_name": slug, "raw_yaml": yaml_text}
+        yaml_text = generate_deploy_yaml(payload.model_dump())
+        return {"ok": True, "raw_yaml": yaml_text}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.post("/api/deploy/validate")
-async def api_deploy_validate(payload: DeployValidatePayload, _: str = Depends(require_user)):
-    ok, msg, slug = await validate_new_deploy(payload.app_name, payload.raw_yaml)
-    return {"ok": ok, "message": msg, "app_name": slug}
-
-
-# ---------------- System Storage & Prune SSD APIs ----------------
-
 @app.get("/api/system/storage")
 async def api_system_storage(_: str = Depends(require_user)):
     try:
-        data = await asyncio.to_thread(get_docker_disk_usage)
-        return JSONResponse(content=data)
+        return await asyncio.to_thread(get_docker_disk_usage)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Storage inspect failed: {e}")
 
 
 @app.post("/api/system/prune")
 async def api_system_prune(payload: PrunePayload, _: str = Depends(require_user)):
     try:
-        res = await asyncio.to_thread(
-            prune_docker_resources,
-            prune_images=payload.prune_images,
-            all_unused_images=payload.all_unused_images,
-            prune_build_cache=payload.prune_build_cache,
-            prune_containers=payload.prune_containers,
-            prune_volumes=payload.prune_volumes,
+        return await prune_docker_resources(
+            dangling_images=payload.dangling_images,
+            unused_images=payload.unused_images,
+            stopped_containers=payload.stopped_containers,
+            build_cache=payload.build_cache,
+            unused_volumes=payload.unused_volumes,
         )
-        return JSONResponse(content=res)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Prune failed: {e}")
 
 
 # ---------------- Compose Visual UI / YAML Editor & Rollback ----------------
@@ -417,7 +419,7 @@ async def api_uninstall_app(
 
 @app.post("/api/apps/{container_id}/{action}")
 async def api_app_action(container_id: str, action: str, _: str = Depends(require_user)):
-    if action not in ("start", "stop", "restart"):
+    if action not in ("start", "stop", "restart", "kill"):
         raise HTTPException(status_code=400, detail="Invalid action")
     try:
         return await asyncio.to_thread(container_action, container_id, action)
@@ -448,6 +450,54 @@ async def api_save_settings(payload: SettingsPayload, _: str = Depends(require_u
 
 
 # ---------------- WebSockets ----------------
+
+@app.websocket("/ws/task-manager")
+async def ws_task_manager(websocket: WebSocket):
+    if not verify_websocket_user(websocket):
+        await websocket.close(code=4401)
+        return
+
+    await websocket.accept()
+    try:
+        while True:
+            snapshot = await asyncio.to_thread(collect_task_manager_snapshot)
+            await websocket.send_json(snapshot)
+            await asyncio.sleep(2.0)
+    except (WebSocketDisconnect, Exception):
+        pass
+
+
+@app.websocket("/ws/deploy")
+async def ws_deploy_app(websocket: WebSocket):
+    if not verify_websocket_user(websocket):
+        await websocket.close(code=4401)
+        return
+
+    await websocket.accept()
+
+    async def send_log(text: str):
+        try:
+            await websocket.send_text(text)
+        except Exception:
+            pass
+
+    try:
+        payload = await websocket.receive_json()
+        app_id = str(payload.get("app_id") or "")
+        raw_yaml = str(payload.get("raw_yaml") or "")
+        res = await deploy_new_app_stream(app_id, raw_yaml, send_log)
+        if res.get("ok"):
+            await send_log("__DEPLOY_OK__\n")
+    except WebSocketDisconnect:
+        pass
+    except Exception as exc:
+        await send_log(f"[ERROR] {exc}\n")
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+
 
 @app.websocket("/ws/logs/{container_id}")
 async def ws_container_logs(websocket: WebSocket, container_id: str):
@@ -542,37 +592,6 @@ async def ws_update_all(websocket: WebSocket):
         await update_all_apps_stream(send_event)
     except WebSocketDisconnect:
         pass
-    finally:
-        try:
-            await websocket.close()
-        except Exception:
-            pass
-
-
-@app.websocket("/ws/deploy")
-async def ws_deploy_app(websocket: WebSocket):
-    if not verify_websocket_user(websocket):
-        await websocket.close(code=4401)
-        return
-
-    await websocket.accept()
-
-    async def send_event(payload: dict):
-        try:
-            await websocket.send_json(payload)
-        except Exception:
-            pass
-
-    try:
-        init_payload = await websocket.receive_json()
-        app_name = str(init_payload.get("app_name") or "")
-        raw_yaml = str(init_payload.get("raw_yaml") or "")
-        await deploy_app_stream(app_name, raw_yaml, send_event)
-    except WebSocketDisconnect:
-        pass
-    except Exception as exc:
-        await send_event({"type": "log", "text": f"[ERROR] {exc}\n"})
-        await send_event({"type": "done", "ok": False, "error": str(exc)})
     finally:
         try:
             await websocket.close()
