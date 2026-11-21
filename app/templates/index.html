@@ -18,6 +18,27 @@
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.3/dist/purify.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
   <link rel="stylesheet" href="/static/css/glass.css" />
+  <style>
+    /* Ẩn thanh cuộn bên trong các khung (vẫn vuốt/cuộn bình thường) */
+    .glass-panel *, .yaml-editor, .changelog-md, .changelog-md * { scrollbar-width: none; -ms-overflow-style: none; }
+    .glass-panel *::-webkit-scrollbar, .yaml-editor::-webkit-scrollbar,
+    .changelog-md::-webkit-scrollbar, .changelog-md *::-webkit-scrollbar { display: none; width: 0; height: 0; }
+    .glass-panel .overflow-y-auto { overflow-x: hidden; min-width: 0; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+    .glass-panel .overflow-y-auto > * { min-width: 0; max-width: 100%; }
+
+    /* Changelog: cố định trong khung, tự xuống dòng, không tràn ngang */
+    .changelog-md {
+      max-width: 100%; min-width: 0; max-height: 46dvh;
+      overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+      overflow-wrap: anywhere; word-break: break-word;
+    }
+    .changelog-md * { max-width: 100%; }
+    .changelog-md img { height: auto; }
+    .changelog-md code { white-space: pre-wrap; word-break: break-all; }
+    .changelog-md pre { overflow-x: hidden; white-space: pre-wrap; }
+    .changelog-md pre code { white-space: pre-wrap; word-break: break-all; }
+    .changelog-md table { display: block; overflow-x: auto; }
+  </style>
   <script>
     (function () {
       const saved = localStorage.getItem('amp_theme') || 'dark';
@@ -717,7 +738,7 @@
         </button>
       </div>
 
-      <div class="flex-1 overflow-y-auto py-4 space-y-3.5">
+      <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-4 space-y-3.5">
         <div x-show="updateModal.loading" class="py-10 text-center text-xs text-muted" x-text="t('loadingDetails')"></div>
 
         <template x-if="!updateModal.loading && !updateModal.updating && !updateModal.updateLogs">
@@ -743,7 +764,7 @@
               </label>
             </div>
 
-            <div class="glass-inset rounded-2xl p-4 space-y-3">
+            <div class="glass-inset rounded-2xl p-4 space-y-3 min-w-0 overflow-hidden">
               <div class="flex items-center justify-between gap-2 flex-wrap">
                 <div class="flex items-center gap-2">
                   <span class="text-xs font-bold uppercase tracking-wider text-sky-400">Changelog</span>
@@ -1410,6 +1431,7 @@
                       <input type="checkbox" x-model="pruneOpts.prune_containers" class="sr-only peer" />
                       <div class="w-11 h-6 bg-slate-600/60 rounded-full peer peer-checked:bg-emerald-500 relative transition after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5 shrink-0"></div>
                     </label>
+                    <p x-show="pruneOpts.prune_containers" x-cloak class="text-[10.5px] text-amber-300/90 leading-snug" x-text="t('pruneContainersWarn')"></p>
                   </div>
 
                   <div class="glass-inset rounded-2xl p-3.5 space-y-2.5" :class="pruneOpts.prune_volumes ? 'ring-1 ring-rose-400/40' : ''">
@@ -1501,42 +1523,42 @@
 
       <template x-if="taskModal.data">
         <div class="grid grid-cols-3 gap-2 pb-3">
-          <div class="glass-inset rounded-2xl p-3 flex items-center gap-3">
+          <div class="glass-inset rounded-2xl px-2 py-3 flex flex-col items-center gap-2 text-center min-w-0">
             <div class="relative w-12 h-12 shrink-0 rounded-full"
                  :style="`background: conic-gradient(#38bdf8 ${Math.min(100, taskModal.data.host.containers_cpu_pct / Math.max(1, taskModal.data.host.cpus))*3.6}deg, var(--glass-surface-hover) 0deg)`">
               <div class="absolute inset-[5px] rounded-full bg-[var(--glass-bg-elevated)] flex items-center justify-center">
                 <span class="text-[10px] font-bold font-mono-code" x-text="`${Math.round(taskModal.data.host.containers_cpu_pct / Math.max(1, taskModal.data.host.cpus))}%`"></span>
               </div>
             </div>
-            <div class="min-w-0">
-              <p class="text-[10.5px] text-muted uppercase tracking-wide" x-text="t('tmCpu')"></p>
-              <p class="text-[11px] font-mono-code text-subtle truncate" x-text="`${taskModal.data.host.containers_cpu_pct}% / ${taskModal.data.host.cpus} vCPU`"></p>
+            <div class="min-w-0 w-full">
+              <p class="text-[10.5px] font-semibold text-muted uppercase tracking-wide leading-none" x-text="t('tmCpu')"></p>
+              <p class="text-[10px] font-mono-code text-subtle leading-tight mt-1" x-text="`${taskModal.data.host.containers_cpu_pct}% / ${taskModal.data.host.cpus} vCPU`"></p>
             </div>
           </div>
 
-          <div class="glass-inset rounded-2xl p-3 flex items-center gap-3">
+          <div class="glass-inset rounded-2xl px-2 py-3 flex flex-col items-center gap-2 text-center min-w-0">
             <div class="relative w-12 h-12 shrink-0 rounded-full"
                  :style="`background: conic-gradient(#a78bfa ${Math.min(100, taskModal.data.host.containers_mem_pct)*3.6}deg, var(--glass-surface-hover) 0deg)`">
               <div class="absolute inset-[5px] rounded-full bg-[var(--glass-bg-elevated)] flex items-center justify-center">
                 <span class="text-[10px] font-bold font-mono-code" x-text="`${Math.round(taskModal.data.host.containers_mem_pct)}%`"></span>
               </div>
             </div>
-            <div class="min-w-0">
-              <p class="text-[10.5px] text-muted uppercase tracking-wide" x-text="t('tmRam')"></p>
-              <p class="text-[11px] font-mono-code text-subtle truncate" x-text="`${taskModal.data.host.containers_mem_text} / ${taskModal.data.host.mem_total_text}`"></p>
+            <div class="min-w-0 w-full">
+              <p class="text-[10.5px] font-semibold text-muted uppercase tracking-wide leading-none" x-text="t('tmRam')"></p>
+              <p class="text-[10px] font-mono-code text-subtle leading-tight mt-1" x-text="`${taskModal.data.host.containers_mem_text} / ${taskModal.data.host.mem_total_text}`"></p>
             </div>
           </div>
 
-          <div class="glass-inset rounded-2xl p-3 flex items-center gap-3">
+          <div class="glass-inset rounded-2xl px-2 py-3 flex flex-col items-center gap-2 text-center min-w-0">
             <div class="relative w-12 h-12 shrink-0 rounded-full"
                  :style="`background: conic-gradient(#34d399 ${Math.min(100, taskModal.data.host.total ? taskModal.data.host.running / taskModal.data.host.total * 100 : 0)*3.6}deg, var(--glass-surface-hover) 0deg)`">
               <div class="absolute inset-[5px] rounded-full bg-[var(--glass-bg-elevated)] flex items-center justify-center">
                 <span class="text-[10px] font-bold font-mono-code" x-text="`${taskModal.data.host.running}/${taskModal.data.host.total}`"></span>
               </div>
             </div>
-            <div class="min-w-0">
-              <p class="text-[10.5px] text-muted uppercase tracking-wide" x-text="t('tmContainers')"></p>
-              <p class="text-[11px] font-mono-code text-subtle truncate" x-text="`${taskModal.data.host.running} ${t('running')} / ${taskModal.data.host.total}`"></p>
+            <div class="min-w-0 w-full">
+              <p class="text-[10.5px] font-semibold text-muted uppercase tracking-wide leading-none" x-text="t('tmContainers')"></p>
+              <p class="text-[10px] font-mono-code text-subtle leading-tight mt-1" x-text="`${taskModal.data.host.running} ${t('running')}`"></p>
             </div>
           </div>
 
@@ -1748,11 +1770,11 @@
           githubTokenLabel: 'GitHub Token (Optional — avoids rate limits & supports private repos)',
           saveSettings: 'Save Settings', noHistory: 'No update history yet.', noApps: 'No matching containers found.',
           clear: 'Clear', connectingLogs: 'Connecting to live stream...',
-          taskManager: 'Task Manager', tmLive: 'Live • updates every 2s', tmCpu: 'Containers CPU', tmRam: 'Containers RAM',
+          taskManager: 'Task Manager', tmLive: 'Live • updates every 2s', tmCpu: 'CPU', tmRam: 'RAM',
           tmContainers: 'Containers', tmMemBar: 'RAM of host', tmName: 'Name', tmSelf: 'THIS APP',
           kill: 'Kill', confirmKillTitle: 'Force Kill Container?', confirmKillMsg: 'will be killed immediately (SIGKILL) without graceful shutdown. Unsaved data may be lost.',
           pruneDangling: 'Dangling only', pruneAllShort: 'All unused', pruneVolumesWarn: 'Warning: data inside unused volumes will be permanently deleted.',
-          segImages: 'Images', segCache: 'Cache', segContainers: 'Containers', segVolumes: 'Volumes'
+          pruneContainersWarn: 'This deletes every stopped container, including apps you stopped on purpose. Their data folders are kept; recreate them from their compose file.', segImages: 'Images', segCache: 'Cache', segContainers: 'Containers', segVolumes: 'Volumes'
         },
         vi: {
           running: 'đang chạy', statusRunning: 'Đang chạy',
@@ -1809,11 +1831,11 @@
           githubTokenLabel: 'GitHub Token (Tuỳ chọn — tránh giới hạn API & đọc repo Private)',
           saveSettings: 'Lưu cài đặt', noHistory: 'Chưa có lịch sử cập nhật nào.', noApps: 'Không tìm thấy container nào phù hợp.',
           clear: 'Xoá', connectingLogs: 'Đang kết nối luồng log trực tiếp...',
-          taskManager: 'Trình quản lý tác vụ', tmLive: 'Trực tiếp • cập nhật mỗi 2 giây', tmCpu: 'CPU container', tmRam: 'RAM container',
+          taskManager: 'Trình quản lý tác vụ', tmLive: 'Trực tiếp • cập nhật mỗi 2 giây', tmCpu: 'CPU', tmRam: 'RAM',
           tmContainers: 'Container', tmMemBar: 'RAM máy chủ', tmName: 'Tên', tmSelf: 'APP NÀY',
           kill: 'Kill', confirmKillTitle: 'Buộc dừng (Kill) container?', confirmKillMsg: 'sẽ bị dừng ngay lập tức (SIGKILL), không tắt an toàn. Dữ liệu chưa lưu có thể mất.',
           pruneDangling: 'Chỉ layer rác', pruneAllShort: 'Tất cả image thừa', pruneVolumesWarn: 'Cảnh báo: dữ liệu trong volume không dùng sẽ bị xoá vĩnh viễn.',
-          segImages: 'Image', segCache: 'Cache', segContainers: 'Container', segVolumes: 'Volume'
+          pruneContainersWarn: 'Sẽ xoá mọi container đang dừng, kể cả app bạn chủ động tắt. Thư mục dữ liệu được giữ nguyên; có thể tạo lại từ file compose.', segImages: 'Image', segCache: 'Cache', segContainers: 'Container', segVolumes: 'Volume'
         }
       };
 
@@ -2229,6 +2251,27 @@
           await this._fetchAppDetails(app.name, false);
         },
 
+        // Loại bỏ phần "SHA256 Checksums" (danh sách hash dài) khỏi release notes để hiện nội dung thay đổi thật
+        _cleanChangelog(md) {
+          const lines = String(md || '').split(/\r?\n/);
+          const out = [];
+          let skipping = false;
+          const isHash = (l) => /[a-f0-9]{40,}/i.test(l);
+          for (const line of lines) {
+            const t = line.trim();
+            if (/^[#>*_\s-]*(sha-?\d*\s*)?(sha-?256|sha-?512|md5)?\s*(checksums?|hashes|digests?)\b/i.test(t) || /^[#>*_\s-]*sha-?(256|512)\b/i.test(t)) {
+              skipping = true; continue;
+            }
+            if (skipping) {
+              if (t === '' || t.startsWith('```') || t.startsWith('|') || isHash(t)) continue;
+              skipping = false;
+            }
+            if (isHash(t) && t.replace(/[^a-f0-9]/gi, '').length >= 40 && t.length < 160) continue;
+            out.push(line);
+          }
+          return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+        },
+
         async _fetchAppDetails(name, refresh) {
           this.updateModal.loading = true;
           try {
@@ -2241,7 +2284,17 @@
             this.updateModal.changelogError = data.changelog_error || '';
             this.updateModal.autoUpdate = !!data.pref?.auto_update;
             this.updateModal.customRepo = data.pref?.custom_repo || data.app?.source_url || '';
-            this.updateModal.changelogHtml = data.changelog ? DOMPurify.sanitize(marked.parse(data.changelog)) : '';
+            const cleaned = data.changelog ? this._cleanChangelog(data.changelog) : '';
+            if (cleaned) {
+              this.updateModal.changelogHtml = DOMPurify.sanitize(marked.parse(cleaned));
+            } else if (data.changelog) {
+              const msg = this.lang === 'vi'
+                ? 'Bản phát hành này chỉ có mã checksum, không có ghi chú thay đổi. Xem chi tiết trên GitHub ↗'
+                : 'This release only lists checksums and has no release notes. See GitHub ↗';
+              this.updateModal.changelogHtml = `<p>${msg}</p>`;
+            } else {
+              this.updateModal.changelogHtml = '';
+            }
             if (this.updateModal.changelogHtml) this.updateModal.showRepoInput = false;
           } catch (err) { this.showToast(err.message); }
           finally { this.updateModal.loading = false; }
