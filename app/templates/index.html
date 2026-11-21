@@ -31,8 +31,13 @@
       max-width: 100%; min-width: 0;
       overflow-x: auto; overflow-y: visible; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch;
       overflow-wrap: normal; word-break: normal; hyphens: none; text-align: left;
-      padding-bottom: 1.25rem;
+      padding-bottom: 1.25rem; width: 100%; contain: inline-size; touch-action: pan-x pan-y;
+      font-size: 12px; line-height: 1.55;
     }
+    .changelog-md ul, .changelog-md ol { padding-left: 1.05rem; margin: .35rem 0; }
+    .changelog-md li { margin: .25rem 0; }
+    .changelog-md li > code, .changelog-md p > code { padding: .1em .3em; font-size: 11px; }
+    .changelog-md h1 { font-size: 1.15rem; } .changelog-md h2 { font-size: 1.05rem; } .changelog-md h3 { font-size: 1rem; }
     .changelog-md li, .changelog-md p { overflow-wrap: normal; word-break: normal; }
     .changelog-md code { white-space: nowrap; word-break: normal; overflow-wrap: normal; }
     .changelog-md img { height: auto; max-width: 100%; }
@@ -75,7 +80,7 @@
               <span class="pro-badge">PRO</span>
             </div>
             <p class="text-[11px] text-muted flex items-center gap-1.5 h-4 leading-4">
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399] shrink-0"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399] shrink-0 relative top-[1px]"></span>
               <span class="leading-none whitespace-nowrap" x-text="`${summary.running}/${summary.total} ${t('running')}`"></span>
               <span x-show="lastChecked" class="hidden sm:inline text-subtle leading-4" x-text="`• ${formatRelativeTime(lastChecked)}`"></span>
             </p>
@@ -773,7 +778,7 @@
               </label>
             </div>
 
-            <div class="glass-inset rounded-2xl p-4 space-y-3 min-w-0 overflow-hidden">
+            <div class="glass-inset rounded-2xl p-4 space-y-3 min-w-0" style="overflow:clip">
               <div class="flex items-center justify-between gap-2 flex-wrap">
                 <div class="flex items-center gap-2">
                   <span class="text-xs font-bold uppercase tracking-wider text-sky-400">Changelog</span>
