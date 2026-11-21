@@ -144,6 +144,13 @@ def get_public_settings() -> dict[str, Any]:
         "prune_old_images": get_setting("prune_old_images", "true").lower() == "true",
         "auto_rollback": get_setting("auto_rollback", "true").lower() == "true",
         "health_wait_seconds": int(get_setting("health_wait_seconds", "25") or 25),
+        "auto_prune_enabled": get_setting("auto_prune_enabled", "false").lower() == "true",
+        "auto_prune_freq": get_setting("auto_prune_freq", "weekly"),
+        "auto_prune_weekday": int(get_setting("auto_prune_weekday", "6") or 6),
+        "auto_prune_time": get_setting("auto_prune_time", "04:00"),
+        "auto_prune_images": get_setting("auto_prune_images", "dangling"),
+        "auto_prune_cache": get_setting("auto_prune_cache", "true").lower() == "true",
+        "auto_prune_last": get_setting("auto_prune_last", ""),
         "has_github_token": bool(get_setting("github_token", "").strip()),
     }
 
