@@ -1,0 +1,38 @@
+name: Update frontend libraries
+
+on:
+  schedule:
+    - cron: "0 10 * * 1"   # Thứ Hai hằng tuần
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Look for newer versions (same major only)
+        id: bump
+        run: |
+          python scripts/bump_vendor.py | tee bump.log
+          echo "changes=$(grep '^CHANGES=' bump.log | cut -d= -f2-)" >> "$GITHUB_OUTPUT"
+      - name: Open pull request
+        if: steps.bump.outputs.changes != 'none'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: bot/vendor-updates
+          sign-commits: true
+          delete-branch: true
+          commit-message: "fix(ui): update frontend libraries"
+          title: "fix(ui): update frontend libraries"
+          body: |
+            Tự động nâng thư viện giao diện (cùng số major): **${{ steps.bump.outputs.changes }}**
+
+            Hãy mở app sau khi build để xem giao diện có bình thường không rồi mới merge.
+          labels: dependencies
