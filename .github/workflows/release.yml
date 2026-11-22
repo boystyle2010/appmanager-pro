@@ -12,6 +12,10 @@ on:
         description: "Tạo release mới dù không có thành phần nào cập nhật"
         type: boolean
         default: false
+      version:
+        description: "Số phiên bản muốn phát hành (vd 1.0.0). Để trống = tự tăng bản vá"
+        type: string
+        default: ""
 
 concurrency:
   group: auto-release
@@ -70,6 +74,7 @@ jobs:
         id: upd
         env:
           FORCE_RELEASE: ${{ github.event.inputs.force_release }}
+          RELEASE_VERSION: ${{ github.event.inputs.version }}
         run: python scripts/auto_update.py check
 
       - name: Verify updated version
@@ -110,6 +115,8 @@ jobs:
   build:
     name: Build, sign & push image
     needs: update
+    # Lịch chạy hằng ngày chỉ build khi có thay đổi (tránh đổi digest `latest` mỗi ngày -> app báo cập nhật ảo)
+    if: needs.update.outputs.changed == 'true' || github.event_name != 'schedule'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -118,6 +125,7 @@ jobs:
       attestations: write
     outputs:
       digest: ${{ steps.build.outputs.digest }}
+      scan: ${{ steps.scan_sum.outputs.summary }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -132,15 +140,28 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract Docker metadata
+      - name: Extract Docker metadata (labels)
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ needs.update.outputs.image }}
-          tags: |
-            type=raw,value=latest
-            type=raw,value=build-${{ needs.update.outputs.short_sha }}
-            type=raw,value=${{ needs.update.outputs.version }},enable=${{ needs.update.outputs.changed == 'true' }}
+          tags: type=raw,value=latest
+
+      - name: Image tags
+        id: tags
+        env:
+          IMAGE: ${{ needs.update.outputs.image }}
+          SHORT: ${{ needs.update.outputs.short_sha }}
+          CHANGED: ${{ needs.update.outputs.changed }}
+          VERSION: ${{ needs.update.outputs.version }}
+        run: |
+          {
+            echo "list<<EOF"
+            echo "$IMAGE:latest"
+            echo "$IMAGE:build-$SHORT"
+            if [ "$CHANGED" = "true" ] && [ -n "$VERSION" ]; then echo "$IMAGE:$VERSION"; fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build and push multi-arch image
         id: build
@@ -151,7 +172,7 @@ jobs:
           push: true
           provenance: false
           sbom: false
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ steps.tags.outputs.list }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -162,6 +183,46 @@ jobs:
           subject-name: ${{ needs.update.outputs.image }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
+
+      # Quét lỗ hổng image vừa build (không chặn release; kết quả ghi vào Release notes).
+      # Ghim theo commit SHA (v0.36.0) vì các tag cũ của trivy-action từng bị chiếm quyền (GHSA-69fq-xp46-6x23).
+      - name: Scan image for vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        continue-on-error: true
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          image-ref: ${{ needs.update.outputs.image }}@${{ steps.build.outputs.digest }}
+          format: json
+          output: trivy.json
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "0"
+
+      - name: Summarize scan
+        id: scan_sum
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json, os
+          summary = "scan unavailable"
+          try:
+              data = json.load(open("trivy.json"))
+              crit = high = 0
+              for r in data.get("Results") or []:
+                  for v in r.get("Vulnerabilities") or []:
+                      sev = v.get("Severity")
+                      crit += sev == "CRITICAL"
+                      high += sev == "HIGH"
+              summary = f"{crit} critical • {high} high (fixable only)"
+          except Exception as exc:
+              print("No scan result:", exc)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"summary={summary}\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write(f"### Trivy scan\n{summary}\n")
+          PY
 
   # ═══════ 3. Thêm mục Package Integrity vào changelog & tạo GitHub Release ═══════
   release:
@@ -180,12 +241,15 @@ jobs:
           python-version: "3.12"
 
       - name: Add Package Integrity to changelog
+        env:
+          SCAN: ${{ needs.build.outputs.scan }}
         run: |
           python scripts/auto_update.py integrity \
             --image "${{ needs.update.outputs.image }}" \
             --digest "${{ needs.build.outputs.digest }}" \
             --version "${{ needs.update.outputs.version }}" \
-            --repo "$GITHUB_REPOSITORY"
+            --repo "$GITHUB_REPOSITORY" \
+            --scan "$SCAN"
 
       - name: Commit changelog (signed by GitHub)
         id: commit
