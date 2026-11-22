@@ -465,6 +465,15 @@
           await this._fetchAppDetails(app.name, false);
         },
 
+        // Markdown -> HTML an toàn. Thiếu thư viện (CDN/vendor hỏng) thì vẫn hiện chữ thô thay vì báo lỗi.
+        _renderMarkdown(md) {
+          if (window.marked && window.DOMPurify) {
+            return window.DOMPurify.sanitize(window.marked.parse(md));
+          }
+          const esc = String(md).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+          return `<pre style="white-space:pre-wrap">${esc}</pre>`;
+        },
+
         // Loại bỏ phần "SHA256 Checksums" (danh sách hash dài) khỏi release notes để hiện nội dung thay đổi thật
         _cleanChangelog(md) {
           const lines = String(md || '').split(/\r?\n/);
@@ -501,7 +510,7 @@
             this.updateModal.customRepo = data.pref?.custom_repo || data.app?.source_url || '';
             const cleaned = data.changelog ? this._cleanChangelog(data.changelog) : '';
             if (cleaned) {
-              this.updateModal.changelogHtml = DOMPurify.sanitize(marked.parse(cleaned));
+              this.updateModal.changelogHtml = this._renderMarkdown(cleaned);
             } else if (data.changelog) {
               const msg = this.lang === 'vi'
                 ? 'Bản phát hành này chỉ có mã checksum, không có ghi chú thay đổi. Xem chi tiết trên GitHub ↗'

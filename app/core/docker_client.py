@@ -249,19 +249,23 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
         scheme = meta["scheme"] if meta else "http"
         index_path = meta["index"] if meta else "/"
 
+        # Ưu tiên ĐÚNG file compose đã tạo ra container (nhãn của Docker Compose). Bản trong
+        # /var/lib/casaos/apps chỉ dùng khi không đọc được file đó: một app chạy lại bằng terminal từ
+        # thư mục khác (vd /DATA/AppData/<app>) vẫn trùng tên project với bản CasaOS cũ; dùng nhầm bản cũ
+        # sẽ tạo lại container sai cấu hình (volume ./data trỏ chỗ khác, mật khẩu/biến cũ...) -> unhealthy.
         compose_path = ""
-        if meta:
-            compose_path = meta["compose_path"]
-        elif config_files:
+        if config_files:
             first_cfg = config_files.split(",")[0].strip()
-            if first_cfg and Path(first_cfg).exists():
+            if first_cfg and Path(first_cfg).is_file():
                 compose_path = first_cfg
-        elif working_dir:
-            for candidate in ("docker-compose.yml", "docker-compose.yaml", "compose.yml"):
+        if not compose_path and working_dir:
+            for candidate in ("docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"):
                 p = Path(working_dir) / candidate
-                if p.exists():
+                if p.is_file():
                     compose_path = str(p)
                     break
+        if not compose_path and meta:
+            compose_path = meta["compose_path"]
 
         source_url = (
             image_labels.get("org.opencontainers.image.source")

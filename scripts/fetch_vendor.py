@@ -1,9 +1,14 @@
 """
 Tải thư viện giao diện về /app/app/static/vendor lúc BUILD image (GitHub Actions có mạng),
-để lúc chạy không còn phụ thuộc CDN. Lỗi tải một file chỉ cảnh báo; HTML tự quay về CDN nếu thiếu file.
+để lúc chạy không còn phụ thuộc CDN.
+- Thư viện JS (marked, DOMPurify, Alpine) là BẮT BUỘC: tải hỏng -> build hỏng, để bot nâng phiên bản
+  phát hiện ngay (vd marked v18 bỏ file marked.min.js) và lùi về bản cũ thay vì phát hành giao diện lỗi.
+- Font chỉ cảnh báo; HTML tự dùng font hệ thống nếu thiếu.
 """
 import re
 import sys
+import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -15,7 +20,7 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
 
 LIBS = {
-    "marked.min.js": "https://cdn.jsdelivr.net/npm/marked@18.2.1/marked.min.js",
+    "marked.min.js": "https://cdn.jsdelivr.net/npm/marked@18.2.1/lib/marked.umd.js",
     "purify.min.js": "https://cdn.jsdelivr.net/npm/dompurify@3.5.0/dist/purify.min.js",
     "alpine.min.js": "https://cdn.jsdelivr.net/npm/alpinejs@3.17.5/dist/cdn.min.js",
 }
@@ -26,14 +31,24 @@ FONT_CSS = {
 }
 
 
-def get(url: str) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=40) as r:
-        return r.read()
+def get(url: str, attempts: int = 3) -> bytes:
+    for i in range(attempts):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": UA})
+            with urllib.request.urlopen(req, timeout=40) as r:
+                return r.read()
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404 or i == attempts - 1:  # file không tồn tại -> thử lại vô ích
+                raise
+        except Exception:
+            if i == attempts - 1:
+                raise
+        time.sleep(3 * (i + 1))
+    raise RuntimeError("unreachable")
 
 
 EXPECT = {  # chuỗi phải có trong file thì mới coi là hợp lệ (tránh lưu nhầm trang lỗi HTML)
-    "marked.min.js": b"marked",
+    "marked.min.js": b"markedjs",
     "purify.min.js": b"DOMPurify",
     "alpine.min.js": b"Alpine",
 }
@@ -65,6 +80,7 @@ def main() -> int:
         if not ok:
             failed += 1
             (OUT / name).unlink(missing_ok=True)
+            print(f"ERROR {name}: không tải được thư viện bắt buộc", file=sys.stderr)
 
     for name, url in FONT_CSS.items():
         try:
@@ -78,10 +94,9 @@ def main() -> int:
             (OUT / name).write_text(css, encoding="utf-8")
             print(f"ok   {name}")
         except Exception as exc:
-            failed += 1
             (OUT / name).unlink(missing_ok=True)
             print(f"WARN {name}: {exc}")
-    return 0  # không làm hỏng build; HTML có CDN dự phòng
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

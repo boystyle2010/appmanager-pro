@@ -163,7 +163,9 @@ def restore_backup(container_name: str, filename: str) -> dict[str, Any]:
     was_running = False
     try:
         container = client.containers.get(container_name)
-        was_running = container.status == "running"
+        # "restarting" = app đang lỗi & khởi động lại liên tục (thường gặp sau cập nhật hỏng): vẫn phải
+        # dừng trước khi ghi đè dữ liệu và chạy lại sau khi khôi phục.
+        was_running = container.status in ("running", "restarting")
         if was_running:
             container.stop(timeout=30)
     except Exception:
