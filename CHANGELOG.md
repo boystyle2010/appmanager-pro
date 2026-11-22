@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.9.4
+
+*Released: 2026-11-22*
+
+### 📦 Component & Version Matrix
+
+- **App Release:** Bumped from `v0.9.3` ➡️ `v0.9.4`
+- **Supported Architectures:** `linux/amd64` (x86_64) & `linux/arm64` (ARM64) *(Multi-arch GHCR Image)*
+- **Python Base Image:** `python 3.15.2`
+- **Docker CLI:** `docker 29.10.0`
+- **Core Python Stack:** `FastAPI 0.165.0` • `Uvicorn 0.54.0` • `Docker SDK 7.2.0` • `ruamel.yaml 0.19.1` • `Argon2 25.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.28.1` • `APScheduler 3.11.3` • `segno 1.6.6`
+- **Frontend Libraries:** `Alpine.js 3.17.5` • `Tailwind CSS 4.3.5` • `marked 18.2.1` • DOMPurify `3.4.18` ➡️ `3.5.0`
+
+### 🚀 What's Changed
+
+- Upgraded **DOMPurify** to `3.5.0`.
+- Uninstalling one service of a multi-service stack now removes only that service (the rest of the stack and its folders are kept)
+- Changelogs keep notes that contain commit links; only real checksum lines are hidden
+- Trusted proxies default to localhost only; add your proxy's IP in `TRUSTED_PROXIES`
+- One failing app no longer stops "Update All" or the nightly auto-update
+- Self-update uses AppManager Pro's own image (no more outdated helper image)
+- Safer "Open" links, clearer "check already running" message, AppManager Pro can no longer be stopped from its own menu
+- CI now boots the real app with uvicorn and builds the arm64 image before publishing; Trivy results list the affected packages
+
 ## 0.9.3
 
 *Released: 2026-11-22*
