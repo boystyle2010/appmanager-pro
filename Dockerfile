@@ -32,8 +32,8 @@ RUN apt-get update && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-# Nâng pip trước (bản pip đi kèm image hay dính lỗ hổng) rồi cài thư viện
-RUN pip install --no-cache-dir --upgrade pip \
+# Nâng pip & setuptools trước (bản đi kèm image hay dính lỗ hổng, vd CVE-2025-47273) rồi cài thư viện
+RUN pip install --no-cache-dir --upgrade pip setuptools \
     && pip install --no-cache-dir -r requirements.txt
 
 COPY app/ ./app/
