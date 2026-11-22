@@ -3,10 +3,10 @@
       const dict = window.AMP_I18N;
 
       const gradients = [
-        'bg-gradient-to-br from-sky-500 to-indigo-600',
-        'bg-gradient-to-br from-emerald-500 to-teal-600',
-        'bg-gradient-to-br from-violet-500 to-fuchsia-600',
-        'bg-gradient-to-br from-amber-500 to-orange-600'
+        'bg-linear-to-br from-sky-500 to-indigo-600',
+        'bg-linear-to-br from-emerald-500 to-teal-600',
+        'bg-linear-to-br from-violet-500 to-fuchsia-600',
+        'bg-linear-to-br from-amber-500 to-orange-600'
       ];
 
       return {
