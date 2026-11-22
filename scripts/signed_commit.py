@@ -37,7 +37,11 @@ def main() -> int:
     a = ap.parse_args()
 
     repo = os.environ["GITHUB_REPOSITORY"]
-    head = gh_api([f"repos/{repo}/git/ref/heads/{a.branch}", "--jq", ".object.sha"]).strip()
+    # Dùng commit mà job đã checkout: nếu main có commit mới chen vào giữa chừng thì GitHub từ chối
+    # (thay vì ghi đè mất thay đổi của commit đó).
+    head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=ROOT).stdout.strip()
+    if not head:
+        head = gh_api([f"repos/{repo}/git/ref/heads/{a.branch}", "--jq", ".object.sha"]).strip()
     paths = [p.strip() for p in Path(a.files_from).read_text(encoding="utf-8").splitlines() if p.strip()]
     additions = [
         {"path": p, "contents": base64.b64encode((ROOT / p).read_bytes()).decode()}

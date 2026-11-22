@@ -19,7 +19,6 @@ import base64  # noqa: F401  (dùng ở signed_commit)
 import json
 import os
 import re
-import subprocess
 import sys
 import urllib.request
 from datetime import datetime, timezone
@@ -32,13 +31,14 @@ VENDOR = ROOT / "scripts/fetch_vendor.py"
 HTML_FILES = [ROOT / "app/templates/index.html", ROOT / "app/templates/auth.html"]
 VERSION_FILE = ROOT / "app/core/docker_client.py"
 CHANGELOG = ROOT / "CHANGELOG.md"
+NEXT_NOTES = ROOT / "RELEASE_NOTES_NEXT.md"  # ghi chú tự viết cho bản phát hành kế tiếp (tuỳ chọn)
 OUT_DIR = ROOT / "release"
 PY_TARGET = (3, 12)
 
 PY_NAMES = {
     "fastapi": "FastAPI", "uvicorn": "Uvicorn", "docker": "Docker SDK", "ruamel.yaml": "ruamel.yaml",
     "argon2-cffi": "Argon2", "itsdangerous": "itsdangerous", "jinja2": "Jinja2",
-    "python-multipart": "python-multipart", "httpx": "HTTPX", "apscheduler": "APScheduler",
+    "python-multipart": "python-multipart", "httpx": "HTTPX", "apscheduler": "APScheduler", "segno": "segno",
 }
 NPM_LIBS = {  # gói npm -> (tên hiển thị, regex bắt phiên bản trong fetch_vendor.py)
     "alpinejs": ("Alpine.js", r"alpinejs@(\d+\.\d+\.\d+)"),
@@ -183,6 +183,9 @@ def check_base_images(fetch=None) -> list[dict]:
                 cands.append(mm.group(1))
         full_cur = cur_tag if len(parts) == 3 else None
         best = max(cands, key=vkey, default=None)
+        if best is None:  # không tra được Docker Hub -> coi như không đổi
+            changes.append({"group": "base", "id": repo, "name": label, "old": cur_tag, "new": cur_tag})
+            return text
         new_tag = cur_tag
         if best and (full_cur is None or vkey(best) > vkey(full_cur)):
             new_tag = best
@@ -215,21 +218,16 @@ def _fmt(item: dict, code_prefix: str = "") -> str:
     return f"`{code_prefix}{old}` ➡️ `{code_prefix}{item['new']}`"
 
 
-def git_other_changes() -> list[str]:
-    try:
-        tag = subprocess.run(["git", "describe", "--tags", "--abbrev=0"], capture_output=True, text=True, cwd=ROOT)
-        rng = f"{tag.stdout.strip()}..HEAD" if tag.returncode == 0 and tag.stdout.strip() else "HEAD"
-        log = subprocess.run(["git", "log", rng, "--no-merges", "--pretty=%s", "-n", "30"], capture_output=True, text=True, cwd=ROOT).stdout
-    except Exception:
+def read_next_notes() -> list[str]:
+    if not NEXT_NOTES.exists():
         return []
     out = []
-    for s in log.splitlines():
-        s = s.strip()
-        if not s or re.match(r"^(chore\((deps|release)\)|chore: release)", s):
+    for line in NEXT_NOTES.read_text(encoding="utf-8").splitlines():
+        t = line.strip()
+        if not t or t.startswith("#") or t.startswith("<!--"):
             continue
-        s = re.sub(r"^(feat|fix|perf|refactor|docs|ci|chore|style|test)(\([^)]*\))?!?:\s*", "", s)
-        out.append(s[:1].upper() + s[1:])
-    return out[:12]
+        out.append(re.sub(r"^[-*]\s+", "", t))
+    return out
 
 
 def build_section(version: str, prev: str, changes: list[dict], others: list[str], date: str) -> str:
@@ -278,18 +276,28 @@ def cmd_check(args) -> int:
     changes = check_base_images() + check_python_packages() + check_npm_libs()
     bumped = [c for c in changes if c["old"].split(" ")[0] != c["new"] or "floating" in c["old"]]
     force = os.environ.get("FORCE_RELEASE", "").lower() == "true"
-    if not bumped and not force:
+    wanted = (os.environ.get("RELEASE_VERSION") or "").strip().lstrip("v")
+    notes = read_next_notes()
+    if not bumped and not force and not wanted and not notes:
         set_output("changed", "false")
         return 0
     prev = read_app_version()
-    version = bump_patch(prev)
+    if wanted:
+        if not re.fullmatch(r"\d+\.\d+\.\d+", wanted) or vkey(wanted) <= vkey(prev):
+            raise SystemExit(f"Phiên bản yêu cầu {wanted!r} không hợp lệ hoặc không lớn hơn {prev}")
+        version = wanted
+    else:
+        version = bump_patch(prev)
     vt = VERSION_FILE.read_text(encoding="utf-8")
     VERSION_FILE.write_text(re.sub(r'APP_VERSION\s*=\s*"\d+\.\d+\.\d+"', f'APP_VERSION = "{version}"', vt, count=1), encoding="utf-8")
     date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    section = build_section(version, prev, changes, git_other_changes(), date)
+    section = build_section(version, prev, changes, notes, date)
     insert_into_changelog(section)
     OUT_DIR.mkdir(exist_ok=True)
     files = [REQ, DOCKERFILE, VENDOR, *HTML_FILES, VERSION_FILE, CHANGELOG]
+    if notes:
+        NEXT_NOTES.write_text("# Ghi chú cho bản phát hành kế tiếp — mỗi dòng bắt đầu bằng \"- \"\n", encoding="utf-8")
+        files.append(NEXT_NOTES)
     (OUT_DIR / "changed_files.txt").write_text("\n".join(str(f.relative_to(ROOT)) for f in files) + "\n", encoding="utf-8")
     set_output("changed", "true")
     set_output("version", version)
@@ -308,7 +316,9 @@ def cmd_integrity(args) -> int:
         "### 🔐 Package Integrity (GHCR Multi-Arch)\n\n"
         f"- **Version Tag:** `{args.image}:{args.version}` (`{args.digest}`)\n"
         f"- **Latest Tag:** `{args.image}:latest`\n"
-        f"- **Provenance:** signed by GitHub — verify with `gh attestation verify oci://{args.image}@{args.digest} -R {args.repo}`\n\n"
+        f"- **Provenance:** signed by GitHub — verify with `gh attestation verify oci://{args.image}@{args.digest} -R {args.repo}`\n"
+        + (f"- **Vulnerability Scan (Trivy):** {args.scan}\n" if args.scan else "")
+        + "\n"
     )
     if "Package Integrity" in section:
         new_section = re.sub(r"### 🔐 Package Integrity.*?(?=### )", block, section, flags=re.S)
@@ -331,6 +341,7 @@ def main() -> int:
     p.add_argument("--digest", required=True)
     p.add_argument("--version", required=True)
     p.add_argument("--repo", required=True)
+    p.add_argument("--scan", default="")
     args = ap.parse_args()
     return cmd_check(args) if args.cmd == "check" else cmd_integrity(args)
 
