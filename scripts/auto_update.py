@@ -279,6 +279,9 @@ def build_section(version: str, prev: str, changes: list[dict], others: list[str
 
 def insert_into_changelog(section: str) -> None:
     text = CHANGELOG.read_text(encoding="utf-8") if CHANGELOG.exists() else "# Changelog\n"
+    # Nếu đã có mục cùng phiên bản (chạy lại) thì thay thế, không tạo trùng
+    ver = section.splitlines()[0].strip()
+    text = re.sub(rf"^{re.escape(ver)}\n.*?(?=^## |\Z)", "", text, flags=re.S | re.M)
     if text.startswith("# Changelog"):
         head, _, rest = text.partition("\n")
         new = head + "\n\n" + section + "\n" + rest.lstrip("\n")
@@ -308,9 +311,11 @@ def cmd_check(args) -> int:
         return 0
     prev = read_app_version()
     if wanted:
-        if not re.fullmatch(r"\d+\.\d+\.\d+", wanted) or vkey(wanted) <= vkey(prev):
-            raise SystemExit(f"Phiên bản yêu cầu {wanted!r} không hợp lệ hoặc không lớn hơn {prev}")
-        version = wanted
+        if not re.fullmatch(r"\d+\.\d+\.\d+", wanted):
+            raise SystemExit(f"Phiên bản yêu cầu {wanted!r} không hợp lệ (dạng đúng: 1.0.0)")
+        if vkey(wanted) < vkey(prev):
+            raise SystemExit(f"Phiên bản yêu cầu {wanted} nhỏ hơn phiên bản hiện tại {prev}")
+        version = wanted  # bằng phiên bản hiện tại cũng được: phát hành lại đúng số đó
     else:
         version = bump_patch(prev)
     vt = VERSION_FILE.read_text(encoding="utf-8")
