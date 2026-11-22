@@ -1,6 +1,17 @@
 # Lấy Docker CLI & Compose v2 binary chính chủ (tương thích hoàn hảo amd64 & arm64)
 FROM docker:29.10.0-cli AS docker-cli
 
+# Biên dịch Tailwind CSS v4 một lần trên máy build (CSS dùng chung cho mọi kiến trúc)
+FROM --platform=$BUILDPLATFORM node:lts-slim AS css
+ARG TAILWIND_VERSION=4.3.3
+WORKDIR /src
+RUN npm init -y >/dev/null \
+    && npm install --no-audit --no-fund --loglevel=error tailwindcss@${TAILWIND_VERSION} @tailwindcss/cli@${TAILWIND_VERSION}
+COPY app/templates ./app/templates
+COPY app/static ./app/static
+RUN npx @tailwindcss/cli -i app/static/css/tailwind.input.css -o /out/tailwind.css --minify \
+    && test -s /out/tailwind.css
+
 FROM python:3.15.2-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -15,15 +26,16 @@ WORKDIR /app
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=docker-cli /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    tzdata \
+# apt-get upgrade: nhận các bản vá bảo mật mới nhất của Debian (giảm lỗi Trivy báo "fixable")
+RUN apt-get update && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends ca-certificates tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ ./app/
+COPY --from=css /out/tailwind.css ./app/static/css/tailwind.css
 COPY assets/ ./assets/
 
 # Tải sẵn Tailwind/Alpine/marked/DOMPurify/font về image để không phụ thuộc CDN lúc chạy

@@ -16,7 +16,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Alpine.js](https://img.shields.io/badge/Alpine.js-3-8BC0D0?logo=alpinedotjs&logoColor=white)](https://alpinejs.dev/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-3-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![Docker](https://img.shields.io/badge/Docker-Compose%20v2-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 [![CasaOS](https://img.shields.io/badge/CasaOS-ready-0A84FF)](https://casaos.io/)
 [![License: MIT](https://img.shields.io/github/license/boystyle2010/appmanager-pro?color=yellow)](LICENSE)
@@ -66,7 +66,7 @@ It runs as a single container, ships a mobile-first "liquid glass" UI in English
 - **Activity log** — sign-ins, failed attempts, updates, uninstalls, compose edits, cleanups and settings changes with user and IP.
 - **Hardened HTTP** — Content-Security-Policy, clickjacking protection, `nosniff`, and Origin checks on every API write and WebSocket (CSRF protection).
 - **Glassmorphic, mobile-first UI**, dark/light theme, English & Vietnamese, installable as a PWA.
-- **No runtime CDN dependency** — Tailwind, Alpine.js, marked, DOMPurify and fonts are bundled into the image at build time, with automatic CDN fallback.
+- **No runtime CDN dependency** — Tailwind CSS v4 is compiled into a static stylesheet when the image is built, and Alpine.js, marked, DOMPurify and fonts are bundled too, with automatic CDN fallback. Requires a modern browser (Safari 16.4+, Chrome 111+, Firefox 128+).
 
 ## 🚀 Installation
 
@@ -177,7 +177,7 @@ docker compose pull && docker compose up -d
 One GitHub Actions workflow ([`release.yml`](.github/workflows/release.yml)) runs **every day**, on **every push to `main`**, and **on demand**:
 
 1. **Checks the source** — Python syntax, internal imports, Jinja templates, static files and JavaScript ([`scripts/check_project.py`](scripts/check_project.py)).
-2. **Looks for updates** ([`scripts/auto_update.py`](scripts/auto_update.py)) of the Python base image, Docker CLI, Python packages and frontend libraries — **always the newest stable release, including new major versions** (Tailwind CSS stays on v3, whose in-browser build the UI relies on).
+2. **Looks for updates** ([`scripts/auto_update.py`](scripts/auto_update.py)) of the Python base image, Docker CLI, Python packages and frontend libraries — **always the newest stable release, including new major versions**.
 3. **Verifies** the result by building the real Docker image and starting the app inside it ([`scripts/verify.sh`](scripts/verify.sh)). If the newest versions fail, it automatically retries with same-major updates only and notes the held-back upgrades in the changelog. The result is **committed via the GitHub API**, so commits are signed by GitHub (*Verified*).
 4. **Builds** the multi-arch image (`linux/amd64`, `linux/arm64`), pushes it to GHCR and **signs it** with a GitHub build-provenance attestation.
 5. **Publishes a GitHub Release** whose notes come from `CHANGELOG.md` (Component & Version Matrix, Package Integrity, What's Changed).
@@ -225,7 +225,8 @@ appmanager-pro/
     │   ├── system_prune.py         # disk usage & prune
     │   └── updater.py              # pull/recreate, health check, rollback
     ├── static/
-    │   ├── css/glass.css
+    │   ├── css/glass.css               # glass UI (CSS layer "components")
+    │   ├── css/tailwind.input.css      # Tailwind v4 source, compiled in the Dockerfile
     │   └── js/{app.js,i18n.js}
     └── templates/{index.html,auth.html}
 ```
