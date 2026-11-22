@@ -33,8 +33,8 @@ jobs:
     permissions:
       contents: write
     outputs:
-      changed: ${{ steps.upd.outputs.changed }}
-      version: ${{ steps.upd.outputs.version }}
+      changed: ${{ steps.final.outputs.changed }}
+      version: ${{ steps.final.outputs.version }}
       head_sha: ${{ steps.head.outputs.sha }}
       short_sha: ${{ steps.head.outputs.short }}
       image: ${{ steps.head.outputs.image }}
@@ -54,48 +54,82 @@ jobs:
       - name: Tools
         run: pip install --quiet jinja2 packaging
 
-      - name: Check source (before update)
+      - name: Check source
         run: |
           python -m compileall -q app scripts
           python scripts/check_project.py
           node --check app/static/js/app.js
           node --check app/static/js/i18n.js
 
-      # Thử khởi động app với thư viện hiện tại; nếu môi trường CI không import được thì bỏ qua bước thử sau khi nâng
-      - name: Baseline smoke test
+      # Build & khởi động thử bản HIỆN TẠI. Nếu môi trường CI không khởi động được app thì các bước sau chỉ kiểm tra build.
+      - name: Baseline check (current version)
         id: baseline
         continue-on-error: true
-        run: |
-          python -m venv "$RUNNER_TEMP/venv-base"
-          "$RUNNER_TEMP/venv-base/bin/pip" install --quiet -r requirements.txt
-          APP_DATA_DIR="$RUNNER_TEMP/data-base" "$RUNNER_TEMP/venv-base/bin/python" -c "import app.main"
+        run: bash scripts/verify.sh amp-base smoke
 
-      - name: Look for updates & write changelog
+      # ── Lần 1: nâng TẤT CẢ lên bản mới nhất (kể cả major mới) ──
+      - name: Look for updates (latest versions)
         id: upd
         env:
+          UPDATE_POLICY: latest
           FORCE_RELEASE: ${{ github.event.inputs.force_release }}
           RELEASE_VERSION: ${{ github.event.inputs.version }}
         run: python scripts/auto_update.py check
 
-      - name: Verify updated version
+      - name: Verify latest versions (build image + start app)
+        id: verify
         if: steps.upd.outputs.changed == 'true'
+        continue-on-error: true
+        run: bash scripts/verify.sh amp-latest ${{ steps.baseline.outcome == 'success' && 'smoke' || '' }}
+
+      # ── Lần 2 (chỉ khi lần 1 hỏng): nâng trong cùng major, ghi chú vào changelog ──
+      - name: Fallback — same-major updates only
+        id: safe
+        if: steps.upd.outputs.changed == 'true' && steps.verify.outcome == 'failure'
+        env:
+          UPDATE_POLICY: safe
+          HELD_BACK: "true"
+          FORCE_RELEASE: ${{ github.event.inputs.force_release }}
+          RELEASE_VERSION: ${{ github.event.inputs.version }}
         run: |
-          python -m compileall -q app scripts
-          python scripts/check_project.py
-          node --check app/static/js/app.js
-          node --check app/static/js/i18n.js
-          if [ "${{ steps.baseline.outcome }}" = "success" ]; then
-            python -m venv "$RUNNER_TEMP/venv-new"
-            "$RUNNER_TEMP/venv-new/bin/pip" install --quiet -r requirements.txt
-            APP_DATA_DIR="$RUNNER_TEMP/data-new" "$RUNNER_TEMP/venv-new/bin/python" -c "import app.main"
+          git checkout -- .
+          rm -rf release
+          python scripts/auto_update.py check
+
+      - name: Verify same-major versions
+        if: steps.safe.outputs.changed == 'true'
+        run: bash scripts/verify.sh amp-safe ${{ steps.baseline.outcome == 'success' && 'smoke' || '' }}
+
+      - name: Pick result
+        id: final
+        env:
+          USE_SAFE: ${{ steps.verify.outcome == 'failure' }}
+          U_CHANGED: ${{ steps.upd.outputs.changed }}
+          U_VERSION: ${{ steps.upd.outputs.version }}
+          U_SUMMARY: ${{ steps.upd.outputs.summary }}
+          S_CHANGED: ${{ steps.safe.outputs.changed }}
+          S_VERSION: ${{ steps.safe.outputs.version }}
+          S_SUMMARY: ${{ steps.safe.outputs.summary }}
+        run: |
+          if [ "$USE_SAFE" = "true" ]; then
+            CHANGED="${S_CHANGED:-false}"; VERSION="$S_VERSION"; SUMMARY="$S_SUMMARY (major upgrades held back)"
+          else
+            CHANGED="${U_CHANGED:-false}"; VERSION="$U_VERSION"; SUMMARY="$U_SUMMARY"
           fi
+          {
+            echo "changed=$CHANGED"
+            echo "version=$VERSION"
+            echo "summary=$SUMMARY"
+          } >> "$GITHUB_OUTPUT"
+          echo "### Update result" >> "$GITHUB_STEP_SUMMARY"
+          echo "$SUMMARY" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Commit (signed by GitHub)
-        if: steps.upd.outputs.changed == 'true'
+        if: steps.final.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.upd.outputs.version }}
-          SUMMARY: ${{ steps.upd.outputs.summary }}
+          VERSION: ${{ steps.final.outputs.version }}
+          SUMMARY: ${{ steps.final.outputs.summary }}
         run: |
           python scripts/signed_commit.py --branch main \
             --message "chore(deps): update components to v${VERSION}"$'\n\n'"${SUMMARY}" \
