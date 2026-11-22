@@ -13,6 +13,13 @@
 - **Core Python Stack:** `FastAPI 0.115.14` • `Uvicorn 0.34.3` • `Docker SDK 7.2.0` • `ruamel.yaml 0.18.17` • `Argon2 23.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.28.1` • `APScheduler 3.11.3` • `segno 1.6.6`
 - **Frontend Libraries:** `Alpine.js 3.17.5` • `Tailwind CSS 3.4.19` • `marked 15.0.12` • `DOMPurify 3.4.18`
 
+### 🔐 Package Integrity (GHCR Multi-Arch)
+
+- **Version Tag:** `ghcr.io/boystyle2010/appmanager-pro:0.9.0` (`sha256:7d74ca1150d9fd92e5d4f23cacf27182c6c03597f6373c4931768c1da98c8c12`)
+- **Latest Tag:** `ghcr.io/boystyle2010/appmanager-pro:latest`
+- **Provenance:** signed by GitHub — verify with `gh attestation verify oci://ghcr.io/boystyle2010/appmanager-pro@sha256:7d74ca1150d9fd92e5d4f23cacf27182c6c03597f6373c4931768c1da98c8c12 -R boystyle2010/appmanager-pro`
+- **Vulnerability Scan (Trivy):** 3 critical • 88 high (fixable only)
+
 ### 🚀 What's Changed
 
 - Maintenance release.
