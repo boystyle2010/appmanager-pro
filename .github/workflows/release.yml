@@ -61,12 +61,6 @@ jobs:
           node --check app/static/js/app.js
           node --check app/static/js/i18n.js
 
-      # Build & khởi động thử bản HIỆN TẠI. Nếu môi trường CI không khởi động được app thì các bước sau chỉ kiểm tra build.
-      - name: Baseline check (current version)
-        id: baseline
-        continue-on-error: true
-        run: bash scripts/verify.sh amp-base smoke
-
       # ── Lần 1: nâng TẤT CẢ lên bản mới nhất (kể cả major mới) ──
       - name: Look for updates (latest versions)
         id: upd
@@ -80,7 +74,7 @@ jobs:
         id: verify
         if: steps.upd.outputs.changed == 'true'
         continue-on-error: true
-        run: bash scripts/verify.sh amp-latest ${{ steps.baseline.outcome == 'success' && 'smoke' || '' }}
+        run: bash scripts/verify.sh amp-latest smoke
 
       # ── Lần 2 (chỉ khi lần 1 hỏng): nâng trong cùng major, ghi chú vào changelog ──
       - name: Fallback — same-major updates only
@@ -98,7 +92,7 @@ jobs:
 
       - name: Verify same-major versions
         if: steps.safe.outputs.changed == 'true'
-        run: bash scripts/verify.sh amp-safe ${{ steps.baseline.outcome == 'success' && 'smoke' || '' }}
+        run: bash scripts/verify.sh amp-safe smoke
 
       - name: Pick result
         id: final
@@ -123,6 +117,11 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "### Update result" >> "$GITHUB_STEP_SUMMARY"
           echo "$SUMMARY" >> "$GITHUB_STEP_SUMMARY"
+
+      # Không có cập nhật thành phần nhưng bạn vừa push code -> vẫn build & khởi động thử trước khi phát hành image
+      - name: Verify current code
+        if: steps.final.outputs.changed != 'true' && github.event_name != 'schedule'
+        run: bash scripts/verify.sh amp-current smoke
 
       - name: Commit (signed by GitHub)
         if: steps.final.outputs.changed == 'true'
