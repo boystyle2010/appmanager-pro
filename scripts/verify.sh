@@ -16,5 +16,6 @@ docker build --quiet -t "$TAG" . >/dev/null
 echo "Image $TAG built"
 
 if [ "$SMOKE" = "smoke" ]; then
-  docker run --rm -e APP_DATA_DIR=/tmp/amp-data --entrypoint python "$TAG" -c "import app.main; print('app.main imported OK')"
+  docker run --rm -e APP_DATA_DIR=/tmp/amp-data -v "$PWD/scripts/smoke_test.py:/smoke_test.py:ro" \
+    --entrypoint python "$TAG" /smoke_test.py
 fi
