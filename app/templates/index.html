@@ -209,11 +209,9 @@
       <div class="flex items-stretch gap-2 mb-4">
       <div class="relative shrink-0 flex pb-1" @click.outside="sortMenuOpen = false" @keydown.escape.window="sortMenuOpen = false">
         <button @click="sortMenuOpen = !sortMenuOpen" :aria-label="t('sortBy')"
-                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-semibold transition"
+                class="h-full inline-flex items-center justify-center gap-1.5 px-3.5 rounded-2xl text-xs font-semibold transition"
                 :class="sortMode !== 'smart' ? 'glass-btn-primary' : 'glass-btn text-muted'">
-          <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7h12M3 12h8M3 17h4m10-9v12m0 0l-3-3m3 3l3-3"/></svg>
-          <!-- giữ chiều cao bằng các nút lọc (có ô số đếm) -->
-          <span class="py-0.5 text-[10px] leading-none invisible w-0 overflow-hidden" aria-hidden="true">0</span>
+          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7h12M3 12h8M3 17h4m10-9v12m0 0l-3-3m3 3l3-3"/></svg>
           <span class="hidden sm:inline" x-text="t('sort_' + sortMode)"></span>
         </button>
         <div x-show="sortMenuOpen" x-cloak x-transition.opacity
