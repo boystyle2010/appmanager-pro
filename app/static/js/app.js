@@ -20,6 +20,9 @@
         summary: { total: 0, running: 0, stopped: 0, casaos: 0, docker: 0, updates: 0 },
         search: '',
         filter: 'all',
+        sortMode: (() => { try { return localStorage.getItem('amp_sort') || 'smart'; } catch (_) { return 'smart'; } })(),
+        sortMenuOpen: false,
+        sortOptions: ['smart', 'name_asc', 'name_desc', 'running', 'stopped'],
         loading: true,
         busyId: null,
         error: '',
@@ -58,6 +61,7 @@
           auto_update_time: '03:30', prune_old_images: true, auto_rollback: true, health_wait_seconds: 25,
           auto_prune_enabled: false, auto_prune_freq: 'weekly', auto_prune_weekday: 6, auto_prune_time: '04:00',
           auto_prune_images: 'dangling', auto_prune_cache: true, auto_prune_next_run: '', auto_prune_last: '',
+          backup_before_update: false, backup_max_mb: 2048, backup_keep: 3,
           github_token: '', has_github_token: false
         },
         storageState: { loading: false, pruning: false, data: null, lastFreed: '' },
@@ -66,6 +70,14 @@
           prune_build_cache: true, prune_containers: false, prune_volumes: false
         },
         updateHistory: [],
+        security: { loading: false, totp_enabled: false, backup_codes_left: 0, setup: null, code: '',
+                    backupCodes: [], disablePw: '', disableCode: '', regenCode: '', busy: false },
+        pwForm: { current: '', next: '', confirm: '', busy: false },
+        auditItems: [],
+        backupsState: { loading: false, items: [], busyFile: '' },
+        histOpen: {},
+        histData: {},
+        histTotalOpen: false,
         filterTabs: [
           { id: 'all', labelKey: 'all' },
           { id: 'updates', labelKey: 'tabUpdates' },
@@ -368,7 +380,7 @@
 
         get filteredApps() {
           const q = this.search.trim().toLowerCase();
-          return this.apps.filter(a => {
+          const list = this.apps.filter(a => {
             if (this.filter === 'updates' && !a.has_update) return false;
             if (this.filter === 'running' && a.status !== 'running') return false;
             if (this.filter === 'stopped' && a.status === 'running') return false;
@@ -377,6 +389,21 @@
             if (!q) return true;
             return a.title.toLowerCase().includes(q) || a.name.toLowerCase().includes(q) || a.image.toLowerCase().includes(q);
           });
+          const byName = (x, y) => x.title.localeCompare(y.title, undefined, { sensitivity: 'base', numeric: true });
+          const run = a => (a.status === 'running' ? 0 : 1);
+          switch (this.sortMode) {
+            case 'name_asc': return list.sort(byName);
+            case 'name_desc': return list.sort((x, y) => byName(y, x));
+            case 'running': return list.sort((x, y) => run(x) - run(y) || byName(x, y));
+            case 'stopped': return list.sort((x, y) => run(y) - run(x) || byName(x, y));
+            default: return list; // 'smart': thứ tự từ server (có cập nhật -> đang chạy -> CasaOS -> tên)
+          }
+        },
+
+        setSort(mode) {
+          this.sortMode = mode;
+          this.sortMenuOpen = false;
+          try { localStorage.setItem('amp_sort', mode); } catch (_) {}
         },
 
         buildWebUrl(app) {
@@ -1031,7 +1058,10 @@
             auto_prune_weekday: Number.isInteger(f.auto_prune_weekday) ? f.auto_prune_weekday : 6,
             auto_prune_time: f.auto_prune_time || '04:00',
             auto_prune_images: f.auto_prune_images || 'dangling',
-            auto_prune_cache: !!f.auto_prune_cache
+            auto_prune_cache: !!f.auto_prune_cache,
+            backup_before_update: !!f.backup_before_update,
+            backup_max_mb: Math.max(50, Math.min(102400, parseInt(f.backup_max_mb, 10) || 2048)),
+            backup_keep: Math.max(1, Math.min(20, parseInt(f.backup_keep, 10) || 3))
           };
           if ((f.github_token || '').trim()) payload.github_token = f.github_token.trim();
           try {
@@ -1040,6 +1070,186 @@
             this.settingsForm = { ...data.settings, github_token: '' };
             this.showToast(this.lang === 'vi' ? 'Đã lưu cài đặt ✓' : 'Settings saved ✓');
           } catch (err) { this.showToast(err.message); }
+        },
+
+        // ---------------- Security: 2FA, password, activity log ----------------
+        async loadSecurity() {
+          this.security.loading = true;
+          try {
+            const res = await fetch('/api/auth/security');
+            if (res.status === 401) { window.location.href = '/login'; return; }
+            const data = await res.json();
+            this.security.totp_enabled = !!data.totp_enabled;
+            this.security.backup_codes_left = data.backup_codes_left || 0;
+          } catch (err) { this.showToast(err.message); }
+          finally { this.security.loading = false; }
+          this.loadAudit();
+        },
+
+        async start2fa() {
+          this.security.busy = true;
+          try {
+            const { res, data } = await this._postJson('/api/auth/2fa/setup', {});
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            this.security.setup = data;
+            this.security.code = '';
+          } catch (err) { this.showToast(err.message); }
+          finally { this.security.busy = false; }
+        },
+
+        async enable2fa() {
+          this.security.busy = true;
+          try {
+            const { res, data } = await this._postJson('/api/auth/2fa/enable', { code: this.security.code });
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            this.security.backupCodes = data.backup_codes || [];
+            this.security.setup = null;
+            this.security.code = '';
+            await this.loadSecurity();
+            this.showToast(this.t('tfaEnabledToast'));
+          } catch (err) { this.showToast(err.message); }
+          finally { this.security.busy = false; }
+        },
+
+        async disable2fa() {
+          this.security.busy = true;
+          try {
+            const { res, data } = await this._postJson('/api/auth/2fa/disable', { password: this.security.disablePw, code: this.security.disableCode });
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            this.security.disablePw = ''; this.security.disableCode = ''; this.security.backupCodes = [];
+            await this.loadSecurity();
+            this.showToast(this.t('tfaDisabledToast'));
+          } catch (err) { this.showToast(err.message); }
+          finally { this.security.busy = false; }
+        },
+
+        async regenBackupCodes() {
+          this.security.busy = true;
+          try {
+            const { res, data } = await this._postJson('/api/auth/2fa/backup-codes', { code: this.security.regenCode });
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            this.security.backupCodes = data.backup_codes || [];
+            this.security.regenCode = '';
+            await this.loadSecurity();
+          } catch (err) { this.showToast(err.message); }
+          finally { this.security.busy = false; }
+        },
+
+        copyText(text) {
+          try { navigator.clipboard.writeText(text); this.showToast(this.t('copied')); }
+          catch (_) { this.showToast(text); }
+        },
+
+        async changePassword() {
+          const f = this.pwForm;
+          if (f.next !== f.confirm) { this.showToast(this.t('pwMismatch')); return; }
+          if ((f.next || '').length < 8) { this.showToast(this.t('pwTooShort')); return; }
+          f.busy = true;
+          try {
+            const { res, data } = await this._postJson('/api/auth/password', { current_password: f.current, new_password: f.next });
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            this.pwForm = { current: '', next: '', confirm: '', busy: false };
+            this.showToast(this.t('pwChanged'));
+            this.loadAudit();
+          } catch (err) { this.showToast(err.message); }
+          finally { this.pwForm.busy = false; }
+        },
+
+        async loadAudit() {
+          try {
+            const res = await fetch('/api/audit?limit=150');
+            if (!res.ok) return;
+            const data = await res.json();
+            this.auditItems = data.items || [];
+          } catch (_) {}
+        },
+
+        utcToLocal(ts) {
+          if (!ts) return '';
+          const d = new Date(String(ts).replace(' ', 'T') + (String(ts).endsWith('Z') ? '' : 'Z'));
+          return isNaN(d) ? ts : d.toLocaleString(this.lang === 'vi' ? 'vi-VN' : 'en-US', { dateStyle: 'short', timeStyle: 'short' });
+        },
+
+        actionLabel(a) {
+          const key = 'act_' + a;
+          const v = this.t(key);
+          return v === key ? a : v;
+        },
+
+        // ---------------- App data backups ----------------
+        async loadBackups() {
+          this.backupsState.loading = true;
+          try {
+            const res = await fetch('/api/backups');
+            if (res.ok) this.backupsState.items = (await res.json()).items || [];
+          } catch (_) {}
+          finally { this.backupsState.loading = false; }
+        },
+
+        confirmRestoreBackup(b) {
+          this.askConfirm({
+            tone: 'danger', title: this.t('restoreBackupTitle'),
+            message: `${b.app} • ${b.file} — ${this.t('restoreBackupMsg')}`,
+            confirmLabel: this.t('restore'), onConfirm: () => this.restoreBackup(b)
+          });
+        },
+
+        async restoreBackup(b) {
+          this.backupsState.busyFile = b.file;
+          try {
+            const { res, data } = await this._postJson('/api/backups/restore', { app: b.app, file: b.file });
+            if (!res.ok) throw new Error(data.detail || 'Restore failed');
+            this.showToast(data.warning || data.message || 'OK');
+          } catch (err) { this.showToast(err.message); }
+          finally { this.backupsState.busyFile = ''; }
+        },
+
+        confirmDeleteBackup(b) {
+          this.askConfirm({
+            tone: 'danger', title: this.t('deleteBackupTitle'), message: `${b.app} • ${b.file}`,
+            confirmLabel: this.t('delete'), onConfirm: () => this.deleteBackup(b)
+          });
+        },
+
+        async deleteBackup(b) {
+          try {
+            const { res, data } = await this._postJson('/api/backups/delete', { app: b.app, file: b.file });
+            if (!res.ok) throw new Error(data.detail || 'Delete failed');
+            await this.loadBackups();
+          } catch (err) { this.showToast(err.message); }
+        },
+
+        // ---------------- Resource history (24h charts) ----------------
+        async toggleHistory(name) {
+          const key = name || '__total__';
+          if (key === '__total__') this.histTotalOpen = !this.histTotalOpen;
+          else this.histOpen = { ...this.histOpen, [key]: !this.histOpen[key] };
+          const open = key === '__total__' ? this.histTotalOpen : this.histOpen[key];
+          if (!open) return;
+          try {
+            const res = await fetch(`/api/system/history?hours=24&container=${encodeURIComponent(name || '')}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            this.histData = { ...this.histData, [key]: data.points || [] };
+          } catch (_) {}
+        },
+
+        sparkPoints(points, field, w = 300, h = 56) {
+          if (!points || points.length < 2) return '';
+          const vals = points.map(p => Number(p[field]) || 0);
+          const t0 = points[0].ts, t1 = points[points.length - 1].ts || t0 + 1;
+          const max = Math.max(...vals, field === 'cpu_pct' ? 5 : 1);
+          return points.map((p, i) => {
+            const x = ((p.ts - t0) / Math.max(1, t1 - t0)) * w;
+            const y = h - 2 - (vals[i] / max) * (h - 6);
+            return `${x.toFixed(1)},${y.toFixed(1)}`;
+          }).join(' ');
+        },
+
+        histStats(points, field) {
+          if (!points || !points.length) return { avg: 0, max: 0 };
+          const vals = points.map(p => Number(p[field]) || 0);
+          return { avg: vals.reduce((a, b) => a + b, 0) / vals.length, max: Math.max(...vals) };
         },
 
         async logout() {
