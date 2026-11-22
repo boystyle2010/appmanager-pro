@@ -298,9 +298,12 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v${{ needs.update.outputs.version }}
+          SHA: ${{ steps.commit.outputs.sha }}
         run: |
-          gh release create "v${{ needs.update.outputs.version }}" \
-            --target "${{ steps.commit.outputs.sha }}" \
-            --title "v${{ needs.update.outputs.version }}" \
-            --notes-file release/body.md \
-            --latest
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # Đã có Release cùng số (chạy lại) -> chỉ cập nhật ghi chú
+            gh release edit "$TAG" --notes-file release/body.md --latest
+          else
+            gh release create "$TAG" --target "$SHA" --title "$TAG" --notes-file release/body.md --latest
+          fi
