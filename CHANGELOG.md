@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.5.3
+
+*Released: 2026-11-22*
+
+### 📦 Component & Version Matrix
+
+- **App Release:** Bumped from `v0.5.2` ➡️ `v0.5.3`
+- **Supported Architectures:** `linux/amd64` (x86_64) & `linux/arm64` (ARM64) *(Multi-arch GHCR Image)*
+- **Python Base Image:** `python 3.12` ➡️ `python 3.12.16`
+- **Docker CLI:** `docker 27` ➡️ `docker 27.5.1`
+- **Core Python Stack:** FastAPI `0.115.6` ➡️ `0.115.14` • Uvicorn `0.34.0` ➡️ `0.34.3` • Docker SDK `7.1.0` ➡️ `7.2.0` • ruamel.yaml `0.18.6` ➡️ `0.18.17` • `Argon2 23.1.0` • `itsdangerous 2.2.0` • Jinja2 `3.1.5` ➡️ `3.1.6` • python-multipart `0.0.20` ➡️ `0.0.34` • `HTTPX 0.28.1` • APScheduler `3.10.4` ➡️ `3.11.3` • segno `1.6.1` ➡️ `1.6.6`
+- **Frontend Libraries:** `Alpine.js 3.17.5` • `Tailwind CSS 3.4.19` • `marked 15.0.12` • `DOMPurify 3.4.18`
+
+### 🚀 What's Changed
+
+- Upgraded **Python Base Image** to `3.12.16`.
+- Upgraded **Docker CLI** to `27.5.1`.
+- Upgraded **FastAPI** to `0.115.14`.
+- Upgraded **Uvicorn** to `0.34.3`.
+- Upgraded **Docker SDK** to `7.2.0`.
+- Upgraded **ruamel.yaml** to `0.18.17`.
+- Upgraded **Jinja2** to `3.1.6`.
+- Upgraded **python-multipart** to `0.0.34`.
+- Upgraded **APScheduler** to `3.11.3`.
+- Upgraded **segno** to `1.6.6`.
+- Add files via upload
+- Update release.yml
+- Create LICENSE
+- Create README.md
+
 ## 0.5.2
 
 *Released: 2026-11-21*
