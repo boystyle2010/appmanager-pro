@@ -11,8 +11,9 @@
   <link rel="icon" type="image/png" href="/assets/icon.png?v=2" />
   <link rel="apple-touch-icon" href="/assets/icon.png?v=2" />
     <link href="/static/vendor/fonts.css" rel="stylesheet" onerror="this.onerror=null;this.href='https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap'" />
-  <script src="/static/vendor/tailwind.js"></script>
-  <script>window.tailwind||document.write('<script src="https://cdn.tailwindcss.com"><\/script>');</script>
+  <!-- Tailwind CSS v4 đã biên dịch sẵn lúc build image; thiếu file thì dùng bản chạy trong trình duyệt -->
+  <link rel="stylesheet" href="/static/css/tailwind.css?v={{ version }}"
+        onerror="this.onerror=null;var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4';document.head.appendChild(s)" />
   <script src="/static/vendor/marked.min.js"></script>
   <script>window.marked||document.write('<script src="https://cdn.jsdelivr.net/npm/marked@15.0.6/marked.min.js"><\/script>');</script>
   <script src="/static/vendor/purify.min.js"></script>
@@ -21,6 +22,7 @@
   <script>window.addEventListener('load',function(){if(!window.Alpine){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js';document.head.appendChild(s)}});</script>
   <link rel="stylesheet" href="/static/css/glass.css" />
   <style>
+  @layer components {
     /* Ẩn thanh cuộn bên trong các khung (vẫn vuốt/cuộn bình thường) */
     .glass-panel *, .yaml-editor, .changelog-md, .changelog-md * { scrollbar-width: none; -ms-overflow-style: none; }
     .glass-panel *::-webkit-scrollbar, .yaml-editor::-webkit-scrollbar,
@@ -54,6 +56,7 @@
     html.modal-open, body.modal-open { overflow: hidden !important; overscroll-behavior: none; }
     body.modal-open { position: fixed; left: 0; right: 0; width: 100%; }
     .changelog-md table { display: block; overflow-x: auto; }
+  }
   </style>
   <script>
     (function () {
@@ -137,7 +140,7 @@
     <main class="max-w-7xl mx-auto px-4 pt-4">
       <!-- Dismissible Update Notification Banner + Update All -->
       <div x-show="showUpdateBanner" x-cloak x-transition
-           class="glass-panel rounded-[22px] p-4 mb-4 border-amber-400/35 bg-gradient-to-r from-amber-500/12 via-orange-500/8 to-transparent flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 relative">
+           class="glass-panel rounded-[22px] p-4 mb-4 border-amber-400/35 bg-linear-to-r from-amber-500/12 via-orange-500/8 to-transparent flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 relative">
         <div class="flex items-start sm:items-center justify-between gap-3 min-w-0 flex-1">
           <div class="flex items-center gap-3 min-w-0">
             <div class="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-400/35 flex items-center justify-center text-amber-400 shrink-0">
@@ -261,7 +264,7 @@
             <div @click="openUpdateModal(app)" class="cursor-pointer group space-y-3">
               <div class="flex items-center gap-3">
                 <template x-if="app.icon">
-                  <div class="w-11 h-11 rounded-[14px] shrink-0 overflow-hidden flex items-center justify-center shadow-sm"
+                  <div class="w-11 h-11 rounded-[14px] shrink-0 overflow-hidden flex items-center justify-center shadow-xs"
                        :class="app.is_self ? 'brand-squircle' : 'glass-icon-box p-1.5'">
                     <img :src="app.icon" :alt="app.title"
                          :class="app.is_self ? '' : 'w-full h-full object-contain rounded-lg'"
@@ -269,7 +272,7 @@
                   </div>
                 </template>
                 <template x-if="!app.icon">
-                  <div class="w-11 h-11 rounded-[14px] shrink-0 flex items-center justify-center text-white font-bold text-xs uppercase shadow-sm ring-1 ring-white/20"
+                  <div class="w-11 h-11 rounded-[14px] shrink-0 flex items-center justify-center text-white font-bold text-xs uppercase shadow-xs ring-1 ring-white/20"
                        :class="avatarGradient(app.title)" x-text="app.title.slice(0, 2)"></div>
                 </template>
 
@@ -573,7 +576,7 @@
 
   <!-- iOS GROUPED GLASS ACTION SHEET -->
   <div x-show="actionSheet.open" x-cloak x-transition.opacity
-       class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/60 backdrop-blur-sm"
+       class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/60 backdrop-blur-xs"
        @click.self="closeActionSheet()" @keydown.escape.window="closeActionSheet()">
     <div class="glass-panel w-full max-w-sm rounded-t-[28px] sm:rounded-[28px] p-5 space-y-3.5"
          style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
@@ -695,7 +698,7 @@
         </button>
       </div>
       <div class="mt-4 h-2 rounded-full bg-[var(--glass-surface)] overflow-hidden">
-        <div class="h-full rounded-full bg-gradient-to-r from-sky-400 to-indigo-500 transition-all duration-300"
+        <div class="h-full rounded-full bg-linear-to-r from-sky-400 to-indigo-500 transition-all duration-300"
              :style="`width: ${batchModal.items.length ? Math.round((batchModal.doneCount / batchModal.items.length) * 100) : 0}%`"></div>
       </div>
       <div class="flex-1 overflow-y-auto py-4 space-y-3">
@@ -1407,7 +1410,7 @@
             <template x-if="storageState.data">
               <div class="space-y-3">
                 <!-- Hero: tổng dung lượng thu hồi + thanh phân bổ -->
-                <div class="rounded-2xl p-4 bg-gradient-to-br from-sky-500/15 via-indigo-500/10 to-transparent border border-sky-400/25 space-y-3.5">
+                <div class="rounded-2xl p-4 bg-linear-to-br from-sky-500/15 via-indigo-500/10 to-transparent border border-sky-400/25 space-y-3.5">
                   <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0">
                       <p class="text-[10.5px] font-semibold uppercase tracking-wider text-sky-400" x-text="t('reclaimableSpace')"></p>
