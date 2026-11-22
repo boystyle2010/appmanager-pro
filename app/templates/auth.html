@@ -14,7 +14,7 @@
   <script src="/static/vendor/tailwind.js"></script>
   <script>window.tailwind||document.write('<script src="https://cdn.tailwindcss.com"><\/script>');</script>
   <script defer src="/static/vendor/alpine.min.js"></script>
-  <script>window.addEventListener('load',function(){if(!window.Alpine){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/alpinejs@3.17.5/dist/cdn.min.js';document.head.appendChild(s)}});</script>
+  <script>window.addEventListener('load',function(){if(!window.Alpine){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js';document.head.appendChild(s)}});</script>
   <link rel="stylesheet" href="/static/css/glass.css" />
   <script>
     (function () {
@@ -131,6 +131,15 @@
             </div>
           </template>
 
+          <template x-if="otpStep">
+            <div>
+              <label class="block text-xs font-semibold text-muted mb-1.5 ml-1" x-text="t('otpLabel')"></label>
+              <input type="text" x-model="otp" x-ref="otpInput" inputmode="numeric" autocomplete="one-time-code"
+                     class="glass-input w-full rounded-2xl px-4 py-3 text-lg tracking-[0.35em] text-center font-semibold" placeholder="123456" />
+              <p class="text-[11px] text-subtle mt-1.5 ml-1" x-text="t('otpHint')"></p>
+            </div>
+          </template>
+
           <template x-if="!isSetup">
             <label class="flex items-center gap-2.5 text-xs font-medium text-muted cursor-pointer select-none pt-1 ml-1">
               <input type="checkbox" x-model="remember" class="w-4 h-4 rounded accent-sky-500" />
@@ -140,7 +149,7 @@
 
           <button type="submit" :disabled="loading"
                   class="glass-btn-primary w-full rounded-2xl py-3.5 text-sm font-semibold mt-2 flex items-center justify-center gap-2 disabled:opacity-60">
-            <span x-text="loading ? t('processing') : (isSetup ? t('createAdmin') : t('signIn'))"></span>
+            <span x-text="loading ? t('processing') : (isSetup ? t('createAdmin') : (otpStep ? t('verify') : t('signIn')))"></span>
           </button>
         </form>
 
@@ -161,7 +170,8 @@
           loginSubtitle: 'Sign in to manage containers, compose files & updates',
           username: 'Username', password: 'Password', confirmPassword: 'Confirm Password',
           remember: 'Keep me signed in for 30 days', createAdmin: 'Create Admin Account',
-          signIn: 'Sign In', processing: 'Authenticating...', mismatch: 'Passwords do not match'
+          signIn: 'Sign In', processing: 'Authenticating...', mismatch: 'Passwords do not match',
+          otpLabel: 'Two-factor code', otpHint: '6-digit code from your authenticator app, or a backup code', verify: 'Verify'
         },
         vi: {
           firstRunBadge: 'Thiết lập lần đầu', secureBadge: 'Trung tâm điều khiển Docker',
@@ -169,7 +179,8 @@
           loginSubtitle: 'Đăng nhập để quản lý ứng dụng, Compose và cập nhật',
           username: 'Tên đăng nhập', password: 'Mật khẩu', confirmPassword: 'Xác nhận mật khẩu',
           remember: 'Ghi nhớ đăng nhập trong 30 ngày', createAdmin: 'Tạo tài khoản Admin',
-          signIn: 'Đăng nhập', processing: 'Đang xác thực...', mismatch: 'Mật khẩu xác nhận không khớp'
+          signIn: 'Đăng nhập', processing: 'Đang xác thực...', mismatch: 'Mật khẩu xác nhận không khớp',
+          otpLabel: 'Mã xác thực 2 lớp', otpHint: 'Mã 6 số trong ứng dụng xác thực, hoặc mã dự phòng', verify: 'Xác minh'
         }
       };
 
@@ -177,7 +188,7 @@
         isSetup, lang: localStorage.getItem('amp_lang') || 'vi',
         theme: localStorage.getItem('amp_theme') || 'dark',
         username: '', password: '', confirmPassword: '', remember: true,
-        showPw: false, loading: false, error: '',
+        showPw: false, loading: false, error: '', otpStep: false, otp: '',
 
         t(key) { return (dict[this.lang] || dict.en)[key] || key; },
         toggleLang() {
@@ -202,13 +213,18 @@
             const url = this.isSetup ? '/api/auth/setup' : '/api/auth/login';
             const body = this.isSetup
               ? { username: this.username, password: this.password, confirm_password: this.confirmPassword }
-              : { username: this.username, password: this.password, remember: this.remember };
+              : { username: this.username, password: this.password, remember: this.remember, otp: this.otpStep ? this.otp : null };
             const res = await fetch(url, {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(body)
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || 'Authentication failed');
+            if (data.otp_required) {
+              this.otpStep = true;
+              this.$nextTick(() => this.$refs.otpInput && this.$refs.otpInput.focus());
+              return;
+            }
             window.location.href = '/';
           } catch (err) { this.error = err.message; }
           finally { this.loading = false; }

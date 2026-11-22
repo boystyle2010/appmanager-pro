@@ -14,11 +14,11 @@
   <script src="/static/vendor/tailwind.js"></script>
   <script>window.tailwind||document.write('<script src="https://cdn.tailwindcss.com"><\/script>');</script>
   <script src="/static/vendor/marked.min.js"></script>
-  <script>window.marked||document.write('<script src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"><\/script>');</script>
+  <script>window.marked||document.write('<script src="https://cdn.jsdelivr.net/npm/marked@15.0.6/marked.min.js"><\/script>');</script>
   <script src="/static/vendor/purify.min.js"></script>
-  <script>window.DOMPurify||document.write('<script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.18/dist/purify.min.js"><\/script>');</script>
+  <script>window.DOMPurify||document.write('<script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.3/dist/purify.min.js"><\/script>');</script>
   <script defer src="/static/vendor/alpine.min.js"></script>
-  <script>window.addEventListener('load',function(){if(!window.Alpine){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/alpinejs@3.17.5/dist/cdn.min.js';document.head.appendChild(s)}});</script>
+  <script>window.addEventListener('load',function(){if(!window.Alpine){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js';document.head.appendChild(s)}});</script>
   <link rel="stylesheet" href="/static/css/glass.css" />
   <style>
     /* Ẩn thanh cuộn bên trong các khung (vẫn vuốt/cuộn bình thường) */
@@ -65,7 +65,7 @@
     })();
   </script>
 </head>
-<body x-data="dashboardApp()" x-init="init()" @keydown.window="handleShortcut($event)">
+<body x-data="dashboardApp()" @keydown.window="handleShortcut($event)">
   <div class="ambient-bg"></div>
 
   <div class="page-layer safe-bottom">
@@ -205,8 +205,29 @@
         </button>
       </div>
 
-      <!-- Filter Pills -->
-      <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 mb-4">
+      <!-- Sort + Filter Pills -->
+      <div class="flex items-center gap-2 mb-4">
+      <div class="relative shrink-0" @click.outside="sortMenuOpen = false" @keydown.escape.window="sortMenuOpen = false">
+        <button @click="sortMenuOpen = !sortMenuOpen" :aria-label="t('sortBy')"
+                class="h-[34px] inline-flex items-center gap-1.5 px-3 rounded-2xl text-xs font-semibold transition"
+                :class="sortMode !== 'smart' ? 'glass-btn-primary' : 'glass-btn text-muted'">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7h12M3 12h8M3 17h4m10-9v12m0 0l-3-3m3 3l3-3"/></svg>
+          <span class="hidden sm:inline" x-text="t('sort_' + sortMode)"></span>
+        </button>
+        <div x-show="sortMenuOpen" x-cloak x-transition.opacity
+             class="absolute left-0 top-full mt-2 z-30 w-52 glass-panel rounded-2xl p-1.5 shadow-xl">
+          <p class="px-2.5 pt-1 pb-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-subtle" x-text="t('sortBy')"></p>
+          <template x-for="opt in sortOptions" :key="opt">
+            <button @click="setSort(opt)"
+                    class="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl text-xs text-left transition hover:bg-[var(--glass-surface-hover)]"
+                    :class="sortMode === opt ? 'text-sky-400 font-semibold' : ''">
+              <span x-text="t('sort_' + opt)"></span>
+              <svg x-show="sortMode === opt" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+            </button>
+          </template>
+        </div>
+      </div>
+      <div class="flex-1 min-w-0 flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
         <template x-for="tab in filterTabs" :key="tab.id">
           <button @click="filter = tab.id"
                   class="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-semibold transition-all"
@@ -221,6 +242,7 @@
                   x-text="countForTab(tab.id)"></span>
           </button>
         </template>
+      </div>
       </div>
 
       <!-- Error Banner -->
@@ -1281,11 +1303,13 @@
       </div>
 
       <!-- 3 Tabs: Schedule | Storage (Prune SSD) | History -->
-      <div class="glass-dock p-1 rounded-2xl grid grid-cols-3 gap-1 mt-4 mb-4">
+      <div class="glass-dock p-1 rounded-2xl grid grid-cols-4 gap-1 mt-4 mb-4">
         <button @click="settingsModal.tab = 'schedule'" class="py-2 rounded-xl text-xs font-semibold transition"
                 :class="settingsModal.tab === 'schedule' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabScheduleShort')"></button>
-        <button @click="settingsModal.tab = 'storage'; loadStorage()" class="py-2 rounded-xl text-xs font-semibold transition"
+        <button @click="settingsModal.tab = 'storage'; loadStorage(); loadBackups()" class="py-2 rounded-xl text-xs font-semibold transition"
                 :class="settingsModal.tab === 'storage' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabStorage')"></button>
+        <button @click="settingsModal.tab = 'security'; loadSecurity()" class="py-2 rounded-xl text-xs font-semibold transition"
+                :class="settingsModal.tab === 'security' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabSecurity')"></button>
         <button @click="settingsModal.tab = 'history'" class="py-2 rounded-xl text-xs font-semibold transition"
                 :class="settingsModal.tab === 'history' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabHistory')"></button>
       </div>
@@ -1543,8 +1567,169 @@
                   <p x-show="settingsForm.auto_prune_last" class="text-[10.5px] text-emerald-300/90" x-text="`${t('apLast')}: ${settingsForm.auto_prune_last}`"></p>
                   <button @click="saveSettings()" class="glass-btn-primary w-full py-2.5 rounded-xl text-xs font-semibold" x-text="t('saveSettings')"></button>
                 </div>
+
+                <!-- Sao lưu dữ liệu app trước khi cập nhật -->
+                <div class="glass-inset rounded-2xl p-4 space-y-3 text-xs">
+                  <div class="flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                      <p class="font-semibold text-[13px]" x-text="t('bkTitle')"></p>
+                      <p class="text-[11px] text-muted mt-0.5" x-text="t('bkDesc')"></p>
+                    </div>
+                    <label class="inline-flex items-center cursor-pointer shrink-0">
+                      <input type="checkbox" x-model="settingsForm.backup_before_update" class="sr-only peer" />
+                      <div class="w-11 h-6 bg-slate-600/60 rounded-full peer peer-checked:bg-emerald-500 relative transition after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5"></div>
+                    </label>
+                  </div>
+                  <div x-show="settingsForm.backup_before_update" x-cloak class="grid grid-cols-2 gap-2">
+                    <label class="space-y-1">
+                      <span class="text-[11px] text-muted" x-text="t('bkMax')"></span>
+                      <input type="number" min="50" max="102400" x-model.number="settingsForm.backup_max_mb" class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code text-center" />
+                    </label>
+                    <label class="space-y-1">
+                      <span class="text-[11px] text-muted" x-text="t('bkKeep')"></span>
+                      <input type="number" min="1" max="20" x-model.number="settingsForm.backup_keep" class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code text-center" />
+                    </label>
+                  </div>
+                  <p x-show="settingsForm.backup_before_update" x-cloak class="text-[10.5px] text-muted leading-snug" x-text="t('bkNote')"></p>
+                  <button @click="saveSettings()" class="glass-btn-primary w-full py-2.5 rounded-xl text-xs font-semibold" x-text="t('saveSettings')"></button>
+
+                  <div class="pt-1 space-y-2">
+                    <div class="flex items-center justify-between">
+                      <p class="font-semibold text-[12px]" x-text="t('bkList')"></p>
+                      <button @click="loadBackups()" class="glass-btn px-2.5 py-1 rounded-lg text-[11px]" x-text="t('recheck')"></button>
+                    </div>
+                    <p x-show="!backupsState.items.length" class="text-[11px] text-subtle" x-text="backupsState.loading ? '…' : t('bkEmpty')"></p>
+                    <template x-for="b in backupsState.items" :key="b.app + b.file">
+                      <div class="rounded-xl bg-[var(--glass-surface)] px-3 py-2.5 flex items-center gap-2.5">
+                        <div class="min-w-0 flex-1">
+                          <p class="font-semibold text-[12px] truncate" x-text="b.app"></p>
+                          <p class="text-[10.5px] text-muted font-mono-code truncate"
+                             x-text="`${new Date(b.created * 1000).toLocaleString(lang === 'vi' ? 'vi-VN' : 'en-US', { dateStyle: 'short', timeStyle: 'short' })} • ${b.size}${b.version ? ' • ' + b.version : ''}`"></p>
+                        </div>
+                        <button @click="confirmRestoreBackup(b)" :disabled="backupsState.busyFile === b.file"
+                                class="glass-btn px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-sky-400 disabled:opacity-50 shrink-0" x-text="t('restore')"></button>
+                        <button @click="confirmDeleteBackup(b)" aria-label="Delete"
+                                class="glass-btn w-8 h-8 rounded-lg flex items-center justify-center text-rose-400 shrink-0">
+                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 7h12M9 7V5h6v2m-7 0l1 12h6l1-12"/></svg>
+                        </button>
+                      </div>
+                    </template>
+                  </div>
+                </div>
               </div>
             </template>
+          </div>
+        </template>
+
+        <!-- TAB: SECURITY (2FA, password, activity log) -->
+        <template x-if="settingsModal.tab === 'security'">
+          <div class="space-y-3.5 text-xs">
+            <!-- 2FA -->
+            <div class="glass-inset rounded-2xl p-4 space-y-3">
+              <div class="flex items-center justify-between gap-3">
+                <div class="min-w-0">
+                  <p class="font-semibold text-[13px]" x-text="t('tfaTitle')"></p>
+                  <p class="text-[11px] text-muted mt-0.5" x-text="t('tfaDesc')"></p>
+                </div>
+                <span class="shrink-0 px-2 py-0.5 rounded-full text-[10.5px] font-semibold"
+                      :class="security.totp_enabled ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-500/20 text-muted'"
+                      x-text="security.totp_enabled ? t('tfaOn') : t('tfaOff')"></span>
+              </div>
+
+              <!-- Mã dự phòng vừa tạo -->
+              <div x-show="security.backupCodes.length" x-cloak class="rounded-xl p-3 bg-amber-500/10 border border-amber-400/30 space-y-2">
+                <p class="text-[11px] text-amber-300 font-semibold" x-text="t('tfaCodesNote')"></p>
+                <div class="grid grid-cols-2 gap-1.5 font-mono-code text-[12px]">
+                  <template x-for="c in security.backupCodes" :key="c"><span class="rounded-lg bg-[var(--glass-surface)] px-2 py-1 text-center" x-text="c"></span></template>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <button @click="copyText(security.backupCodes.join('\n'))" class="glass-btn py-2 rounded-xl text-[11px] font-semibold" x-text="t('copy')"></button>
+                  <button @click="security.backupCodes = []" class="glass-btn-primary py-2 rounded-xl text-[11px] font-semibold" x-text="t('tfaSaved')"></button>
+                </div>
+              </div>
+
+              <!-- Chưa bật -->
+              <template x-if="!security.totp_enabled">
+                <div class="space-y-3">
+                  <button x-show="!security.setup" @click="start2fa()" :disabled="security.busy"
+                          class="glass-btn-primary w-full py-2.5 rounded-xl text-xs font-semibold disabled:opacity-50" x-text="t('tfaSetup')"></button>
+                  <template x-if="security.setup">
+                    <div class="space-y-3">
+                      <p class="text-[11px] text-muted leading-snug" x-text="t('tfaStep1')"></p>
+                      <div x-show="security.setup.qr_svg" class="mx-auto w-44 h-44 rounded-xl overflow-hidden bg-white p-1 [&>svg]:w-full [&>svg]:h-full" x-html="security.setup.qr_svg"></div>
+                      <div class="rounded-xl bg-[var(--glass-surface)] px-3 py-2 flex items-center gap-2">
+                        <span class="font-mono-code text-[11.5px] break-all flex-1" x-text="security.setup.secret"></span>
+                        <button @click="copyText(security.setup.secret)" class="glass-btn px-2.5 py-1 rounded-lg text-[11px] shrink-0" x-text="t('copy')"></button>
+                      </div>
+                      <a :href="security.setup.uri" class="block text-center glass-btn py-2 rounded-xl text-[11px] font-semibold text-sky-400" x-text="t('tfaOpenApp')"></a>
+                      <p class="text-[11px] text-muted" x-text="t('tfaStep2')"></p>
+                      <div class="flex gap-2">
+                        <input type="text" inputmode="numeric" autocomplete="one-time-code" x-model="security.code" placeholder="123456"
+                               class="glass-input flex-1 rounded-xl px-3 py-2 text-sm tracking-[0.3em] text-center font-semibold" />
+                        <button @click="enable2fa()" :disabled="security.busy || (security.code || '').length < 6"
+                                class="glass-btn-primary px-4 rounded-xl text-xs font-semibold disabled:opacity-50" x-text="t('tfaEnable')"></button>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </template>
+
+              <!-- Đã bật -->
+              <template x-if="security.totp_enabled">
+                <div class="space-y-3">
+                  <p class="text-[11px] text-muted" x-text="`${t('tfaCodesLeft')}: ${security.backup_codes_left}`"></p>
+                  <div class="flex gap-2">
+                    <input type="text" x-model="security.regenCode" :placeholder="t('tfaCodePh')"
+                           class="glass-input flex-1 min-w-0 rounded-xl px-3 py-2 text-xs text-center" />
+                    <button @click="regenBackupCodes()" :disabled="security.busy || !security.regenCode"
+                            class="glass-btn px-3 rounded-xl text-[11px] font-semibold disabled:opacity-50 shrink-0" x-text="t('tfaNewCodes')"></button>
+                  </div>
+                  <div class="rounded-xl p-3 bg-rose-500/10 border border-rose-500/25 space-y-2">
+                    <p class="text-[11px] font-semibold text-rose-300" x-text="t('tfaDisableTitle')"></p>
+                    <input type="password" x-model="security.disablePw" :placeholder="t('pwCurrent')" autocomplete="current-password"
+                           class="glass-input w-full rounded-xl px-3 py-2 text-xs" />
+                    <input type="text" x-model="security.disableCode" :placeholder="t('tfaCodePh')"
+                           class="glass-input w-full rounded-xl px-3 py-2 text-xs text-center" />
+                    <button @click="disable2fa()" :disabled="security.busy || !security.disablePw || !security.disableCode"
+                            class="glass-btn w-full py-2 rounded-xl text-[11px] font-semibold text-rose-400 disabled:opacity-50" x-text="t('tfaDisable')"></button>
+                  </div>
+                </div>
+              </template>
+            </div>
+
+            <!-- Đổi mật khẩu -->
+            <div class="glass-inset rounded-2xl p-4 space-y-2.5">
+              <p class="font-semibold text-[13px]" x-text="t('pwTitle')"></p>
+              <input type="password" x-model="pwForm.current" :placeholder="t('pwCurrent')" autocomplete="current-password" class="glass-input w-full rounded-xl px-3 py-2 text-xs" />
+              <input type="password" x-model="pwForm.next" :placeholder="t('pwNew')" autocomplete="new-password" class="glass-input w-full rounded-xl px-3 py-2 text-xs" />
+              <input type="password" x-model="pwForm.confirm" :placeholder="t('pwConfirm')" autocomplete="new-password" class="glass-input w-full rounded-xl px-3 py-2 text-xs" />
+              <p class="text-[10.5px] text-muted" x-text="t('pwNote')"></p>
+              <button @click="changePassword()" :disabled="pwForm.busy || !pwForm.current || !pwForm.next"
+                      class="glass-btn-primary w-full py-2.5 rounded-xl text-xs font-semibold disabled:opacity-50" x-text="t('pwSave')"></button>
+            </div>
+
+            <!-- Nhật ký hoạt động -->
+            <div class="glass-inset rounded-2xl p-4 space-y-2.5">
+              <div class="flex items-center justify-between">
+                <p class="font-semibold text-[13px]" x-text="t('auditTitle')"></p>
+                <button @click="loadAudit()" class="glass-btn px-2.5 py-1 rounded-lg text-[11px]" x-text="t('recheck')"></button>
+              </div>
+              <p x-show="!auditItems.length" class="text-[11px] text-subtle" x-text="t('auditEmpty')"></p>
+              <div class="space-y-1.5">
+                <template x-for="a in auditItems" :key="a.id">
+                  <div class="rounded-xl bg-[var(--glass-surface)] px-3 py-2 flex items-start gap-2.5">
+                    <span class="mt-1 w-1.5 h-1.5 rounded-full shrink-0" :class="a.ok ? 'bg-emerald-400' : 'bg-rose-400'"></span>
+                    <div class="min-w-0 flex-1">
+                      <p class="text-[11.5px] font-semibold truncate">
+                        <span x-text="actionLabel(a.action)"></span><span x-show="a.target" class="text-muted font-normal" x-text="` • ${a.target}`"></span>
+                      </p>
+                      <p class="text-[10.5px] text-subtle font-mono-code truncate" x-text="`${a.username || '—'} • ${a.ip || '—'}${a.detail ? ' • ' + a.detail : ''}`"></p>
+                    </div>
+                    <span class="text-[10px] text-subtle shrink-0" x-text="utcToLocal(a.ts)"></span>
+                  </div>
+                </template>
+              </div>
+            </div>
           </div>
         </template>
 
@@ -1564,7 +1749,7 @@
                   </div>
                   <p class="font-mono-code text-[11px] text-muted mt-1" x-text="`${h.from_version || '?'} → ${h.to_version || '?'}`"></p>
                 </div>
-                <span class="text-[10px] text-subtle shrink-0" x-text="h.created_at"></span>
+                <span class="text-[10px] text-subtle shrink-0" x-text="utcToLocal(h.created_at)"></span>
               </div>
             </template>
           </div>
@@ -1646,6 +1831,8 @@
 
       <!-- Sort chips -->
       <div class="flex items-center gap-1.5 pb-2.5 overflow-x-auto no-scrollbar">
+        <button @click="toggleHistory('')" class="shrink-0 px-3 py-1.5 rounded-xl text-[11px] font-semibold transition"
+                :class="histTotalOpen ? 'glass-btn-update' : 'glass-btn text-muted'" x-text="t('tm24h')"></button>
         <template x-for="opt in [['cpu','CPU'],['mem','RAM'],['name', t('tmName')]]" :key="opt[0]">
           <button @click="taskSort = opt[0]"
                   class="shrink-0 px-3 py-1.5 rounded-xl text-[11px] font-semibold transition"
@@ -1656,6 +1843,24 @@
 
       <div class="flex-1 overflow-y-auto -mx-1 px-1 space-y-2.5 min-h-0">
         <div x-show="!taskModal.data" class="py-10 text-center text-xs text-muted" x-text="t('connectingLogs')"></div>
+        <template x-if="histTotalOpen">
+        <div class="glass-inset rounded-2xl p-3 space-y-2">
+          <p class="text-[11px] font-semibold" x-text="t('tmTotal24h')"></p>
+          <template x-if="(histData['__total__'] || []).length < 2"><p class="text-[11px] text-subtle" x-text="t('tmNoHistory')"></p></template>
+          <template x-if="(histData['__total__'] || []).length >= 2">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <p class="text-[10px] text-muted flex justify-between"><span>CPU</span><span class="font-mono-code" x-text="`avg ${histStats(histData['__total__'], 'cpu_pct').avg.toFixed(1)}% • max ${histStats(histData['__total__'], 'cpu_pct').max.toFixed(1)}%`"></span></p>
+                <svg viewBox="0 0 300 56" preserveAspectRatio="none" class="w-full h-14 mt-1"><polyline fill="none" stroke="#38bdf8" stroke-width="2" vector-effect="non-scaling-stroke" :points="sparkPoints(histData['__total__'], 'cpu_pct')"/></svg>
+              </div>
+              <div>
+                <p class="text-[10px] text-muted flex justify-between"><span>RAM</span><span class="font-mono-code" x-text="`max ${formatBytesJs(histStats(histData['__total__'], 'mem_bytes').max)}`"></span></p>
+                <svg viewBox="0 0 300 56" preserveAspectRatio="none" class="w-full h-14 mt-1"><polyline fill="none" stroke="#a78bfa" stroke-width="2" vector-effect="non-scaling-stroke" :points="sparkPoints(histData['__total__'], 'mem_bytes')"/></svg>
+              </div>
+            </div>
+          </template>
+        </div>
+        </template>
 
         <template x-for="row in taskRows" :key="row.id">
           <div class="glass-inset rounded-2xl p-3 space-y-2.5" :class="row.status !== 'running' ? 'opacity-70' : ''">
@@ -1688,10 +1893,34 @@
                   <div class="flex items-baseline justify-between text-[10.5px]"><span class="text-muted">RAM</span><span class="font-mono-code font-semibold" x-text="row.mem_text"></span></div>
                   <div class="h-1.5 rounded-full bg-[var(--glass-surface-hover)] overflow-hidden mt-1"><div class="h-full rounded-full bg-violet-400 transition-all duration-500" :style="`width:${Math.min(100, row.mem_pct)}%`"></div></div>
                 </div>
-                <p class="text-[10.5px] text-muted font-mono-code col-span-2 flex items-center justify-between">
+                <p class="text-[10.5px] text-muted font-mono-code col-span-2 flex items-center justify-between gap-2">
                   <span x-text="`↓ ${row.net_rx_text}  ↑ ${row.net_tx_text}`"></span>
-                  <span x-text="`PIDs ${row.pids}`"></span>
+                  <span class="flex items-center gap-2">
+                    <span x-text="`PIDs ${row.pids}`"></span>
+                    <button @click="toggleHistory(row.name)" class="glass-btn px-2 py-0.5 rounded-md text-[10px] font-semibold"
+                            :class="histOpen[row.name] ? 'text-amber-300' : 'text-sky-400'" x-text="t('tm24h')"></button>
+                  </span>
                 </p>
+                <template x-if="histOpen[row.name]">
+                  <div class="col-span-2">
+                  <div class="glass-inset rounded-2xl p-3 space-y-2">
+          <p class="text-[11px] font-semibold" x-text="t('tm24h')"></p>
+          <template x-if="(histData[row.name] || []).length < 2"><p class="text-[11px] text-subtle" x-text="t('tmNoHistory')"></p></template>
+          <template x-if="(histData[row.name] || []).length >= 2">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <p class="text-[10px] text-muted flex justify-between"><span>CPU</span><span class="font-mono-code" x-text="`avg ${histStats(histData[row.name], 'cpu_pct').avg.toFixed(1)}% • max ${histStats(histData[row.name], 'cpu_pct').max.toFixed(1)}%`"></span></p>
+                <svg viewBox="0 0 300 56" preserveAspectRatio="none" class="w-full h-14 mt-1"><polyline fill="none" stroke="#38bdf8" stroke-width="2" vector-effect="non-scaling-stroke" :points="sparkPoints(histData[row.name], 'cpu_pct')"/></svg>
+              </div>
+              <div>
+                <p class="text-[10px] text-muted flex justify-between"><span>RAM</span><span class="font-mono-code" x-text="`max ${formatBytesJs(histStats(histData[row.name], 'mem_bytes').max)}`"></span></p>
+                <svg viewBox="0 0 300 56" preserveAspectRatio="none" class="w-full h-14 mt-1"><polyline fill="none" stroke="#a78bfa" stroke-width="2" vector-effect="non-scaling-stroke" :points="sparkPoints(histData[row.name], 'mem_bytes')"/></svg>
+              </div>
+            </div>
+          </template>
+        </div>
+                  </div>
+                </template>
               </div>
             </template>
 
