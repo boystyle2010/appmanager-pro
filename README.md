@@ -177,8 +177,8 @@ docker compose pull && docker compose up -d
 One GitHub Actions workflow ([`release.yml`](.github/workflows/release.yml)) runs **every day**, on **every push to `main`**, and **on demand**:
 
 1. **Checks the source** — Python syntax, internal imports, Jinja templates, static files and JavaScript ([`scripts/check_project.py`](scripts/check_project.py)).
-2. **Looks for updates** ([`scripts/auto_update.py`](scripts/auto_update.py)) of the Python base image, Docker CLI, Python packages and frontend libraries — same major version only (patch-only for `0.x` packages).
-3. **Verifies** the updated version installs and starts, then **commits via the GitHub API**, so commits are signed by GitHub (*Verified*).
+2. **Looks for updates** ([`scripts/auto_update.py`](scripts/auto_update.py)) of the Python base image, Docker CLI, Python packages and frontend libraries — **always the newest stable release, including new major versions** (Tailwind CSS stays on v3, whose in-browser build the UI relies on).
+3. **Verifies** the result by building the real Docker image and starting the app inside it ([`scripts/verify.sh`](scripts/verify.sh)). If the newest versions fail, it automatically retries with same-major updates only and notes the held-back upgrades in the changelog. The result is **committed via the GitHub API**, so commits are signed by GitHub (*Verified*).
 4. **Builds** the multi-arch image (`linux/amd64`, `linux/arm64`), pushes it to GHCR and **signs it** with a GitHub build-provenance attestation.
 5. **Publishes a GitHub Release** whose notes come from `CHANGELOG.md` (Component & Version Matrix, Package Integrity, What's Changed).
 
@@ -208,6 +208,7 @@ appmanager-pro/
 ├── scripts/
 │   ├── auto_update.py              # finds new versions & writes the changelog
 │   ├── check_project.py            # pre-build source checks
+│   ├── verify.sh                   # builds the image & starts the app before committing updates
 │   ├── fetch_vendor.py             # bundles UI libraries & fonts at build time
 │   └── signed_commit.py            # commits through the GitHub API (signed)
 └── app/
