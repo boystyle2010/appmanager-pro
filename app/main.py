@@ -270,10 +270,8 @@ async def pwa_manifest():
 async def dashboard_page(request: Request):
     if not has_admin_user() or not get_current_user_optional(request):
         return RedirectResponse(url="/login", status_code=302)
-    return templates.TemplateResponse(
-        "index.html",
-        {"request": request, "version": app.version},
-    )
+    # Cú pháp mới (request đứng đầu): bắt buộc từ Starlette 1.0, vẫn chạy với bản cũ
+    return templates.TemplateResponse(request, "index.html", {"version": app.version})
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -281,10 +279,7 @@ async def login_page(request: Request):
     is_setup = not has_admin_user()
     if not is_setup and get_current_user_optional(request):
         return RedirectResponse(url="/", status_code=302)
-    return templates.TemplateResponse(
-        "auth.html",
-        {"request": request, "is_setup": is_setup, "version": app.version},
-    )
+    return templates.TemplateResponse(request, "auth.html", {"is_setup": is_setup, "version": app.version})
 
 
 # ---------------- Auth APIs ----------------
