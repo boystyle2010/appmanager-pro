@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.9.3
+
+*Released: 2026-11-22*
+
+### 📦 Component & Version Matrix
+
+- **App Release:** Bumped from `v0.9.2` ➡️ `v0.9.3`
+- **Supported Architectures:** `linux/amd64` (x86_64) & `linux/arm64` (ARM64) *(Multi-arch GHCR Image)*
+- **Python Base Image:** `python 3.15.2`
+- **Docker CLI:** `docker 29.10.0`
+- **Core Python Stack:** `FastAPI 0.165.0` • `Uvicorn 0.54.0` • `Docker SDK 7.2.0` • `ruamel.yaml 0.19.1` • `Argon2 25.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.28.1` • `APScheduler 3.11.3` • `segno 1.6.6`
+- **Frontend Libraries:** `Alpine.js 3.17.5` • Tailwind CSS `4.3.3` ➡️ `4.3.5` • `marked 18.2.1` • `DOMPurify 3.4.18`
+
+### 🚀 What's Changed
+
+- Upgraded **Tailwind CSS** to `4.3.5`.
+- UI moved to Tailwind CSS v4, compiled when the image is built (faster page load, no in-browser CSS compiler)
+- Debian security updates are applied during the image build
+
 ## 0.9.2
 
 *Released: 2026-11-22*

@@ -3,7 +3,7 @@ FROM docker:29.10.0-cli AS docker-cli
 
 # Biên dịch Tailwind CSS v4 một lần trên máy build (CSS dùng chung cho mọi kiến trúc)
 FROM --platform=$BUILDPLATFORM node:lts-slim AS css
-ARG TAILWIND_VERSION=4.3.3
+ARG TAILWIND_VERSION=4.3.5
 WORKDIR /src
 RUN npm init -y >/dev/null \
     && npm install --no-audit --no-fund --loglevel=error tailwindcss@${TAILWIND_VERSION} @tailwindcss/cli@${TAILWIND_VERSION}
