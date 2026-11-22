@@ -10,7 +10,11 @@ Tự động kiểm tra & nâng các thành phần cốt lõi của AppManager P
   python scripts/auto_update.py integrity --image ghcr.io/o/r --digest sha256:... --version 0.5.1
       Chèn mục "Package Integrity" (có digest) vào CHANGELOG.md và ghi release/body.md cho GitHub Release.
 
-Quy tắc an toàn: chỉ nâng trong cùng major; với bản 0.x chỉ nâng bản vá (0.115.x -> 0.115.y).
+Chính sách nâng cấp (biến môi trường UPDATE_POLICY):
+  latest (mặc định) — nâng mọi thành phần lên bản ổn định MỚI NHẤT, kể cả major mới.
+  safe              — chỉ nâng trong cùng major (0.x: chỉ bản vá). Workflow dùng chế độ này làm phương án dự phòng
+                      khi bản "latest" không qua được bước kiểm tra.
+Ngoại lệ: Tailwind CSS giữ ở v3 (v4 không có bản chạy trong trình duyệt tương thích, cần viết lại giao diện).
 """
 from __future__ import annotations
 
@@ -33,7 +37,9 @@ VERSION_FILE = ROOT / "app/core/docker_client.py"
 CHANGELOG = ROOT / "CHANGELOG.md"
 NEXT_NOTES = ROOT / "RELEASE_NOTES_NEXT.md"  # ghi chú tự viết cho bản phát hành kế tiếp (tuỳ chọn)
 OUT_DIR = ROOT / "release"
-PY_TARGET = (3, 12)
+PY_TARGET = [3, 12]  # được cập nhật theo image Python trong Dockerfile
+POLICY = (os.environ.get("UPDATE_POLICY") or "latest").strip().lower()
+PINNED_MAJOR = {"tailwindcss": 3}
 
 PY_NAMES = {
     "fastapi": "FastAPI", "uvicorn": "Uvicorn", "docker": "Docker SDK", "ruamel.yaml": "ruamel.yaml",
@@ -59,18 +65,25 @@ def is_stable(v: str) -> bool:
     return bool(re.fullmatch(r"\d+(\.\d+){1,3}", v))
 
 
-def pick_newer(current: str, candidates: list[str]) -> str:
-    """Bản mới nhất được phép nâng: cùng major; nếu major = 0 thì cùng cả minor (chỉ nâng bản vá)."""
+def pick_newer(current: str, candidates: list[str], pin_major: int | None = None) -> str:
+    """
+    Chọn bản ổn định mới nhất.
+    - POLICY=latest: mọi bản mới hơn (kể cả major mới), trừ khi pin_major giới hạn.
+    - POLICY=safe: cùng major; nếu major = 0 thì cùng cả minor.
+    """
     cur = vkey(current)
     ok = []
     for c in candidates:
         if not is_stable(c):
             continue
         k = vkey(c)
-        if k[0] != cur[0]:
+        if pin_major is not None and k[0] != pin_major:
             continue
-        if cur[0] == 0 and k[:2] != cur[:2]:
-            continue
+        if POLICY == "safe":
+            if k[0] != cur[0]:
+                continue
+            if cur[0] == 0 and k[:2] != cur[:2]:
+                continue
         ok.append(c)
     best = max(ok, key=vkey, default=current)
     return best if vkey(best) > cur else current
@@ -147,7 +160,7 @@ def check_npm_libs(fetch=None) -> list[dict]:
             continue
         cur = m.group(1)
         try:
-            new = pick_newer(cur, npm_versions(pkg, fetch))
+            new = pick_newer(cur, npm_versions(pkg, fetch), PINNED_MAJOR.get(pkg))
         except Exception as exc:
             print(f"WARN npm {pkg}: {exc}")
             new = cur
@@ -164,22 +177,26 @@ def check_base_images(fetch=None) -> list[dict]:
     text = DOCKERFILE.read_text(encoding="utf-8")
     changes = []
 
-    def bump(repo: str, suffix: str, label: str, keep_minor: bool, text: str) -> str:
+    def bump(repo: str, suffix: str, label: str, text: str) -> str:
         m = re.search(rf"{repo}:(\d+(?:\.\d+){{0,2}}){re.escape(suffix)}\b", text)
         if not m:
             return text
         cur_tag = m.group(1)
         parts = cur_tag.split(".")
-        prefix = ".".join(parts[: 2 if keep_minor else 1])
+        # latest: mọi phiên bản; safe: python giữ major.minor, docker giữ major
+        if POLICY == "safe":
+            prefix = ".".join(parts[: 2 if repo == "python" else 1]) + "."
+        else:
+            prefix = ""
         try:
-            names = docker_tags(repo, prefix + ".", fetch)
+            names = docker_tags(repo, prefix or suffix.lstrip("-"), fetch)
         except Exception as exc:
             print(f"WARN Docker Hub {repo}: {exc}")
             names = []
         cands = []
         for n in names:
-            mm = re.fullmatch(rf"({re.escape(prefix)}\.\d+(?:\.\d+)?){re.escape(suffix)}", n)
-            if mm and len(mm.group(1).split(".")) == (3 if keep_minor else 3):
+            mm = re.fullmatch(rf"(\d+\.\d+\.\d+){re.escape(suffix)}", n)
+            if mm and mm.group(1).startswith(prefix):
                 cands.append(mm.group(1))
         full_cur = cur_tag if len(parts) == 3 else None
         best = max(cands, key=vkey, default=None)
@@ -187,14 +204,18 @@ def check_base_images(fetch=None) -> list[dict]:
             changes.append({"group": "base", "id": repo, "name": label, "old": cur_tag, "new": cur_tag})
             return text
         new_tag = cur_tag
-        if best and (full_cur is None or vkey(best) > vkey(full_cur)):
+        if full_cur is None or vkey(best) > vkey(full_cur):
             new_tag = best
         changes.append({"group": "base", "id": repo, "name": label, "old": cur_tag if full_cur else f"{cur_tag} (floating)", "new": new_tag})
         return text.replace(f"{repo}:{cur_tag}{suffix}", f"{repo}:{new_tag}{suffix}")
 
-    text = bump("python", "-slim", "Python Base Image", True, text)
-    text = bump("docker", "-cli", "Docker CLI", False, text)
+    text = bump("python", "-slim", "Python Base Image", text)
+    text = bump("docker", "-cli", "Docker CLI", text)
     DOCKERFILE.write_text(text, encoding="utf-8")
+    # Thư viện Python phải tương thích với bản Python của image
+    pm = re.search(r"python:(\d+)\.(\d+)", text)
+    if pm:
+        PY_TARGET[0], PY_TARGET[1] = int(pm.group(1)), int(pm.group(2))
     return changes
 
 
@@ -249,6 +270,8 @@ def build_section(version: str, prev: str, changes: list[dict], others: list[str
         lines.append(f"- Upgraded **{c['name']}** to `{c['new']}`.")
     for o in others:
         lines.append(f"- {o}")
+    if os.environ.get("HELD_BACK", "").lower() == "true":
+        lines.append("- Some major upgrades were held back because the automatic start-up test failed with them; only same-major updates were applied.")
     if not bumped and not others:
         lines.append("- Maintenance release.")
     return "\n".join(lines).rstrip() + "\n"
@@ -278,8 +301,10 @@ def cmd_check(args) -> int:
     force = os.environ.get("FORCE_RELEASE", "").lower() == "true"
     wanted = (os.environ.get("RELEASE_VERSION") or "").strip().lstrip("v")
     notes = read_next_notes()
-    if not bumped and not force and not wanted and not notes:
+    # Ghi chú tự viết KHÔNG tự tạo bản phát hành; chỉ được dùng khi có bản phát hành (cập nhật thành phần / chạy tay)
+    if not bumped and not force and not wanted:
         set_output("changed", "false")
+        set_output("python_version", f"{PY_TARGET[0]}.{PY_TARGET[1]}")
         return 0
     prev = read_app_version()
     if wanted:
@@ -300,6 +325,7 @@ def cmd_check(args) -> int:
         files.append(NEXT_NOTES)
     (OUT_DIR / "changed_files.txt").write_text("\n".join(str(f.relative_to(ROOT)) for f in files) + "\n", encoding="utf-8")
     set_output("changed", "true")
+    set_output("python_version", f"{PY_TARGET[0]}.{PY_TARGET[1]}")
     set_output("version", version)
     set_output("prev_version", prev)
     set_output("summary", "; ".join(f"{c['name']} {c['old']} -> {c['new']}" for c in bumped)[:900] or "maintenance")
@@ -314,9 +340,9 @@ def cmd_integrity(args) -> int:
     section = m.group(0)
     block = (
         "### 🔐 Package Integrity (GHCR Multi-Arch)\n\n"
-        f"- **Version Tag:** `{args.image}:{args.version}` (`{args.digest}`)\n"
-        f"- **Latest Tag:** `{args.image}:latest`\n"
-        f"- **Provenance:** signed by GitHub — verify with `gh attestation verify oci://{args.image}@{args.digest} -R {args.repo}`\n"
+        f"- **Image:** `{args.image.split('/', 1)[-1]}:{args.version}`\n"
+        f"- **Digest:** `{args.digest[:19]}…`\n"
+        f"- **Provenance:** ✅ Signed by GitHub · [View attestation](https://github.com/{args.repo}/attestations)\n"
         + (f"- **Vulnerability Scan (Trivy):** {args.scan}\n" if args.scan else "")
         + "\n"
     )
