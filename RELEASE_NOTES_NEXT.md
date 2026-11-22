@@ -1,0 +1,18 @@
+# Ghi chú cho bản phát hành kế tiếp — mỗi dòng bắt đầu bằng "- "
+- First stable release 🎉
+- Two-factor authentication (TOTP) with QR setup and one-time backup codes
+- Change password from Settings → Security (signs out other devices)
+- Activity log: sign-ins, failed attempts, updates, uninstalls, compose edits, cleanups
+- Login lockout can no longer be bypassed with fake X-Forwarded-For headers; lockout survives restarts (`TRUSTED_PROXIES`)
+- Security headers (CSP, clickjacking protection) and Origin checks on WebSockets
+- Optional app data backup before each update, with one-click restore
+- 24-hour CPU/RAM charts in Task Manager
+- Trivy vulnerability scan for every image build
+- CSRF protection: API writes and WebSockets must come from the app's own page
+- Update checks use HEAD requests first, so they no longer use up the Docker Hub pull limit
+- Failed compose edits now restart the app with the previous file instead of leaving it stopped
+- Health check after updates ignores restarts that happened before the update (no more false rollbacks)
+- Only one update per app can run at a time
+- Live Logs no longer leak connections when closed on quiet containers
+- Backup restore keeps file permissions and owners
+- Daily CI runs only rebuild the image when something changed

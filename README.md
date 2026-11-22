@@ -53,13 +53,18 @@ It runs as a single container, ships a mobile-first "liquid glass" UI in English
 - **Smart uninstall** — four levels: container, CasaOS compose folder, Docker image, and (with confirmation) app data in `/DATA/AppData`.
 
 ### System
-- **Task Manager** — live CPU, RAM, network and PIDs per container over WebSocket.
+- **Task Manager** — live CPU, RAM, network and PIDs per container over WebSocket, plus **24-hour CPU/RAM charts** (sampled every 5 minutes, kept 7 days).
 - **Storage / SSD cleanup** — disk-usage breakdown (images, build cache, containers, volumes), selective prune with size estimate.
 - **Scheduled SSD cleanup** — daily / weekly / monthly cleanup of images and build cache (containers and volumes are never removed automatically).
 - **Update history** — every update, rollback and cleanup is logged.
+- **App data backups** — optional `.tar.gz` backup of the app's `/DATA/AppData` folder before each update, with size limit, retention and one-click restore.
 
 ### Security & UI
-- **Admin account** with Argon2id password hashing, signed session cookies (`HttpOnly`, `SameSite=Lax`, `Secure` over HTTPS) and **IP lockout** after 5 failed logins (15 minutes).
+- **Admin account** with Argon2id password hashing, signed session cookies (`HttpOnly`, `SameSite=Lax`, `Secure` over HTTPS) and **IP lockout** after 5 failed logins (15 minutes, persisted across restarts). Proxy headers are only trusted from configured proxies, so the lockout cannot be bypassed with fake IPs.
+- **Two-factor authentication (TOTP)** with QR setup and one-time backup codes; works with Google Authenticator, 1Password, iOS Passwords and others.
+- **Password change** from the UI (signs out other devices).
+- **Activity log** — sign-ins, failed attempts, updates, uninstalls, compose edits, cleanups and settings changes with user and IP.
+- **Hardened HTTP** — Content-Security-Policy, clickjacking protection, `nosniff`, and Origin checks on every API write and WebSocket (CSRF protection).
 - **Glassmorphic, mobile-first UI**, dark/light theme, English & Vietnamese, installable as a PWA.
 - **No runtime CDN dependency** — Tailwind, Alpine.js, marked, DOMPurify and fonts are bundled into the image at build time, with automatic CDN fallback.
 
@@ -127,7 +132,10 @@ docker compose pull && docker compose up -d
 | `CASAOS_APPS_DIR` | `/var/lib/casaos/apps` | Where CasaOS stores app compose files. |
 | `APPDATA_DIR` | `/DATA/AppData` | Root folder for app data (used by uninstall & compose discovery). |
 | `APP_DATA_DIR` | `/app/data` | AppManager Pro's own database & backups (inside the container). |
-| `RESET_AUTH` | `false` | Set to `true` and restart to reset the admin account; set back to `false` afterwards. |
+| `RESET_AUTH` | `false` | Set to `true` and restart to reset the admin account (also removes 2FA); set back to `false` afterwards. |
+| `TRUSTED_PROXIES` | `127.0.0.0/8,::1/128,172.16.0.0/12` | Comma-separated IPs/CIDRs of reverse proxies whose `X-Forwarded-For` / `CF-Connecting-IP` headers are trusted. The default covers proxies on the same host (e.g. cloudflared, Nginx Proxy Manager in Docker). Add your proxy's IP if it runs on another machine. |
+| `TRUST_CF_CONNECTING_IP` | `false` | Set to `true` only if requests reach the app exclusively through Cloudflare (Tunnel); then the `CF-Connecting-IP` header is used as the client IP. |
+| `ALLOWED_ORIGINS` | — | Extra hostnames allowed to call the API/WebSockets when your reverse proxy rewrites the `Host` header (e.g. `am.example.com`). |
 
 ### Volumes
 
@@ -148,17 +156,20 @@ docker compose pull && docker compose up -d
 | Auto-rollback | on | Restore the previous version if the update fails the health check. |
 | Health check time | 25 s | How long the new container is watched (10–120 s). |
 | Scheduled SSD cleanup | off | Daily / weekly / monthly cleanup of images & build cache. |
+| Back up app data before updates | off | Archive `/DATA/AppData/<app>` before each update (max size & number kept are configurable). |
 | GitHub token | — | Optional; raises the GitHub API limit (60 → 5,000 requests/hour) and allows private repos. |
+| Security tab | — | Two-factor authentication, password change, activity log. |
 
 ## 🧭 Usage
 
 | Where | What you can do |
 |---|---|
-| **Dashboard** | Search, filter (All / Updates / Running / Stopped), *Update All*, re-check registries. |
+| **Dashboard** | Search, sort (smart, name A–Z / Z–A, running or stopped first), filter (All / Updates / Running / Stopped), *Update All*, re-check registries. |
 | **App card → version row** | Open update details: changelog, auto-update toggle, skip version, *Update App*. |
 | **App card → ⋯** | Logs, start/stop/restart, edit compose, uninstall. |
 | **Header → activity icon** | Task Manager (live resources, restart/stop/kill). |
-| **Header → ⚙️** | General settings, Storage / SSD cleanup, update history. |
+| **Header → ⚙️** | General settings, Storage / SSD cleanup & app data backups, Security (2FA, password, activity log), update history. |
+| **Task Manager → 24h** | CPU/RAM charts for all containers or a single one. |
 | **＋ button** | Deploy a new app from YAML or the quick form. |
 
 ## 🤖 Automated builds & releases
@@ -179,7 +190,10 @@ Verify an image:
 gh attestation verify oci://ghcr.io/boystyle2010/appmanager-pro:latest -R boystyle2010/appmanager-pro
 ```
 
-Force a release without component updates: **Actions → Auto Update, Build & Release → Run workflow → force_release**.
+6. **Scans the image with Trivy** (critical/high, fixable only) and adds the result to the release notes.
+
+**Manual releases:** *Actions → Auto Update, Build & Release → Run workflow* — tick `force_release`, or type a version such as `1.0.0` in `version`.
+The changelog only lists **component updates** (base image, Python packages, frontend libraries) — editing or uploading files on GitHub does not add entries. To add your own notes to the next release, write bullet lines in `RELEASE_NOTES_NEXT.md`; they are moved into the changelog automatically and the file is cleared.
 
 ## 🗂️ Project structure
 
@@ -199,7 +213,8 @@ appmanager-pro/
 └── app/
     ├── main.py                     # FastAPI app: pages, REST API, WebSockets
     ├── core/
-    │   ├── auth.py                 # Argon2 login, sessions, IP lockout
+    │   ├── app_backup.py           # app data backups & restore
+    │   ├── auth.py                 # Argon2 login, sessions, lockout, TOTP 2FA
     │   ├── compose_manager.py      # compose discovery, editor, backups, uninstall
     │   ├── database.py             # SQLite settings, cache & history
     │   ├── docker_client.py        # container listing & actions
@@ -224,7 +239,11 @@ All endpoints except login/setup require the session cookie.
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/api/auth/setup` | Create the first admin account |
-| `POST` | `/api/auth/login` · `/api/auth/logout` | Sign in / out |
+| `POST` | `/api/auth/login` · `/api/auth/logout` | Sign in / out (`otp` field when 2FA is on) |
+| `GET` | `/api/auth/security` | 2FA status |
+| `POST` | `/api/auth/2fa/{setup,enable,disable,backup-codes}` | Manage two-factor authentication |
+| `POST` | `/api/auth/password` | Change password |
+| `GET` | `/api/audit` | Activity log |
 | `GET` | `/api/apps` | List apps with update status |
 | `POST` | `/api/updates/check` | Re-check all registries |
 | `GET` | `/api/apps/{name}/details` | Changelog & update details |
@@ -237,6 +256,8 @@ All endpoints except login/setup require the session cookie.
 | `GET` | `/api/system/storage` | Docker disk usage |
 | `POST` | `/api/system/prune` | Prune images / cache / containers / volumes |
 | `GET` · `POST` | `/api/settings` | Read / save settings & history |
+| `GET` | `/api/system/history?container=&hours=` | CPU/RAM samples (all containers when `container` is empty) |
+| `GET` | `/api/backups` · `POST` `/api/backups/{restore,delete}` | App data backups |
 
 </details>
 
@@ -270,13 +291,15 @@ python scripts/check_project.py
 node --check app/static/js/app.js && node --check app/static/js/i18n.js
 ```
 
-Commit messages starting with `feat:` or `fix:` are listed under *What's Changed* in the next release.
+Commit messages do not appear in the changelog; use `RELEASE_NOTES_NEXT.md` for release notes.
 
 ## 🔒 Security notes
 
 - Mounting `/var/run/docker.sock` gives the app **root-equivalent control** of the host. Keep it on your LAN or behind a VPN (e.g. Tailscale) or an authenticated tunnel (e.g. Cloudflare Access) — do not expose it directly to the internet.
 - Use HTTPS (reverse proxy) when accessing it remotely so session cookies are marked `Secure`.
-- Lost the admin password? Set `RESET_AUTH=true`, restart, create a new account, then set it back to `false`.
+- Turn on **two-factor authentication** (Settings → Security) and keep the backup codes somewhere safe.
+- If you use a reverse proxy on another machine, add its IP to `TRUSTED_PROXIES`; otherwise every request appears to come from the proxy.
+- Lost the admin password or your 2FA device and backup codes? Set `RESET_AUTH=true`, restart, create a new account, then set it back to `false`.
 
 ## ❓ Troubleshooting
 
@@ -287,6 +310,10 @@ Commit messages starting with `feat:` or `fix:` are listed under *What's Changed
 | Update failed and was rolled back | Open **Live Logs** of the app and check **Settings → History** for the reason. |
 | UI looks unstyled | Hard-refresh the page; the app falls back to CDNs if bundled libraries are missing. |
 | Container restarts with `ModuleNotFoundError` | A file in `app/core/` is missing or misnamed — CI's *Check source* step reports which one. |
+| Everyone gets locked out together | All requests come through one proxy that is not trusted — add it to `TRUSTED_PROXIES`. |
+| 2FA codes are always rejected | Check that the phone's and server's clocks are correct (`TZ` does not matter, the clock does). |
+| "Cross-site request blocked" behind a reverse proxy | The proxy changes the `Host` header — add your domain to `ALLOWED_ORIGINS` (or forward `Host` / `X-Forwarded-Host`). |
+| 24h chart says "Collecting data" | Samples are taken every 5 minutes; wait at least 10 minutes after starting. |
 
 ## 📝 Changelog
 
