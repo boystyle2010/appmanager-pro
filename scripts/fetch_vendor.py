@@ -16,7 +16,7 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 
 LIBS = {
     "tailwind.js": "https://cdn.tailwindcss.com/3.4.19",
-    "marked.min.js": "https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js",
+    "marked.min.js": "https://cdn.jsdelivr.net/npm/marked@18.2.1/marked.min.js",
     "purify.min.js": "https://cdn.jsdelivr.net/npm/dompurify@3.4.18/dist/purify.min.js",
     "alpine.min.js": "https://cdn.jsdelivr.net/npm/alpinejs@3.17.5/dist/cdn.min.js",
 }
