@@ -41,6 +41,7 @@ check("GET", "/api/settings", {200})
 check("GET", "/api/audit", {200})
 check("POST", "/api/auth/logout", {403}, headers={"Origin": "http://evil.example"})  # chống CSRF phải chặn
 check("GET", "/static/js/app.js", {200})
+check("GET", "/static/css/tailwind.css", {200})       # Tailwind v4 đã được biên dịch trong image
 
 if failures:
     print("\nSMOKE TEST FAILED:")

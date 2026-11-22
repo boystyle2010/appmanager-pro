@@ -39,16 +39,16 @@ NEXT_NOTES = ROOT / "RELEASE_NOTES_NEXT.md"  # ghi chú tự viết cho bản ph
 OUT_DIR = ROOT / "release"
 PY_TARGET = [3, 12]  # được cập nhật theo image Python trong Dockerfile
 POLICY = (os.environ.get("UPDATE_POLICY") or "latest").strip().lower()
-PINNED_MAJOR = {"tailwindcss": 3}
+PINNED_MAJOR: dict[str, int] = {}
 
 PY_NAMES = {
     "fastapi": "FastAPI", "uvicorn": "Uvicorn", "docker": "Docker SDK", "ruamel.yaml": "ruamel.yaml",
     "argon2-cffi": "Argon2", "itsdangerous": "itsdangerous", "jinja2": "Jinja2",
     "python-multipart": "python-multipart", "httpx": "HTTPX", "apscheduler": "APScheduler", "segno": "segno",
 }
-NPM_LIBS = {  # gói npm -> (tên hiển thị, regex bắt phiên bản trong fetch_vendor.py)
+NPM_LIBS = {  # gói npm -> (tên hiển thị, regex bắt phiên bản; tìm trong fetch_vendor.py, HTML và Dockerfile)
     "alpinejs": ("Alpine.js", r"alpinejs@(\d+\.\d+\.\d+)"),
-    "tailwindcss": ("Tailwind CSS", r"cdn\.tailwindcss\.com/(\d+\.\d+\.\d+)"),
+    "tailwindcss": ("Tailwind CSS", r"TAILWIND_VERSION=(\d+\.\d+\.\d+)"),
     "marked": ("marked", r"marked@(\d+\.\d+\.\d+)"),
     "dompurify": ("DOMPurify", r"dompurify@(\d+\.\d+\.\d+)"),
 }
@@ -152,10 +152,10 @@ def check_python_packages(fetch=None) -> list[dict]:
 
 
 def check_npm_libs(fetch=None) -> list[dict]:
-    texts = {f: f.read_text(encoding="utf-8") for f in [VENDOR, *HTML_FILES]}
+    texts = {f: f.read_text(encoding="utf-8") for f in [VENDOR, *HTML_FILES, DOCKERFILE]}
     changes = []
     for pkg, (disp, pattern) in NPM_LIBS.items():
-        m = re.search(pattern, texts[VENDOR])
+        m = next((mm for mm in (re.search(pattern, t) for t in texts.values()) if mm), None)
         if not m:
             continue
         cur = m.group(1)
@@ -164,9 +164,9 @@ def check_npm_libs(fetch=None) -> list[dict]:
         except Exception as exc:
             print(f"WARN npm {pkg}: {exc}")
             new = cur
-        if new != cur:
-            for f in texts:
-                texts[f] = re.sub(pattern.replace(r"(\d+\.\d+\.\d+)", re.escape(cur)), lambda mo: mo.group(0).replace(cur, new), texts[f])
+        # Ghi phiên bản mới vào MỌI chỗ nhắc tới thư viện (kể cả link CDN dự phòng đang lệch phiên bản)
+        for f in texts:
+            texts[f] = re.sub(pattern, lambda mo: mo.group(0).replace(mo.group(1), new), texts[f])
         changes.append({"group": "frontend", "id": pkg, "name": disp, "old": cur, "new": new})
     for f, t in texts.items():
         f.write_text(t, encoding="utf-8")

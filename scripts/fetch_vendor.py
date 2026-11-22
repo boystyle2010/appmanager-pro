@@ -15,7 +15,6 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
 
 LIBS = {
-    "tailwind.js": "https://cdn.tailwindcss.com/3.4.19",
     "marked.min.js": "https://cdn.jsdelivr.net/npm/marked@18.2.1/marked.min.js",
     "purify.min.js": "https://cdn.jsdelivr.net/npm/dompurify@3.4.18/dist/purify.min.js",
     "alpine.min.js": "https://cdn.jsdelivr.net/npm/alpinejs@3.17.5/dist/cdn.min.js",
@@ -34,12 +33,11 @@ def get(url: str) -> bytes:
 
 
 EXPECT = {  # chuỗi phải có trong file thì mới coi là hợp lệ (tránh lưu nhầm trang lỗi HTML)
-    "tailwind.js": b"tailwind",
     "marked.min.js": b"marked",
     "purify.min.js": b"DOMPurify",
     "alpine.min.js": b"Alpine",
 }
-FALLBACK_URLS = {"tailwind.js": "https://cdn.tailwindcss.com"}  # bản không ghim phiên bản
+FALLBACK_URLS: dict[str, str] = {}  # Tailwind v4 được biên dịch riêng trong Dockerfile
 
 
 def valid_js(name: str, data: bytes) -> bool:

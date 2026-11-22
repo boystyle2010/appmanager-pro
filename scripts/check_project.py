@@ -81,7 +81,7 @@ except ImportError:
 for tpl in sorted((APP / "templates").glob("*.html")):
     text = tpl.read_text(encoding="utf-8")
     for ref in set(re.findall(r'(?:src|href)="(/static/[^"?#]+)', text)):
-        if ref.startswith("/static/vendor/"):
+        if ref.startswith("/static/vendor/") or ref == "/static/css/tailwind.css":
             continue
         if not (APP / ref.lstrip("/")).exists():
             errors.append(f"{tpl.relative_to(ROOT)}: tham chiếu {ref} nhưng file không tồn tại")
