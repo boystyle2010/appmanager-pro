@@ -15,10 +15,10 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
 
 LIBS = {
-    "tailwind.js": "https://cdn.tailwindcss.com/3.4.17",
-    "marked.min.js": "https://cdn.jsdelivr.net/npm/marked@15.0.6/marked.min.js",
-    "purify.min.js": "https://cdn.jsdelivr.net/npm/dompurify@3.2.3/dist/purify.min.js",
-    "alpine.min.js": "https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js",
+    "tailwind.js": "https://cdn.tailwindcss.com/3.4.19",
+    "marked.min.js": "https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js",
+    "purify.min.js": "https://cdn.jsdelivr.net/npm/dompurify@3.4.18/dist/purify.min.js",
+    "alpine.min.js": "https://cdn.jsdelivr.net/npm/alpinejs@3.17.5/dist/cdn.min.js",
 }
 FONT_CSS = {
     "fonts.css": "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500"

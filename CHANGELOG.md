@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.5.1
+
+*Released: 2026-11-22*
+
+### 📦 Component & Version Matrix
+
+- **App Release:** Bumped from `v0.5.0` ➡️ `v0.5.1`
+- **Supported Architectures:** `linux/amd64` (x86_64) & `linux/arm64` (ARM64) *(Multi-arch GHCR Image)*
+- **Python Base Image:** `python 3.12.16`
+- **Docker CLI:** `docker 27.5.1`
+- **Core Python Stack:** `FastAPI 0.115.14` • `Uvicorn 0.34.3` • `Docker SDK 7.2.0` • `ruamel.yaml 0.18.17` • `Argon2 23.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.28.1` • `APScheduler 3.11.3` • `segno 1.6.6`
+- **Frontend Libraries:** Alpine.js `3.14.8` ➡️ `3.17.5` • Tailwind CSS `3.4.17` ➡️ `3.4.19` • marked `15.0.6` ➡️ `15.0.12` • DOMPurify `3.2.3` ➡️ `3.4.18`
+
+### 🚀 What's Changed
+
+- Upgraded **Alpine.js** to `3.17.5`.
+- Upgraded **Tailwind CSS** to `3.4.19`.
+- Upgraded **marked** to `15.0.12`.
+- Upgraded **DOMPurify** to `3.4.18`.
+- First stable release 🎉
+- Two-factor authentication (TOTP) with QR setup and one-time backup codes
+- Change password from Settings → Security (signs out other devices)
+- Activity log: sign-ins, failed attempts, updates, uninstalls, compose edits, cleanups
+- Login lockout can no longer be bypassed with fake X-Forwarded-For headers; lockout survives restarts (`TRUSTED_PROXIES`)
+- Security headers (CSP, clickjacking protection) and Origin checks on WebSockets
+- Optional app data backup before each update, with one-click restore
+- 24-hour CPU/RAM charts in Task Manager
+- Trivy vulnerability scan for every image build
+- CSRF protection: API writes and WebSockets must come from the app's own page
+- Update checks use HEAD requests first, so they no longer use up the Docker Hub pull limit
+- Failed compose edits now restart the app with the previous file instead of leaving it stopped
+- Health check after updates ignores restarts that happened before the update (no more false rollbacks)
+- Only one update per app can run at a time
+- Live Logs no longer leak connections when closed on quiet containers
+- Backup restore keeps file permissions and owners
+- Daily CI runs only rebuild the image when something changed
+
 ## 0.5.3
 
 *Released: 2026-11-22*
