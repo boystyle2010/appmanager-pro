@@ -6,7 +6,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
-from app.core.database import add_update_history, get_all_update_cache, get_public_settings, set_setting
+from app.core.database import add_resource_samples, add_update_history, get_all_update_cache, get_public_settings, set_setting
 from app.core.docker_client import list_all_apps
 from app.core.registry_checker import check_all_updates
 from app.core.updater import update_app_stream
@@ -72,6 +72,28 @@ async def run_auto_prune_job() -> None:
         logger.warning("Auto prune failed: %s", exc)
 
 
+RESOURCE_SAMPLE_MINUTES = 5
+
+
+async def run_resource_sampler() -> None:
+    """Lưu CPU/RAM của từng container mỗi 5 phút (giữ 7 ngày) để vẽ biểu đồ trong Task Manager."""
+    from app.core.system_monitor import collect_task_manager_snapshot
+
+    try:
+        snap = await asyncio.to_thread(collect_task_manager_snapshot)
+    except Exception as exc:
+        logger.debug("Resource sampling skipped: %s", exc)
+        return
+    ts = int(datetime.now(timezone.utc).timestamp())
+    rows = [
+        (t["name"], float(t.get("cpu_pct") or 0), int(t.get("mem_bytes") or 0))
+        for t in snap.get("tasks", [])
+        if t.get("status") == "running"
+    ]
+    if rows:
+        await asyncio.to_thread(add_resource_samples, ts, rows)
+
+
 def get_auto_prune_next_run() -> str:
     job = scheduler.get_job("auto_prune_job")
     if not job or not job.next_run_time:
@@ -125,13 +147,19 @@ def configure_jobs() -> None:
             hour, minute = [int(x) for x in cfg["auto_update_time"].split(":", 1)]
         except Exception:
             hour, minute = 3, 30
-        scheduler.add_job(
-            run_auto_update_job,
-            trigger=CronTrigger(hour=hour, minute=minute),
-            id="auto_update_job",
-            replace_existing=True,
-        )
+        try:
+            trig = CronTrigger(hour=hour, minute=minute)
+        except ValueError:
+            trig = CronTrigger(hour=3, minute=30)
+        scheduler.add_job(run_auto_update_job, trigger=trig, id="auto_update_job", replace_existing=True)
 
+
+    scheduler.add_job(
+        run_resource_sampler,
+        trigger=IntervalTrigger(minutes=RESOURCE_SAMPLE_MINUTES),
+        id="resource_sampler",
+        replace_existing=True,
+    )
 
     if scheduler.get_job("auto_prune_job"):
         scheduler.remove_job("auto_prune_job")
@@ -146,12 +174,11 @@ def configure_jobs() -> None:
             trig_kwargs["day_of_week"] = max(0, min(6, int(cfg["auto_prune_weekday"])))
         elif cfg["auto_prune_freq"] == "monthly":
             trig_kwargs["day"] = 1
-        scheduler.add_job(
-            run_auto_prune_job,
-            trigger=CronTrigger(**trig_kwargs),
-            id="auto_prune_job",
-            replace_existing=True,
-        )
+        try:
+            prune_trig = CronTrigger(**trig_kwargs)
+        except ValueError:
+            prune_trig = CronTrigger(hour=4, minute=0)
+        scheduler.add_job(run_auto_prune_job, trigger=prune_trig, id="auto_prune_job", replace_existing=True)
 
 
 def start_scheduler() -> None:

@@ -1,6 +1,6 @@
 import asyncio
 from pathlib import Path
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, Optional
 
 from ruamel.yaml import YAML
 
@@ -59,6 +59,7 @@ def _probe_container_sync(name: str) -> dict[str, Any]:
     st = c.attrs.get("State", {}) or {}
     health = ((st.get("Health") or {}).get("Status")) or ""
     return {
+        "id": c.id,
         "status": st.get("Status", ""),
         "restarting": bool(st.get("Restarting")),
         "exit_code": st.get("ExitCode", 0),
@@ -67,7 +68,9 @@ def _probe_container_sync(name: str) -> dict[str, Any]:
     }
 
 
-async def _wait_healthy(name: str, send_log: LogCallback, window: int) -> tuple[bool, str]:
+async def _wait_healthy(
+    name: str, send_log: LogCallback, window: int, baseline: Optional[dict] = None
+) -> tuple[bool, str]:
     """
     Theo dõi container mới trong `window` giây. Coi là hỏng nếu: thoát với mã lỗi, đang restart liên tục,
     RestartCount tăng, hoặc healthcheck báo unhealthy. Có healthcheck 'healthy' thì kết luận ngay.
@@ -82,7 +85,9 @@ async def _wait_healthy(name: str, send_log: LogCallback, window: int) -> tuple[
         last = info["status"]
         if info["health"] == "unhealthy":
             return False, "Healthcheck reports unhealthy"
-        if info["restarting"] or info["restart_count"] > 0:
+        # Chỉ tính các lần restart xảy ra SAU khi cập nhật (container cũ có thể đã từng restart từ trước)
+        base_count = baseline["restart_count"] if baseline and baseline.get("id") == info["id"] else 0
+        if info["restarting"] or info["restart_count"] > base_count:
             return False, f"Container keeps restarting (count={info['restart_count']})"
         if info["status"] in ("exited", "dead"):
             if info["exit_code"] == 0:
@@ -233,7 +238,25 @@ def _restore_compose_backup(compose_path: str, backup_path: str) -> None:
         )
 
 
+_UPDATE_LOCKS: dict[str, asyncio.Lock] = {}
+
+
 async def update_app_stream(
+    container_name: str,
+    send_log: LogCallback,
+    mode: str = "manual",
+) -> dict:
+    """Mỗi app chỉ được cập nhật 1 tiến trình tại một thời điểm (tay / tự động / Update All)."""
+    lock = _UPDATE_LOCKS.setdefault(container_name, asyncio.Lock())
+    if lock.locked():
+        msg = "This app is already being updated. Please wait for it to finish."
+        await send_log(f"[ERROR] {msg}\n")
+        return {"ok": False, "error": msg}
+    async with lock:
+        return await _update_app_stream_impl(container_name, send_log, mode)
+
+
+async def _update_app_stream_impl(
     container_name: str,
     send_log: LogCallback,
     mode: str = "manual",
@@ -301,6 +324,32 @@ async def update_app_stream(
     await send_log(f"==> Updating {title} ({container_name})\n")
     await send_log(f"==> Compose file: {compose_path}\n\n")
 
+    # Sao lưu dữ liệu app trước khi cập nhật (tuỳ chọn trong Settings)
+    backup_name = ""
+    if get_setting("backup_before_update", "false").lower() == "true" and app_info.get("appdata_path"):
+        from app.core.app_backup import create_backup
+
+        await send_log(f"==> Backing up app data: {app_info['appdata_path']} ...\n")
+        try:
+            max_mb = int(get_setting("backup_max_mb", "2048") or 2048)
+            keep = int(get_setting("backup_keep", "3") or 3)
+        except ValueError:
+            max_mb, keep = 2048, 3
+        bres = await asyncio.to_thread(
+            create_backup, container_name, app_info["appdata_path"], from_ver, max_mb, keep
+        )
+        if bres.get("ok"):
+            backup_name = bres["file"]
+            await send_log(f"==> {bres['message']} ({bres.get('size', '')})\n\n")
+        else:
+            await send_log(f"==> [WARN] {bres.get('message')} — continuing without data backup.\n\n")
+
+    # Ghi nhận trạng thái container trước khi cập nhật (để kiểm tra sức khoẻ chính xác)
+    try:
+        baseline = await asyncio.to_thread(_probe_container_sync, container_name)
+    except Exception:
+        baseline = None
+
     # Bước 1: docker compose pull
     pull_cmd = ["docker", "compose", "-f", compose_path, "pull"]
     if service:
@@ -339,7 +388,7 @@ async def update_app_stream(
     except Exception:
         window = 25
     await send_log(f"\n==> Checking the new container for {window}s...\n")
-    healthy, reason = await _wait_healthy(container_name, send_log, window)
+    healthy, reason = await _wait_healthy(container_name, send_log, window, baseline)
     await send_log(f"==> {reason}\n")
 
     rolled_back = False
@@ -353,6 +402,11 @@ async def update_app_stream(
         if rb_ok:
             rolled_back = True
             await send_log("\n↩️ Rolled back: the previous version is running again.\n")
+            if backup_name:
+                await send_log(
+                    f"==> A data backup from before this update is available ({backup_name}). "
+                    "Restore it from Settings → Storage → App data backups if the new version changed your data.\n"
+                )
             add_update_history(
                 container_name, title, from_ver, target_ver, mode, "rolled_back",
                 f"Update failed ({reason}); previous version restored",

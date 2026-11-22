@@ -530,10 +530,27 @@ async def check_single_app(
     if local_digests:
         try:
             manifest_url = f"https://{registry}/v2/{repo}/manifests/{tag}"
-            resp = await _registry_request(
-                client, manifest_url, MANIFEST_ACCEPT, token_cache, scope_key
-            )
-            if resp.status_code == 200:
+            # HEAD trước: Docker Hub không tính HEAD vào hạn mức pull. Nếu digest khớp bản local thì dừng ở đây.
+            head_digest = ""
+            try:
+                head = await _registry_request(
+                    client, manifest_url, MANIFEST_ACCEPT, token_cache, scope_key, method="HEAD"
+                )
+                if head.status_code == 200:
+                    head_digest = head.headers.get("docker-content-digest", "").strip()
+            except Exception:
+                head_digest = ""
+            if head_digest and head_digest in local_digests:
+                resp = None
+                result["remote_digest"] = head_digest
+                remote_digest = head_digest
+            else:
+                resp = await _registry_request(
+                    client, manifest_url, MANIFEST_ACCEPT, token_cache, scope_key
+                )
+            if resp is None:
+                pass
+            elif resp.status_code == 200:
                 top_digest = resp.headers.get("docker-content-digest", "").strip()
                 manifest_data = resp.json() if resp.content else {}
 

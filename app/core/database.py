@@ -1,6 +1,7 @@
 import os
 import secrets
 import sqlite3
+import time
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,11 @@ DEFAULT_SETTINGS = {
     "auto_update_time": "03:30",
     "prune_old_images": "true",
     "github_token": "",
+    "auto_rollback": "true",
+    "health_wait_seconds": "25",
+    "backup_before_update": "false",
+    "backup_max_mb": "2048",
+    "backup_keep": "3",
 }
 
 
@@ -77,8 +83,45 @@ def init_db() -> None:
                 message TEXT DEFAULT '',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE IF NOT EXISTS login_attempts (
+                ip TEXT NOT NULL,
+                ts REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts(ip);
+
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                username TEXT DEFAULT '',
+                ip TEXT DEFAULT '',
+                action TEXT NOT NULL,
+                target TEXT DEFAULT '',
+                detail TEXT DEFAULT '',
+                ok INTEGER DEFAULT 1
+            );
+
+            CREATE TABLE IF NOT EXISTS resource_samples (
+                ts INTEGER NOT NULL,
+                container TEXT NOT NULL,
+                cpu_pct REAL DEFAULT 0,
+                mem_bytes INTEGER DEFAULT 0
+            );
+            CREATE INDEX IF NOT EXISTS idx_resource_samples ON resource_samples(container, ts);
             """
         )
+
+        # Cột mới cho bảng users (2FA) — thêm an toàn cho database cũ
+        ucols = {r["name"] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
+        for col, ddl in (
+            ("totp_secret", "TEXT DEFAULT ''"),
+            ("totp_enabled", "INTEGER DEFAULT 0"),
+            ("totp_last_step", "INTEGER DEFAULT 0"),
+            ("backup_codes", "TEXT DEFAULT '[]'"),
+            ("totp_pending", "TEXT DEFAULT ''"),
+        ):
+            if col not in ucols:
+                conn.execute(f"ALTER TABLE users ADD COLUMN {col} {ddl}")
 
         # Tự động thêm cột target_tag cho database cũ mà không mất tài khoản Admin
         cols = {
@@ -151,6 +194,9 @@ def get_public_settings() -> dict[str, Any]:
         "auto_prune_images": get_setting("auto_prune_images", "dangling"),
         "auto_prune_cache": get_setting("auto_prune_cache", "true").lower() == "true",
         "auto_prune_last": get_setting("auto_prune_last", ""),
+        "backup_before_update": get_setting("backup_before_update", "false").lower() == "true",
+        "backup_max_mb": int(get_setting("backup_max_mb", "2048") or 2048),
+        "backup_keep": int(get_setting("backup_keep", "3") or 3),
         "has_github_token": bool(get_setting("github_token", "").strip()),
     }
 
@@ -180,9 +226,132 @@ def get_user_by_username(username: str):
     conn = get_connection()
     try:
         return conn.execute(
-            "SELECT id, username, password_hash FROM users WHERE username = ?",
+            "SELECT id, username, password_hash, totp_secret, totp_enabled, totp_last_step, "
+            "backup_codes, totp_pending FROM users WHERE username = ?",
             (username,),
         ).fetchone()
+    finally:
+        conn.close()
+
+
+def update_user_fields(username: str, **fields: Any) -> None:
+    allowed = {"password_hash", "totp_secret", "totp_enabled", "totp_last_step", "backup_codes", "totp_pending"}
+    cols = [k for k in fields if k in allowed]
+    if not cols:
+        return
+    conn = get_connection()
+    try:
+        conn.execute(
+            f"UPDATE users SET {', '.join(f'{c} = ?' for c in cols)} WHERE username = ?",
+            (*[fields[c] for c in cols], username),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def rotate_session_secret() -> None:
+    """Đổi khoá phiên -> mọi phiên đăng nhập cũ hết hiệu lực."""
+    set_setting("session_secret", secrets.token_hex(32))
+
+
+# ---------------- Chống dò mật khẩu (lưu bền vững) ----------------
+
+def count_recent_failures(ip: str, window_seconds: int) -> tuple[int, float]:
+    """Trả về (số lần sai trong cửa sổ, thời điểm lần sai cũ nhất trong cửa sổ)."""
+    conn = get_connection()
+    try:
+        cutoff = time.time() - window_seconds
+        conn.execute("DELETE FROM login_attempts WHERE ts < ?", (time.time() - 86400,))
+        row = conn.execute(
+            "SELECT COUNT(*) AS c, MIN(ts) AS first FROM login_attempts WHERE ip = ? AND ts >= ?",
+            (ip, cutoff),
+        ).fetchone()
+        conn.commit()
+        return int(row["c"] or 0), float(row["first"] or 0)
+    finally:
+        conn.close()
+
+
+def add_login_failure(ip: str) -> None:
+    conn = get_connection()
+    try:
+        conn.execute("INSERT INTO login_attempts (ip, ts) VALUES (?, ?)", (ip, time.time()))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def clear_login_failures(ip: str) -> None:
+    conn = get_connection()
+    try:
+        conn.execute("DELETE FROM login_attempts WHERE ip = ?", (ip,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ---------------- Nhật ký thao tác (audit log) ----------------
+
+def add_audit(action: str, username: str = "", ip: str = "", target: str = "", detail: str = "", ok: bool = True) -> None:
+    conn = get_connection()
+    try:
+        conn.execute(
+            "INSERT INTO audit_log (username, ip, action, target, detail, ok) VALUES (?, ?, ?, ?, ?, ?)",
+            (username or "", ip or "", action, (target or "")[:200], (detail or "")[:500], 1 if ok else 0),
+        )
+        # Giữ tối đa 3000 dòng gần nhất
+        conn.execute("DELETE FROM audit_log WHERE id <= (SELECT MAX(id) FROM audit_log) - 3000")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_audit_log(limit: int = 200) -> list[dict[str, Any]]:
+    conn = get_connection()
+    try:
+        rows = conn.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+# ---------------- Lịch sử tài nguyên ----------------
+
+def add_resource_samples(ts: int, rows: list[tuple[str, float, int]]) -> None:
+    conn = get_connection()
+    try:
+        conn.executemany(
+            "INSERT INTO resource_samples (ts, container, cpu_pct, mem_bytes) VALUES (?, ?, ?, ?)",
+            [(ts, name, cpu, mem) for name, cpu, mem in rows],
+        )
+        conn.execute("DELETE FROM resource_samples WHERE ts < ?", (ts - 7 * 86400,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_resource_samples(container: str, since_ts: int) -> list[dict[str, Any]]:
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT ts, cpu_pct, mem_bytes FROM resource_samples WHERE container = ? AND ts >= ? ORDER BY ts",
+            (container, since_ts),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_resource_totals(since_ts: int) -> list[dict[str, Any]]:
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT ts, SUM(cpu_pct) AS cpu_pct, SUM(mem_bytes) AS mem_bytes FROM resource_samples "
+            "WHERE ts >= ? GROUP BY ts ORDER BY ts",
+            (since_ts,),
+        ).fetchall()
+        return [dict(r) for r in rows]
     finally:
         conn.close()
 

@@ -605,11 +605,23 @@ async def save_and_apply_compose(container_name: str, raw_yaml: str) -> dict[str
     logs = out.decode("utf-8", errors="replace").strip()
 
     if proc.returncode != 0:
+        # Trả file về bản cũ rồi chạy lại để app không bị dừng giữa chừng
         path.write_text(original_text, encoding="utf-8")
+        rb = await asyncio.create_subprocess_exec(
+            "docker", "compose", "-f", compose_path, "up", "-d", "--remove-orphans",
+            cwd=compose_dir,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        rb_out, _ = await rb.communicate()
+        rb_logs = rb_out.decode("utf-8", errors="replace").strip()
+        restored = rb.returncode == 0
         return {
             "ok": False,
-            "error": "docker compose up failed — rolled back automatically.",
-            "logs": logs,
+            "error": "docker compose up failed — previous compose restored and the app was started again."
+            if restored
+            else "docker compose up failed — previous compose restored, but restarting the app also failed. Check the logs.",
+            "logs": logs + ("\n\n--- Restore ---\n" + rb_logs if rb_logs else ""),
             "backup": backup_file,
         }
 
