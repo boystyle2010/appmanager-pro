@@ -239,22 +239,36 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, os
+          from collections import Counter
           summary = "scan unavailable"
+          rows, where = [], Counter()
           try:
               data = json.load(open("trivy.json"))
               crit = high = 0
               for r in data.get("Results") or []:
                   for v in r.get("Vulnerabilities") or []:
                       sev = v.get("Severity")
+                      if sev not in ("CRITICAL", "HIGH"):
+                          continue
                       crit += sev == "CRITICAL"
                       high += sev == "HIGH"
+                      pkg = v.get("PkgName", "?")
+                      tgt = r.get("Target", "")
+                      label = pkg if r.get("Class") == "os-pkgs" else f"{pkg} in {os.path.basename(tgt) or tgt}"
+                      where[label] += 1
+                      rows.append(f"| {sev} | {v.get('VulnerabilityID','')} | {pkg} | {v.get('InstalledVersion','')} | {v.get('FixedVersion','')} | {r.get('Target','')} |")
               summary = f"{crit} critical • {high} high (fixable only)"
+              if where:
+                  summary += " — " + ", ".join(f"{p} ×{n}" for p, n in where.most_common(4))
           except Exception as exc:
               print("No scan result:", exc)
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
               f.write(f"summary={summary}\n")
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
-              f.write(f"### Trivy scan\n{summary}\n")
+              f.write(f"### Trivy scan\n{summary}\n\n")
+              if rows:
+                  f.write("| Severity | ID | Package | Installed | Fixed in | Target |\n|---|---|---|---|---|---|\n")
+                  f.write("\n".join(rows[:60]) + "\n")
           PY
 
   # ═══════ 3. Thêm mục Package Integrity vào changelog & tạo GitHub Release ═══════

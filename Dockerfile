@@ -32,7 +32,9 @@ RUN apt-get update && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Nâng pip trước (bản pip đi kèm image hay dính lỗ hổng) rồi cài thư viện
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
 
 COPY app/ ./app/
 COPY --from=css /out/tailwind.css ./app/static/css/tailwind.css
