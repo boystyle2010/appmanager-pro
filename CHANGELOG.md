@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.9.0
+
+*Released: 2026-11-22*
+
+### 📦 Component & Version Matrix
+
+- **App Release:** Bumped from `v0.5.1` ➡️ `v0.9.0`
+- **Supported Architectures:** `linux/amd64` (x86_64) & `linux/arm64` (ARM64) *(Multi-arch GHCR Image)*
+- **Python Base Image:** `python 3.12.16`
+- **Docker CLI:** `docker 27.5.1`
+- **Core Python Stack:** `FastAPI 0.115.14` • `Uvicorn 0.34.3` • `Docker SDK 7.2.0` • `ruamel.yaml 0.18.17` • `Argon2 23.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.28.1` • `APScheduler 3.11.3` • `segno 1.6.6`
+- **Frontend Libraries:** `Alpine.js 3.17.5` • `Tailwind CSS 3.4.19` • `marked 15.0.12` • `DOMPurify 3.4.18`
+
+### 🚀 What's Changed
+
+- Maintenance release.
+
 ## 0.5.1
 
 *Released: 2026-11-22*
