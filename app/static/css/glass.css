@@ -1,3 +1,7 @@
+/* Thứ tự lớp CSS giống Tailwind v4: tiện ích (utilities) luôn thắng các class giao diện bên dưới */
+@layer theme, base, components, utilities;
+
+@layer components {
 :root {
   --bg-base: #090f1d;
   --text-primary: #f8fafc;
@@ -395,3 +399,4 @@ html.light .pro-badge {
 .safe-bottom { padding-bottom: calc(2.5rem + env(safe-area-inset-bottom)); }
 
 [x-cloak] { display: none !important; }
+}

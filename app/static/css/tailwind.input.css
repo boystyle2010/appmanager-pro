@@ -1,0 +1,28 @@
+/*
+ * Tailwind CSS v4 — file nguồn. Được biên dịch lúc build image (Dockerfile, stage "css")
+ * thành app/static/css/tailwind.css (không commit file kết quả).
+ */
+@import "tailwindcss" source(none);
+
+/* Chỉ quét các file giao diện của app */
+@source "../../templates";
+@source "../js";
+
+/* Giao diện tối theo class .dark trên <html> (giống Tailwind v3 darkMode: 'class') */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Giữ hành vi mặc định của Tailwind v3 */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
