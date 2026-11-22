@@ -17,8 +17,10 @@ from app.core.database import init_db  # noqa: E402
 from app.main import app  # noqa: E402
 
 init_db()
-client = TestClient(app, base_url="http://localhost")
 failures = []
+# "with" -> chạy cả phần khởi động (lifespan: database, scheduler) giống lúc chạy thật
+_ctx = TestClient(app, base_url="http://localhost")
+client = _ctx.__enter__()
 
 
 def check(method, path, expect, **kw):
@@ -42,6 +44,8 @@ check("GET", "/api/audit", {200})
 check("POST", "/api/auth/logout", {403}, headers={"Origin": "http://evil.example"})  # chống CSRF phải chặn
 check("GET", "/static/js/app.js", {200})
 check("GET", "/static/css/tailwind.css", {200})       # Tailwind v4 đã được biên dịch trong image
+
+_ctx.__exit__(None, None, None)
 
 if failures:
     print("\nSMOKE TEST FAILED:")

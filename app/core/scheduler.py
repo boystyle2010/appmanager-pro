@@ -12,6 +12,7 @@ from app.core.registry_checker import check_all_updates
 from app.core.updater import update_app_stream
 
 logger = logging.getLogger("appmanager.scheduler")
+_BACKGROUND_TASKS: set = set()  # giữ tham chiếu để task nền không bị thu hồi giữa chừng
 scheduler = AsyncIOScheduler()
 
 
@@ -185,7 +186,8 @@ def start_scheduler() -> None:
     if not scheduler.running:
         configure_jobs()
         scheduler.start()
-        asyncio.create_task(_startup_check_if_stale())
+        _BACKGROUND_TASKS.add(t := asyncio.create_task(_startup_check_if_stale()))
+        t.add_done_callback(_BACKGROUND_TASKS.discard)
 
 
 def stop_scheduler() -> None:

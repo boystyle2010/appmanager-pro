@@ -35,9 +35,10 @@ LOCKOUT_SECONDS = 15 * 60               # Khóa IP 15 phút nếu sai 5 lần
 ph = PasswordHasher()
 
 # Chỉ tin header IP (X-Forwarded-For / CF-Connecting-IP) khi request đến từ các proxy này.
-# Mặc định: localhost và mạng nội bộ của Docker (cloudflared, nginx... chạy cùng máy).
-# Đặt biến môi trường TRUSTED_PROXIES (vd: "172.16.0.0/12,192.168.68.10") nếu proxy nằm ở máy khác.
-_DEFAULT_TRUSTED = "127.0.0.0/8,::1/128,172.16.0.0/12"
+# Mặc định CHỈ tin localhost. Nếu dùng reverse proxy / Cloudflare Tunnel, khai báo IP của proxy
+# trong biến TRUSTED_PROXIES (vd: "172.17.0.1" hoặc "172.18.0.5,192.168.68.10").
+# Không nên tin cả dải 172.16.0.0/12: mọi container khác cũng nằm trong dải đó và có thể giả IP.
+_DEFAULT_TRUSTED = "127.0.0.0/8,::1/128"
 
 
 def _trusted_networks() -> list:

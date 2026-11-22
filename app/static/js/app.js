@@ -407,8 +407,12 @@
         },
 
         buildWebUrl(app) {
-          const idx = app.index && app.index.startsWith('/') ? app.index : `/${app.index || ''}`;
-          return `${app.scheme || 'http'}://${window.location.hostname}:${app.port_map}${idx}`;
+          // Chỉ cho http/https và đường dẫn tương đối an toàn (chặn "javascript:" từ manifest lạ)
+          const scheme = String(app.scheme || 'http').toLowerCase() === 'https' ? 'https' : 'http';
+          const raw = String(app.index || '').replace(/[\s\u0000-\u001f]/g, '');
+          const idx = raw.startsWith('/') && !raw.startsWith('//') ? raw : `/${raw.replace(/^\/+/, '')}`;
+          const port = String(app.port_map || '').replace(/[^0-9]/g, '');
+          return `${scheme}://${window.location.hostname}${port ? ':' + port : ''}${idx}`;
         },
 
         async loadApps() {
@@ -435,8 +439,13 @@
           }
           try {
             const res = await fetch('/api/updates/check', { method: 'POST' });
+            const body = await res.clone().json().catch(() => ({}));
+            if (body.already_running) {
+              if (!silent) this.showToast(this.lang === 'vi' ? 'Đang kiểm tra cập nhật, vui lòng đợi…' : 'An update check is already running…');
+              await new Promise(r => setTimeout(r, 4000));
+            }
             await this.loadApps();
-            if (!silent && res.ok) {
+            if (!silent && res.ok && !body.already_running) {
               const found = this.summary.updates;
               this.showToast(found > 0
                 ? `${found} ${this.t('updatesAvailable')}`
@@ -464,14 +473,15 @@
           const isHash = (l) => /[a-f0-9]{40,}/i.test(l);
           for (const line of lines) {
             const t = line.trim();
-            if (/^[#>*_\s-]*(sha-?\d*\s*)?(sha-?256|sha-?512|md5)?\s*(checksums?|hashes|digests?)\b/i.test(t) || /^[#>*_\s-]*sha-?(256|512)\b/i.test(t)) {
+            if (/^[#>*_\s-]*(sha-?\d*\s*)?(sha-?256|sha-?512|md5)?\s*(checksums?|hashes|digests?)[\s:*_]*$/i.test(t) || /^[#>*_\s-]*sha-?(256|512)(\s*(sums?|checksums?|hashes))?[\s:*_]*$/i.test(t)) {
               skipping = true; continue;
             }
             if (skipping) {
               if (t === '' || t.startsWith('```') || t.startsWith('|') || isHash(t)) continue;
               skipping = false;
             }
-            if (isHash(t) && t.replace(/[^a-f0-9]/gi, '').length >= 40 && t.length < 160) continue;
+            // Chỉ bỏ dòng CHỈ gồm mã hash (+ tên file); ghi chú có link commit vẫn giữ nguyên
+            if (/^[\s`*>|-]*(?:[\w./+@-]+\s*[:=]?\s*)?`?(?:sha(?:256|512):)?[a-f0-9]{40,}`?(?:\s+\*?[\w./+@-]+)?[\s`|]*$/i.test(t)) continue;
             out.push(line);
           }
           return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();

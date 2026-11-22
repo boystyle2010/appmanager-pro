@@ -6,6 +6,9 @@ on:
     - cron: "0 10 * * *"
   push:
     branches: [main]
+    paths-ignore:            # sửa tài liệu không cần build lại image
+      - "**.md"
+      - "LICENSE"
   workflow_dispatch:
     inputs:
       force_release:
@@ -54,6 +57,9 @@ jobs:
       - name: Tools
         run: pip install --quiet jinja2 packaging
 
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
       - name: Check source
         run: |
           python -m compileall -q app scripts
@@ -74,7 +80,7 @@ jobs:
         id: verify
         if: steps.upd.outputs.changed == 'true'
         continue-on-error: true
-        run: bash scripts/verify.sh amp-latest smoke
+        run: VERIFY_ARM64=1 bash scripts/verify.sh amp-latest smoke
 
       # ── Lần 2 (chỉ khi lần 1 hỏng): nâng trong cùng major, ghi chú vào changelog ──
       - name: Fallback — same-major updates only
@@ -92,7 +98,7 @@ jobs:
 
       - name: Verify same-major versions
         if: steps.safe.outputs.changed == 'true'
-        run: bash scripts/verify.sh amp-safe smoke
+        run: VERIFY_ARM64=1 bash scripts/verify.sh amp-safe smoke
 
       - name: Pick result
         id: final
@@ -136,10 +142,9 @@ jobs:
 
       - name: Resolve head
         id: head
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          SHA=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
+          # Build đúng commit vừa được kiểm tra (commit của bot nếu có, nếu không thì commit đã checkout)
+          if [ -s new_sha.txt ]; then SHA=$(tr -d '[:space:]' < new_sha.txt); else SHA=$(git rev-parse HEAD); fi
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "short=${SHA::7}" >> "$GITHUB_OUTPUT"
           echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"

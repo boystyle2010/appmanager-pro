@@ -484,7 +484,11 @@ async def deploy_new_app_stream(
     elif APPDATA_DIR.exists():
         root_dir = APPDATA_DIR
     else:
-        root_dir = DATA_DIR / "stacks"
+        # Thư mục trong container KHÔNG khớp đường dẫn trên máy thật -> bind mount tương đối sẽ sai chỗ
+        msg = (f"No host app folder is mounted. Mount {APPDATA_DIR} (or {CASAOS_APPS_DIR}) into the "
+               "AppManager Pro container with the same path on the host, then deploy again.")
+        await send_log(f"[ERROR] {msg}\n")
+        return {"ok": False, "error": msg}
 
     target_dir = root_dir / app_id
     compose_path = target_dir / "docker-compose.yml"
@@ -672,7 +676,45 @@ async def uninstall_app(
     image_id = app_info.get("image_id") or ""
     appdata_path = app_info.get("appdata_path") or ""
 
-    if compose_path and Path(compose_path).exists():
+    # App nằm trong một stack nhiều service (vd: immich + redis)? -> chỉ gỡ đúng service này
+    project = app_info.get("project") or ""
+    service = app_info.get("service") or ""
+
+    def _other_services() -> int:
+        if not project:
+            return 0
+        client = get_docker_client()
+        others = client.containers.list(all=True, filters={"label": f"com.docker.compose.project={project}"})
+        return len([c for c in others if c.name != container_name])
+
+    shared_stack = bool(compose_path and service) and (await asyncio.to_thread(_other_services)) > 0
+
+    if shared_stack and Path(compose_path).exists():
+        proc = await asyncio.create_subprocess_exec(
+            "docker", "compose", "-f", compose_path, "rm", "-s", "-f", service,
+            cwd=str(Path(compose_path).parent),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        out, _ = await proc.communicate()
+        logs.append(out.decode("utf-8", errors="replace").strip())
+        if proc.returncode != 0:
+            return {"ok": False, "error": "docker compose rm failed", "logs": "\n".join(logs)}
+        logs.append(f"Removed service '{service}' only — other services of '{project}' keep running.")
+        if remove_images and image_id:
+            def _rm_img():
+                try:
+                    get_docker_client().images.remove(image=image_id, force=False)
+                    return "Removed image."
+                except Exception as exc:
+                    return f"Image kept (still in use or error: {exc})"
+            logs.append(await asyncio.to_thread(_rm_img))
+        remove_compose = False  # không xoá thư mục compose của cả stack
+        logs.append("Kept the compose folder because other services still use it.")
+        if remove_appdata:
+            remove_appdata = False
+            logs.append("Kept the AppData folder because it may be shared by the other services.")
+    elif compose_path and Path(compose_path).exists():
         cmd = ["docker", "compose", "-f", compose_path, "down", "--remove-orphans"]
         if remove_images:
             cmd.extend(["--rmi", "all"])

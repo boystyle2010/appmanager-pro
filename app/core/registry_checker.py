@@ -217,8 +217,11 @@ def extract_github_slug(
 
 _HASH_RE = re.compile(r"[a-f0-9]{40,}", re.I)
 _CHECKSUM_HEAD_RE = re.compile(
-    r"^[#>*_\s-]*(sha-?\d*\s*)?(sha-?256|sha-?512|md5)?\s*(checksums?|hashes|digests?)\b", re.I
+    r"^[#>*_\s-]*(sha-?\d*\s*)?(sha-?256|sha-?512|md5)?\s*(checksums?|hashes|digests?)[\s:*_]*$", re.I
 )
+
+
+_ONLY_HASH_RE = re.compile(r"^[\s`*>|-]*(?:[\w./+@-]+\s*[:=]?\s*)?`?(?:sha(?:256|512):)?[a-f0-9]{40,}`?(?:\s+\*?[\w./+@-]+)?[\s`|]*$", re.I)
 
 
 def strip_checksums(md: str) -> str:
@@ -227,14 +230,15 @@ def strip_checksums(md: str) -> str:
     skipping = False
     for line in (md or "").splitlines():
         t = line.strip()
-        if _CHECKSUM_HEAD_RE.match(t) or re.match(r"^[#>*_\s-]*sha-?(256|512)\b", t, re.I):
+        if _CHECKSUM_HEAD_RE.match(t) or re.match(r"^[#>*_\s-]*sha-?(256|512)(\s*(sums?|checksums?|hashes))?[\s:*_]*$", t, re.I):
             skipping = True
             continue
         if skipping:
             if t == "" or t.startswith("```") or t.startswith("|") or _HASH_RE.search(t):
                 continue
             skipping = False
-        if _HASH_RE.search(t) and len(t) < 160:
+        # Chỉ bỏ dòng CHỈ gồm mã hash (+ tên file); không đụng tới ghi chú có link commit
+        if _ONLY_HASH_RE.match(t):
             continue
         out.append(line)
     text = re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip()

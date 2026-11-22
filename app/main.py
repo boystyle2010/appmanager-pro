@@ -288,7 +288,7 @@ async def login_page(request: Request):
 async def api_setup(payload: SetupPayload, request: Request, response: Response):
     if payload.password != payload.confirm_password:
         raise HTTPException(status_code=400, detail="Passwords do not match")
-    setup_first_admin(payload.username, payload.password)
+    await asyncio.to_thread(setup_first_admin, payload.username, payload.password)
     set_session_cookie(response, request, payload.username.strip(), remember=True)
     audit(request, payload.username.strip(), "setup", detail="Admin account created")
     return {"ok": True}

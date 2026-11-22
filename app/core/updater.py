@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Optional
 
@@ -158,8 +159,16 @@ def _trigger_self_update_helper(compose_path: str) -> None:
         old.remove(force=True)
     except Exception:
         pass
+    # Dùng chính image AppManager Pro đang chạy (đã có sẵn Docker CLI + Compose) -> không phụ thuộc tag cũ
+    helper_image = "docker:cli"
+    try:
+        import socket
+
+        helper_image = client.containers.get(socket.gethostname()).image.id
+    except Exception:
+        pass
     client.containers.run(
-        image="docker:27-cli",
+        image=helper_image,
         command=[
             "sh",
             "-c",
@@ -238,6 +247,7 @@ def _restore_compose_backup(compose_path: str, backup_path: str) -> None:
         )
 
 
+logger = logging.getLogger("appmanager.updater")
 _UPDATE_LOCKS: dict[str, asyncio.Lock] = {}
 
 
@@ -253,7 +263,20 @@ async def update_app_stream(
         await send_log(f"[ERROR] {msg}\n")
         return {"ok": False, "error": msg}
     async with lock:
-        return await _update_app_stream_impl(container_name, send_log, mode)
+        try:
+            return await _update_app_stream_impl(container_name, send_log, mode)
+        except Exception as exc:  # không để một app lỗi làm dừng cả Update All / cập nhật tự động
+            logger.exception("Update of %s crashed", container_name)
+            msg = f"Unexpected error: {exc}"
+            try:
+                await send_log(f"\n[ERROR] {msg}\n")
+            except Exception:
+                pass
+            try:
+                add_update_history(container_name, container_name, "", "", mode, "failed", msg[:300])
+            except Exception:
+                pass
+            return {"ok": False, "error": msg}
 
 
 async def _update_app_stream_impl(

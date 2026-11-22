@@ -133,7 +133,7 @@ docker compose pull && docker compose up -d
 | `APPDATA_DIR` | `/DATA/AppData` | Root folder for app data (used by uninstall & compose discovery). |
 | `APP_DATA_DIR` | `/app/data` | AppManager Pro's own database & backups (inside the container). |
 | `RESET_AUTH` | `false` | Set to `true` and restart to reset the admin account (also removes 2FA); set back to `false` afterwards. |
-| `TRUSTED_PROXIES` | `127.0.0.0/8,::1/128,172.16.0.0/12` | Comma-separated IPs/CIDRs of reverse proxies whose `X-Forwarded-For` / `CF-Connecting-IP` headers are trusted. The default covers proxies on the same host (e.g. cloudflared, Nginx Proxy Manager in Docker). Add your proxy's IP if it runs on another machine. |
+| `TRUSTED_PROXIES` | `127.0.0.0/8,::1/128` | Comma-separated IPs/CIDRs of reverse proxies whose `X-Forwarded-For` header is trusted. Only localhost by default. If you use Cloudflare Tunnel or Nginx Proxy Manager in Docker, add that container's exact IP (e.g. `172.18.0.5`) — not the whole `172.16.0.0/12` range, which any other container could use to fake IPs. |
 | `TRUST_CF_CONNECTING_IP` | `false` | Set to `true` only if requests reach the app exclusively through Cloudflare (Tunnel); then the `CF-Connecting-IP` header is used as the client IP. |
 | `ALLOWED_ORIGINS` | — | Extra hostnames allowed to call the API/WebSockets when your reverse proxy rewrites the `Host` header (e.g. `am.example.com`). |
 
@@ -312,7 +312,7 @@ Commit messages do not appear in the changelog; use `RELEASE_NOTES_NEXT.md` for 
 | Update failed and was rolled back | Open **Live Logs** of the app and check **Settings → History** for the reason. |
 | UI looks unstyled | Hard-refresh the page; the app falls back to CDNs if bundled libraries are missing. |
 | Container restarts with `ModuleNotFoundError` | A file in `app/core/` is missing or misnamed — CI's *Check source* step reports which one. |
-| Everyone gets locked out together | All requests come through one proxy that is not trusted — add it to `TRUSTED_PROXIES`. |
+| Everyone gets locked out together | All requests come through one proxy that is not trusted — add that proxy's IP to `TRUSTED_PROXIES` (find it with `docker inspect <proxy-container>`). |
 | 2FA codes are always rejected | Check that the phone's and server's clocks are correct (`TZ` does not matter, the clock does). |
 | "Cross-site request blocked" behind a reverse proxy | The proxy changes the `Host` header — add your domain to `ALLOWED_ORIGINS` (or forward `Host` / `X-Forwarded-Host`). |
 | 24h chart says "Collecting data" | Samples are taken every 5 minutes; wait at least 10 minutes after starting. |
