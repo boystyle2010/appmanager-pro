@@ -1,0 +1,6 @@
+# Lỗ hổng tạm bỏ qua — mỗi dòng phải có lý do và ngày hết hạn (exp:), hết hạn Trivy sẽ báo lại.
+
+# golang.org/x/net v0.60.0 nằm sẵn trong binary docker-compose (lấy từ image docker:cli).
+# Không tự vá được; chờ Docker Compose phát hành bản dùng x/net >= 0.62.0
+# (v5.8.0 và nhánh main ngày 2026-11-22 vẫn là v0.60.0).
+CVE-2026-78661 exp:2027-02-28

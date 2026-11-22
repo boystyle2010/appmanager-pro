@@ -236,6 +236,7 @@ jobs:
           output: trivy.json
           severity: CRITICAL,HIGH
           ignore-unfixed: true
+          trivyignores: .trivyignore   # CVE tạm bỏ qua, có lý do & hạn
           exit-code: "0"
 
       - name: Summarize scan
