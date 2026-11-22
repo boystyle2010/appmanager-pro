@@ -13,6 +13,13 @@
 - **Core Python Stack:** `FastAPI 0.165.0` • `Uvicorn 0.54.0` • `Docker SDK 7.2.0` • `ruamel.yaml 0.19.1` • `Argon2 25.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.28.1` • `APScheduler 3.11.3` • `segno 1.6.6`
 - **Frontend Libraries:** `Alpine.js 3.17.5` • `Tailwind CSS 4.3.5` • `marked 18.2.1` • DOMPurify `3.4.18` ➡️ `3.5.0`
 
+### 🔐 Package Integrity (GHCR Multi-Arch)
+
+- **Image:** `boystyle2010/appmanager-pro:0.9.4`
+- **Digest:** `sha256:47e821112f5c…`
+- **Provenance:** ✅ Signed by GitHub · [View attestation](https://github.com/boystyle2010/appmanager-pro/attestations)
+- **Vulnerability Scan (Trivy):** 0 critical • 1 high (fixable only) — setuptools in Python ×1
+
 ### 🚀 What's Changed
 
 - Upgraded **DOMPurify** to `3.5.0`.
