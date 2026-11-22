@@ -1,5 +1,6 @@
 import asyncio
 import threading
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Optional
@@ -10,17 +11,27 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
+from app.core.app_backup import delete_backup, list_backups, restore_backup
 from app.core.auth import (
+    check_second_factor,
     clear_failed_attempts,
     clear_session_cookie,
     get_client_ip,
     get_current_user_optional,
+    hash_password,
     is_ip_locked,
+    new_backup_codes,
+    new_totp_secret,
+    origin_allowed,
     record_failed_attempt,
     require_user,
     set_session_cookie,
     setup_first_admin,
+    totp_qr_svg,
+    totp_uri,
+    validate_new_password,
     verify_password,
+    verify_totp,
     verify_websocket_user,
 )
 from app.core.compose_manager import (
@@ -37,7 +48,13 @@ from app.core.compose_manager import (
 )
 from app.core.database import (
     DATA_DIR,
+    add_audit,
     get_app_pref,
+    get_audit_log,
+    get_resource_samples,
+    get_resource_totals,
+    rotate_session_secret,
+    update_user_fields,
     get_public_settings,
     get_update_cache_item,
     get_update_history,
@@ -84,6 +101,42 @@ if ASSETS_DIR.exists():
 
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
+# ---------------- Security headers ----------------
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src 'self' data: https://fonts.gstatic.com; "
+    "img-src * data: blob:; "
+    "connect-src 'self' ws: wss:; "
+    "frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'"
+)
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    if request.method in ("POST", "PUT", "PATCH", "DELETE") and request.url.path.startswith("/api/"):
+        if not origin_allowed(request.headers):
+            return JSONResponse(status_code=403, content={"detail": "Cross-site request blocked"})
+    response = await call_next(request)
+    h = response.headers
+    h.setdefault("X-Content-Type-Options", "nosniff")
+    h.setdefault("X-Frame-Options", "SAMEORIGIN")
+    h.setdefault("Referrer-Policy", "same-origin")
+    h.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    if response.headers.get("content-type", "").startswith("text/html"):
+        h.setdefault("Content-Security-Policy", _CSP)
+    if request.url.path.startswith("/api/"):
+        h.setdefault("Cache-Control", "no-store")
+    return response
+
+
+def audit(request, user: str, action: str, target: str = "", detail: str = "", ok: bool = True) -> None:
+    try:
+        add_audit(action, user or "", get_client_ip(request), target, detail, ok)
+    except Exception:
+        pass
+
 
 class SetupPayload(BaseModel):
     username: str
@@ -95,6 +148,26 @@ class LoginPayload(BaseModel):
     username: str
     password: str
     remember: bool = True
+    otp: Optional[str] = None
+
+
+class TwoFactorCodePayload(BaseModel):
+    code: str
+
+
+class TwoFactorDisablePayload(BaseModel):
+    password: str
+    code: str
+
+
+class PasswordChangePayload(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class BackupActionPayload(BaseModel):
+    app: str
+    file: str
 
 
 class AppPrefPayload(BaseModel):
@@ -116,6 +189,9 @@ class SettingsPayload(BaseModel):
     auto_prune_time: str = "04:00"
     auto_prune_images: str = "dangling"
     auto_prune_cache: bool = True
+    backup_before_update: bool = False
+    backup_max_mb: int = 2048
+    backup_keep: int = 3
     github_token: Optional[str] = None
 
 
@@ -219,6 +295,7 @@ async def api_setup(payload: SetupPayload, request: Request, response: Response)
         raise HTTPException(status_code=400, detail="Passwords do not match")
     setup_first_admin(payload.username, payload.password)
     set_session_cookie(response, request, payload.username.strip(), remember=True)
+    audit(request, payload.username.strip(), "setup", detail="Admin account created")
     return {"ok": True}
 
 
@@ -228,25 +305,118 @@ async def api_login(payload: LoginPayload, request: Request, response: Response)
     lock_remaining = is_ip_locked(ip)
     if lock_remaining > 0:
         mins = (lock_remaining + 59) // 60
+        audit(request, payload.username.strip(), "login_blocked", detail="IP locked out", ok=False)
         raise HTTPException(
             status_code=429,
             detail=f"Too many failed attempts. Try again in {mins} minute(s).",
         )
 
     user = get_user_by_username(payload.username.strip())
-    if not user or not verify_password(user["password_hash"], payload.password):
+    if not user or not await asyncio.to_thread(verify_password, user["password_hash"], payload.password):
         record_failed_attempt(ip)
+        audit(request, payload.username.strip(), "login_failed", detail="Wrong username or password", ok=False)
         raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    if user["totp_enabled"]:
+        if not (payload.otp or "").strip():
+            return {"ok": False, "otp_required": True}
+        if not check_second_factor(user, payload.otp or ""):
+            record_failed_attempt(ip)
+            audit(request, user["username"], "login_failed", detail="Wrong 2FA code", ok=False)
+            raise HTTPException(status_code=401, detail="Invalid two-factor code")
 
     clear_failed_attempts(ip)
     set_session_cookie(response, request, user["username"], remember=payload.remember)
+    audit(request, user["username"], "login", detail="2FA" if user["totp_enabled"] else "")
     return {"ok": True, "username": user["username"]}
 
 
 @app.post("/api/auth/logout")
-async def api_logout(response: Response):
+async def api_logout(request: Request, response: Response):
+    audit(request, get_current_user_optional(request) or "", "logout")
     clear_session_cookie(response)
     return {"ok": True}
+
+
+# ---------------- Account security: 2FA & password ----------------
+
+@app.get("/api/auth/security")
+async def api_security_status(user: str = Depends(require_user)):
+    u = get_user_by_username(user)
+    import json as _json
+
+    try:
+        remaining = len(_json.loads(u["backup_codes"] or "[]"))
+    except Exception:
+        remaining = 0
+    return {"username": user, "totp_enabled": bool(u["totp_enabled"]), "backup_codes_left": remaining}
+
+
+@app.post("/api/auth/2fa/setup")
+async def api_2fa_setup(user: str = Depends(require_user)):
+    u = get_user_by_username(user)
+    if u["totp_enabled"]:
+        raise HTTPException(status_code=400, detail="Two-factor authentication is already enabled")
+    secret = new_totp_secret()
+    update_user_fields(user, totp_pending=secret)
+    uri = totp_uri(secret, user)
+    return {"secret": secret, "uri": uri, "qr_svg": totp_qr_svg(uri)}
+
+
+@app.post("/api/auth/2fa/enable")
+async def api_2fa_enable(payload: TwoFactorCodePayload, request: Request, user: str = Depends(require_user)):
+    u = get_user_by_username(user)
+    secret = u["totp_pending"] or ""
+    if not secret:
+        raise HTTPException(status_code=400, detail="Start the 2FA setup first")
+    step = verify_totp(secret, payload.code)
+    if not step:
+        raise HTTPException(status_code=400, detail="Invalid code — check the time on your phone and try again")
+    codes, hashed = new_backup_codes()
+    update_user_fields(user, totp_secret=secret, totp_enabled=1, totp_last_step=step, totp_pending="", backup_codes=hashed)
+    audit(request, user, "2fa_enabled")
+    return {"ok": True, "backup_codes": codes}
+
+
+@app.post("/api/auth/2fa/disable")
+async def api_2fa_disable(payload: TwoFactorDisablePayload, request: Request, user: str = Depends(require_user)):
+    u = get_user_by_username(user)
+    if not await asyncio.to_thread(verify_password, u["password_hash"], payload.password) or not check_second_factor(u, payload.code):
+        audit(request, user, "2fa_disable_failed", ok=False)
+        raise HTTPException(status_code=400, detail="Wrong password or code")
+    update_user_fields(user, totp_secret="", totp_enabled=0, totp_last_step=0, backup_codes="[]", totp_pending="")
+    audit(request, user, "2fa_disabled")
+    return {"ok": True}
+
+
+@app.post("/api/auth/2fa/backup-codes")
+async def api_2fa_new_codes(payload: TwoFactorCodePayload, request: Request, user: str = Depends(require_user)):
+    u = get_user_by_username(user)
+    if not u["totp_enabled"] or not check_second_factor(u, payload.code):
+        raise HTTPException(status_code=400, detail="Invalid code")
+    codes, hashed = new_backup_codes()
+    update_user_fields(user, backup_codes=hashed)
+    audit(request, user, "2fa_backup_codes_regenerated")
+    return {"ok": True, "backup_codes": codes}
+
+
+@app.post("/api/auth/password")
+async def api_change_password(payload: PasswordChangePayload, request: Request, response: Response, user: str = Depends(require_user)):
+    u = get_user_by_username(user)
+    if not await asyncio.to_thread(verify_password, u["password_hash"], payload.current_password):
+        audit(request, user, "password_change_failed", ok=False)
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    validate_new_password(payload.new_password)
+    update_user_fields(user, password_hash=await asyncio.to_thread(hash_password, payload.new_password))
+    rotate_session_secret()  # đăng xuất mọi thiết bị khác
+    set_session_cookie(response, request, user, remember=True)
+    audit(request, user, "password_changed")
+    return {"ok": True}
+
+
+@app.get("/api/audit")
+async def api_audit(limit: int = 200, _: str = Depends(require_user)):
+    return {"items": get_audit_log(max(1, min(1000, limit)))}
 
 
 # ---------------- Docker & Update APIs ----------------
@@ -336,9 +506,9 @@ async def api_system_storage(_: str = Depends(require_user)):
 
 
 @app.post("/api/system/prune")
-async def api_system_prune(payload: PrunePayload, _: str = Depends(require_user)):
+async def api_system_prune(payload: PrunePayload, request: Request, user: str = Depends(require_user)):
     try:
-        return await asyncio.to_thread(
+        res = await asyncio.to_thread(
             prune_docker_resources,
             prune_images=payload.prune_images,
             all_unused_images=payload.all_unused_images,
@@ -346,7 +516,10 @@ async def api_system_prune(payload: PrunePayload, _: str = Depends(require_user)
             prune_containers=payload.prune_containers,
             prune_volumes=payload.prune_volumes,
         )
+        audit(request, user, "prune", detail=f"Freed {res.get('freed_display', '')}")
+        return res
     except Exception as e:
+        audit(request, user, "prune", detail=str(e)[:200], ok=False)
         raise HTTPException(status_code=500, detail=f"Prune failed: {e}")
 
 
@@ -400,9 +573,10 @@ async def api_validate_compose(
 
 @app.post("/api/apps/{container_name}/compose/apply")
 async def api_apply_compose(
-    container_name: str, payload: ComposeYamlPayload, _: str = Depends(require_user)
+    container_name: str, payload: ComposeYamlPayload, request: Request, user: str = Depends(require_user)
 ):
     res = await save_and_apply_compose(container_name, payload.raw_yaml)
+    audit(request, user, "compose_apply", container_name, res.get("error") or "", bool(res.get("ok")))
     if not res.get("ok"):
         raise HTTPException(status_code=400, detail=res.get("error") or "Apply failed")
     return res
@@ -410,9 +584,10 @@ async def api_apply_compose(
 
 @app.post("/api/apps/{container_name}/compose/rollback")
 async def api_rollback_compose(
-    container_name: str, payload: RollbackPayload, _: str = Depends(require_user)
+    container_name: str, payload: RollbackPayload, request: Request, user: str = Depends(require_user)
 ):
     res = await rollback_compose(container_name, payload.filename)
+    audit(request, user, "compose_rollback", container_name, payload.filename, bool(res.get("ok")))
     if not res.get("ok"):
         raise HTTPException(status_code=400, detail=res.get("error") or "Rollback failed")
     return res
@@ -422,7 +597,7 @@ async def api_rollback_compose(
 
 @app.post("/api/apps/{container_name}/uninstall")
 async def api_uninstall_app(
-    container_name: str, payload: UninstallPayload, _: str = Depends(require_user)
+    container_name: str, payload: UninstallPayload, request: Request, user: str = Depends(require_user)
 ):
     res = await uninstall_app(
         container_name,
@@ -431,17 +606,24 @@ async def api_uninstall_app(
         remove_appdata=payload.remove_appdata,
         confirm_name=payload.confirm_name,
     )
+    audit(
+        request, user, "uninstall", container_name,
+        f"compose={payload.remove_compose} images={payload.remove_images} appdata={payload.remove_appdata}",
+        bool(res.get("ok")),
+    )
     if not res.get("ok"):
         raise HTTPException(status_code=400, detail=res.get("error") or "Uninstall failed")
     return res
 
 
 @app.post("/api/apps/{container_id}/{action}")
-async def api_app_action(container_id: str, action: str, _: str = Depends(require_user)):
+async def api_app_action(container_id: str, action: str, request: Request, user: str = Depends(require_user)):
     if action not in ("start", "stop", "restart", "kill"):
         raise HTTPException(status_code=400, detail="Invalid action")
     try:
-        return await asyncio.to_thread(container_action, container_id, action)
+        res = await asyncio.to_thread(container_action, container_id, action)
+        audit(request, user, action, container_id)
+        return res
     except KeyError:
         raise HTTPException(status_code=404, detail="Container not found")
     except Exception as e:
@@ -456,35 +638,88 @@ async def api_get_settings(_: str = Depends(require_user)):
     }
 
 
+def _valid_hhmm(value: str, default: str) -> str:
+    try:
+        h, m = (int(x) for x in (value or "").split(":", 1))
+        if 0 <= h < 24 and 0 <= m < 60:
+            return f"{h:02d}:{m:02d}"
+    except ValueError:
+        pass
+    return default
+
+
 @app.post("/api/settings")
-async def api_save_settings(payload: SettingsPayload, _: str = Depends(require_user)):
+async def api_save_settings(payload: SettingsPayload, request: Request, user: str = Depends(require_user)):
     set_setting("check_interval_hours", str(max(1, min(168, payload.check_interval_hours))))
     set_setting("auto_update_enabled", "true" if payload.auto_update_enabled else "false")
-    set_setting("auto_update_time", payload.auto_update_time)
+    set_setting("auto_update_time", _valid_hhmm(payload.auto_update_time, "03:30"))
     set_setting("prune_old_images", "true" if payload.prune_old_images else "false")
     set_setting("auto_rollback", "true" if payload.auto_rollback else "false")
     set_setting("health_wait_seconds", str(max(10, min(120, payload.health_wait_seconds))))
     set_setting("auto_prune_enabled", "true" if payload.auto_prune_enabled else "false")
     set_setting("auto_prune_freq", payload.auto_prune_freq if payload.auto_prune_freq in ("daily", "weekly", "monthly") else "weekly")
     set_setting("auto_prune_weekday", str(max(0, min(6, payload.auto_prune_weekday))))
-    set_setting("auto_prune_time", payload.auto_prune_time if len(payload.auto_prune_time) == 5 and payload.auto_prune_time[2] == ":" else "04:00")
+    set_setting("auto_prune_time", _valid_hhmm(payload.auto_prune_time, "04:00"))
     set_setting("auto_prune_images", payload.auto_prune_images if payload.auto_prune_images in ("off", "dangling", "all") else "dangling")
     set_setting("auto_prune_cache", "true" if payload.auto_prune_cache else "false")
+    set_setting("backup_before_update", "true" if payload.backup_before_update else "false")
+    set_setting("backup_max_mb", str(max(50, min(102400, payload.backup_max_mb))))
+    set_setting("backup_keep", str(max(1, min(20, payload.backup_keep))))
     if payload.github_token is not None:
         set_setting("github_token", payload.github_token.strip())
     configure_jobs()
+    audit(request, user, "settings_saved")
     return {"ok": True, "settings": {**get_public_settings(), "auto_prune_next_run": get_auto_prune_next_run()}}
+
+
+# ---------------- Resource history & app data backups ----------------
+
+@app.get("/api/system/history")
+async def api_resource_history(container: str = "", hours: int = 24, _: str = Depends(require_user)):
+    since = int(time.time()) - max(1, min(168, hours)) * 3600
+    if container:
+        points = await asyncio.to_thread(get_resource_samples, container, since)
+    else:
+        points = await asyncio.to_thread(get_resource_totals, since)
+    return {"container": container, "hours": hours, "points": points}
+
+
+@app.get("/api/backups")
+async def api_list_backups(_: str = Depends(require_user)):
+    return {"items": await asyncio.to_thread(list_backups)}
+
+
+@app.post("/api/backups/restore")
+async def api_restore_backup(payload: BackupActionPayload, request: Request, user: str = Depends(require_user)):
+    try:
+        res = await asyncio.to_thread(restore_backup, payload.app, payload.file)
+    except (ValueError, FileNotFoundError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    audit(request, user, "backup_restore", payload.app, payload.file, bool(res.get("ok")))
+    if not res.get("ok"):
+        raise HTTPException(status_code=400, detail=res.get("error") or "Restore failed")
+    return res
+
+
+@app.post("/api/backups/delete")
+async def api_delete_backup(payload: BackupActionPayload, request: Request, user: str = Depends(require_user)):
+    try:
+        await asyncio.to_thread(delete_backup, payload.app, payload.file)
+    except (ValueError, FileNotFoundError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    audit(request, user, "backup_delete", payload.app, payload.file)
+    return {"ok": True}
 
 
 # ---------------- WebSockets ----------------
 
 @app.websocket("/ws/task-manager")
 async def ws_task_manager(websocket: WebSocket):
-    if not verify_websocket_user(websocket):
+    ws_user = verify_websocket_user(websocket)
+    await websocket.accept()
+    if not ws_user:
         await websocket.close(code=4401)
         return
-
-    await websocket.accept()
     try:
         while True:
             snapshot = await asyncio.to_thread(collect_task_manager_snapshot)
@@ -496,11 +731,11 @@ async def ws_task_manager(websocket: WebSocket):
 
 @app.websocket("/ws/deploy")
 async def ws_deploy_app(websocket: WebSocket):
-    if not verify_websocket_user(websocket):
+    ws_user = verify_websocket_user(websocket)
+    await websocket.accept()
+    if not ws_user:
         await websocket.close(code=4401)
         return
-
-    await websocket.accept()
 
     async def send_log(text: str):
         try:
@@ -513,6 +748,7 @@ async def ws_deploy_app(websocket: WebSocket):
         app_id = str(payload.get("app_id") or "")
         raw_yaml = str(payload.get("raw_yaml") or "")
         res = await deploy_new_app_stream(app_id, raw_yaml, send_log)
+        audit(websocket, ws_user, "deploy", app_id, ok=bool(res.get("ok")))
         if res.get("ok"):
             await send_log("__DEPLOY_OK__\n")
     except WebSocketDisconnect:
@@ -528,36 +764,52 @@ async def ws_deploy_app(websocket: WebSocket):
 
 @app.websocket("/ws/logs/{container_id}")
 async def ws_container_logs(websocket: WebSocket, container_id: str):
-    if not verify_websocket_user(websocket):
+    ws_user = verify_websocket_user(websocket)
+    await websocket.accept()
+    if not ws_user:
         await websocket.close(code=4401)
         return
 
-    await websocket.accept()
     loop = asyncio.get_running_loop()
-    queue: asyncio.Queue[str | None] = asyncio.Queue(maxsize=500)
+    queue: asyncio.Queue[str | None] = asyncio.Queue()
     stop_event = threading.Event()
-    log_stream = None
+    holder: dict[str, Any] = {}
+
+    def push(item):
+        # Hàng đợi không giới hạn nhưng bỏ bớt dòng cũ khi quá dài để không tốn RAM
+        if item is not None and queue.qsize() > 2000:
+            return
+        queue.put_nowait(item)
 
     def reader_thread():
-        nonlocal log_stream
         try:
             client = get_docker_client()
             container = client.containers.get(container_id)
-            log_stream = container.logs(
-                stream=True, follow=True, tail=150, timestamps=True
-            )
-            for chunk in log_stream:
+            stream = container.logs(stream=True, follow=True, tail=150, timestamps=True)
+            holder["stream"] = stream
+            for chunk in stream:
                 if stop_event.is_set():
                     break
-                text = chunk.decode("utf-8", errors="replace")
-                loop.call_soon_threadsafe(queue.put_nowait, text)
+                loop.call_soon_threadsafe(push, chunk.decode("utf-8", errors="replace"))
         except Exception as exc:
-            loop.call_soon_threadsafe(queue.put_nowait, f"\n[AppManager Pro] Stream closed: {exc}\n")
+            if not stop_event.is_set():
+                loop.call_soon_threadsafe(push, f"\n[AppManager Pro] Stream closed: {exc}\n")
         finally:
-            loop.call_soon_threadsafe(queue.put_nowait, None)
+            loop.call_soon_threadsafe(push, None)
 
-    thread = threading.Thread(target=reader_thread, daemon=True)
-    thread.start()
+    async def watch_disconnect():
+        # Phát hiện client đóng kết nối ngay cả khi container không in log nào
+        try:
+            while True:
+                msg = await websocket.receive()
+                if msg.get("type") == "websocket.disconnect":
+                    break
+        except Exception:
+            pass
+        loop.call_soon_threadsafe(push, None)
+
+    threading.Thread(target=reader_thread, daemon=True).start()
+    watcher = asyncio.create_task(watch_disconnect())
 
     try:
         while True:
@@ -565,24 +817,30 @@ async def ws_container_logs(websocket: WebSocket, container_id: str):
             if line is None:
                 break
             await websocket.send_text(line)
-    except WebSocketDisconnect:
+    except (WebSocketDisconnect, RuntimeError):
         pass
     finally:
         stop_event.set()
-        if log_stream is not None:
+        watcher.cancel()
+        stream = holder.get("stream")
+        if stream is not None:
             try:
-                log_stream.close()
+                stream.close()  # đóng kết nối Docker -> luồng đọc thoát ra
             except Exception:
                 pass
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 
 @app.websocket("/ws/update/{container_name}")
 async def ws_update_app(websocket: WebSocket, container_name: str):
-    if not verify_websocket_user(websocket):
+    ws_user = verify_websocket_user(websocket)
+    await websocket.accept()
+    if not ws_user:
         await websocket.close(code=4401)
         return
-
-    await websocket.accept()
 
     async def send_log(text: str):
         try:
@@ -590,6 +848,7 @@ async def ws_update_app(websocket: WebSocket, container_name: str):
         except Exception:
             pass
 
+    audit(websocket, ws_user, "update", container_name)
     try:
         await update_app_stream(container_name, send_log, mode="manual")
     except WebSocketDisconnect:
@@ -603,11 +862,11 @@ async def ws_update_app(websocket: WebSocket, container_name: str):
 
 @app.websocket("/ws/update-all")
 async def ws_update_all(websocket: WebSocket):
-    if not verify_websocket_user(websocket):
+    ws_user = verify_websocket_user(websocket)
+    await websocket.accept()
+    if not ws_user:
         await websocket.close(code=4401)
         return
-
-    await websocket.accept()
 
     async def send_event(payload: dict):
         try:
@@ -615,6 +874,7 @@ async def ws_update_all(websocket: WebSocket):
         except Exception:
             pass
 
+    audit(websocket, ws_user, "update_all")
     try:
         await update_all_apps_stream(send_event)
     except WebSocketDisconnect:
