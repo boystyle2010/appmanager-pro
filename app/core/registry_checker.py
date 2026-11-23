@@ -924,8 +924,17 @@ async def suggest_image_tags(image_ref: str, limit: int = 3) -> dict[str, Any]:
     registry, repo, tag = parse_image_ref(image_ref)
     cur = _parse_pinned_tag(tag)
     fmt = channel_format(tag)
+    if not cur:
+        # Tag chỉ có phiên bản lớn: "7-alpine", "16", "30-apache", "v3"
+        m_major = re.match(r"^((?:[a-z]+-)?v?)(\d+)(-[a-zA-Z0-9._-]+)?$", tag)
+        if m_major:
+            sfx = m_major.group(3) or ""
+            cur = {"prefix": m_major.group(1), "ver_str": m_major.group(2), "nums": (int(m_major.group(2)),),
+                   "suffix": sfx, "variant": re.sub(r"\d+", "#", sfx.lower()), "build": (), "is_pre": False,
+                   "major_only": True}
     if cur and not cur["is_pre"]:
-        prefixes, variant, n_parts = {cur["prefix"]}, cur["variant"], len(cur["nums"])
+        prefixes, variant = {cur["prefix"]}, cur["variant"]
+        n_parts = None if cur.get("major_only") else len(cur["nums"])
         pattern = "{}"
     elif fmt:
         pattern = fmt[0]
@@ -946,7 +955,8 @@ async def suggest_image_tags(image_ref: str, limit: int = 3) -> dict[str, Any]:
         same = [_parse_pinned_tag(n) for n, d in tags if d and d == digest_of.get(tag) and n != tag]
         same = [x for x in same if x and not x["is_pre"]]
         if same:
-            best = max(same, key=lambda x: (len(x["variant"]), x["nums"]))
+            # biến thể gọn nhất, phiên bản đầy đủ nhất (1.31.9 thay vì tag theo dòng 1.31)
+            best = min(same, key=lambda x: (len(x["variant"]), -len(x["nums"]), [-n for n in x["nums"]]))
             prefixes, variant, n_parts = {best["prefix"]}, best["variant"], len(best["nums"])
     pre_digests = _pre_channel_digests(tags)
     stable_digests = {d for n, d in tags if d and channel_format(n) and channel_format(n)[1] in STABLE_CHANNELS}
@@ -964,8 +974,32 @@ async def suggest_image_tags(image_ref: str, limit: int = 3) -> dict[str, Any]:
         if d and d in stable_digests:
             mj = p["nums"][0]
             caps[mj] = max(caps.get(mj, p["nums"]), p["nums"])
+    if n_parts is None and parsed:
+        # Tag chỉ có phiên bản lớn (node:20): gợi ý dạng phiên bản đầy đủ phổ biến nhất (20.18.1), không lẫn 26.13
+        from collections import Counter
+
+        n_full = Counter(len(p["nums"]) for p, _n, _d in parsed).most_common(1)[0][0]
+        parsed = [x for x in parsed if len(x[0]["nums"]) == n_full]
+
+    # Bỏ tag cũ theo kiểu đánh số khác (vd linuxserver/qbittorrent 14.3.9, 20.04.1 khi app đang 5.x):
+    # đi lên từ phiên bản lớn hiện tại, dừng khi gặp bước nhảy > 3
+    majors = sorted({p["nums"][0] for p, _n, _d in parsed})
+    base_major = cur["nums"][0] if cur and not cur["is_pre"] else (max(caps) if caps else None)
+    allowed_majors = set(majors)
+    if base_major is not None and base_major < 1900:
+        allowed_majors = {m for m in majors if m <= base_major}
+        last = base_major
+        for m in majors:
+            if m <= base_major:
+                continue
+            if m - last > 3:
+                break
+            allowed_majors.add(m)
+            last = m
     versions: list[tuple[tuple, str]] = []
     for p, n, d in parsed:
+        if p["nums"][0] not in allowed_majors:
+            continue
         mj = p["nums"][0]
         if mj in caps and (p["nums"] > caps[mj] or (d and d in pre_digests and d not in stable_digests)):
             continue
@@ -974,17 +1008,17 @@ async def suggest_image_tags(image_ref: str, limit: int = 3) -> dict[str, Any]:
     seen_ver: set = set()
     picked: list[str] = []
     for key, n in sorted(versions, reverse=True):
-        if key in seen_ver:
+        if key[0] in seen_ver:  # cùng phiên bản khác số build (v2.1.7-ls238/-ls237) -> chỉ giữ build mới nhất
             continue
-        seen_ver.add(key)
+        seen_ver.add(key[0])
         picked.append(n)
         if len(picked) >= limit:
             break
     out: list[dict[str, str]] = []
     # Tag kênh của đúng biến thể: "latest-apache" / "apache" (php), "latest-full"; không có biến thể thì "latest"
-    chan_candidates = [pattern.format(w) for w in ("latest", "stable")]
+    chan_candidates = [pattern.format(w) for w in STABLE_CHANNELS]
     if variant and pattern == "{}":
-        chan_candidates = [f"latest{variant}", f"stable{variant}", variant.strip("-")] if "#" not in variant else []
+        chan_candidates = ([f"{w}{variant}" for w in STABLE_CHANNELS] + [variant.strip("-")]) if "#" not in variant else []
     # Kênh ổn định nào trỏ tới một tag phiên bản đúng biến thể (vd latest = v0.147.0-noble-full) cũng được gợi ý
     variant_digests = {d for p_, n_, d in parsed if d}
     chan_candidates += [n for n, d in tags if d in variant_digests and channel_format(n)

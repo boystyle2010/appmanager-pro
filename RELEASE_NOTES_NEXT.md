@@ -36,3 +36,5 @@
 - Pre-release changelog for projects that build betas from the main branch without tags (e.g. Scrypted): commits on the default branch since the last stable release
 - Every update now creates a restorable backup: apps without config folders in /DATA/AppData (e.g. cloudflared) get an image + docker-compose.yml backup, so the Restore button works for them; when a pinned tag is bumped, the previous compose also appears under Edit Config → Backups
 - Edit Config → Image & Tag has a dropdown with the rolling tag of the same variant (latest / latest-full / apache…) and the 3 newest stable versions from the registry (pre-release builds excluded)
+- Duplicate compose files: the warning in Edit Config has Merge (keeps the running, working file as the base and only adds missing x-* blocks such as x-casaos from the other file; refused while the container is not running correctly) and Skip (hides the warning until one of the files changes)
+- Tag suggestions cover more tag styles: major-only tags (redis:7-alpine, node:20), build-numbered tags (one entry per version), "release"/"stable" rolling tags, and old tags with a different numbering scheme are ignored

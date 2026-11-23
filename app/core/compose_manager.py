@@ -8,14 +8,14 @@ from typing import Any, Awaitable, Callable, Optional
 
 from ruamel.yaml import YAML
 
-from app.core.database import DATA_DIR, get_setting
+from app.core.database import DATA_DIR, get_setting, set_setting
 from app.core.docker_client import (
     APPDATA_DIR,
     CASAOS_APPS_DIR,
     get_app_by_name,
     get_docker_client,
 )
-from app.core.compose_snapshot import rollback_compose_text, save_good
+from app.core.compose_snapshot import compose_changed_since_created, get_good, rollback_compose_text, save_good
 from app.core.updater import (
     _container_attrs_sync,
     _diagnostics_sync,
@@ -604,6 +604,119 @@ def find_other_compose_files(compose_path: str, names: list[str]) -> list[str]:
     return found
 
 
+def _dup_skip_key(container_name: str) -> str:
+    return f"compose_dup_skip:{container_name}"
+
+
+def _dup_fingerprint(compose_path: str, others: list[str]) -> str:
+    import hashlib
+
+    h = hashlib.sha256()
+    for p in [compose_path, *sorted(others)]:
+        try:
+            h.update(p.encode() + b"\0" + Path(p).read_bytes() + b"\0")
+        except Exception:
+            pass
+    return h.hexdigest()[:32]
+
+
+def visible_duplicate_files(container_name: str, compose_path: str, names: list[str]) -> list[str]:
+    """Các file compose trùng khác nội dung — trừ khi người dùng đã bấm Skip cho đúng trạng thái hiện tại."""
+    others = find_other_compose_files(compose_path, names)
+    if others and get_setting(_dup_skip_key(container_name), "") == _dup_fingerprint(compose_path, others):
+        return []
+    return others
+
+
+def _merge_compose_text(active_text: str, other_text: str) -> str:
+    """
+    Gộp: giữ NGUYÊN cấu hình đang chạy (services, volumes, env...) của file đang chạy; chỉ lấy thêm từ file kia
+    các khối mở rộng x-* (vd x-casaos: tiêu đề, icon, cổng cho CasaOS) mà file đang chạy chưa có.
+    """
+    ry = _make_yaml()
+    active = ry.load(active_text) or {}
+    other = ry.load(other_text) or {}
+    if not isinstance(active, dict) or not isinstance(other, dict):
+        return active_text
+    for key, val in other.items():
+        if str(key).startswith("x-") and key not in active:
+            active[key] = val
+    a_svcs = active.get("services") or {}
+    o_svcs = other.get("services") or {}
+    if isinstance(a_svcs, dict) and isinstance(o_svcs, dict):
+        for name, o_svc in o_svcs.items():
+            a_svc = a_svcs.get(name)
+            if isinstance(a_svc, dict) and isinstance(o_svc, dict):
+                for key, val in o_svc.items():
+                    if str(key).startswith("x-") and key not in a_svc:
+                        a_svc[key] = val
+    buf = io.StringIO()
+    ry.dump(active, buf)
+    return buf.getvalue()
+
+
+async def resolve_duplicate_compose(container_name: str, action: str) -> dict[str, Any]:
+    app_info = await asyncio.to_thread(get_app_by_name, container_name)
+    if not app_info:
+        return {"ok": False, "error": "Container not found"}
+    compose_path = app_info.get("compose_path") or ""
+    if not compose_path or not Path(compose_path).is_file():
+        return {"ok": False, "error": "No docker-compose.yml found"}
+    names = [app_info.get("project") or "", container_name, Path(compose_path).parent.name]
+    others = await asyncio.to_thread(find_other_compose_files, compose_path, names)
+    if not others:
+        return {"ok": True, "message": "No other compose file differs from the running one."}
+
+    if action == "skip":
+        set_setting(_dup_skip_key(container_name), _dup_fingerprint(compose_path, others))
+        return {"ok": True, "message": "Warning hidden until one of these files changes."}
+    if action != "merge":
+        return {"ok": False, "error": "Unknown action"}
+
+    # Chỉ gộp khi bản đang chạy thật sự chạy tốt -> không bao giờ nhân bản một cấu hình lỗi
+    try:
+        st = await asyncio.to_thread(_probe_container_sync, container_name)
+    except Exception as exc:
+        return {"ok": False, "error": f"Cannot inspect the container: {exc}"}
+    if st.get("status") != "running" or st.get("restarting") or st.get("health") == "unhealthy":
+        return {"ok": False, "error": (
+            f"The container is not running correctly (status: {st.get('status')}"
+            f"{', unhealthy' if st.get('health') == 'unhealthy' else ''}). Merge is only allowed from a working configuration."
+        )}
+    attrs = await asyncio.to_thread(_container_attrs_sync, container_name)
+    active_text = Path(compose_path).read_text(encoding="utf-8")
+    if compose_changed_since_created(compose_path, attrs):
+        good = get_good(container_name, compose_path)
+        if good is None or good != active_text:
+            return {"ok": False, "error": (
+                "docker-compose.yml was edited after the container was created and has not been applied yet. "
+                "Apply it (Save & Apply) or revert it first, then merge."
+            )}
+
+    merged = active_text
+    for other in others:
+        merged = _merge_compose_text(merged, Path(other).read_text(encoding="utf-8"))
+    ok_valid, valid_msg = await validate_compose_yaml(merged, str(Path(compose_path).parent))
+    if not ok_valid:
+        return {"ok": False, "error": f"Merged file is not valid: {valid_msg}"}
+
+    written: list[str] = []
+    for path in [compose_path, *others]:
+        p = Path(path)
+        current = p.read_text(encoding="utf-8")
+        if current == merged:
+            continue
+        p.with_name(p.name + ".bak").write_text(current, encoding="utf-8")
+        if path == compose_path:
+            _create_backup(container_name, current)
+        p.write_text(merged, encoding="utf-8")
+        written.append(path)
+    # File đang chạy chỉ thêm khối x-* (không ảnh hưởng container) -> ghi nhận là bản chạy tốt
+    save_good(container_name, compose_path, merged)
+    set_setting(_dup_skip_key(container_name), "")
+    return {"ok": True, "message": f"Merged into {len(written)} file(s); previous versions saved as .bak.", "written": written}
+
+
 async def get_compose_state(container_name: str, service: Optional[str] = None) -> dict[str, Any]:
     app_info = await asyncio.to_thread(get_app_by_name, container_name)
     if not app_info:
@@ -621,7 +734,8 @@ async def get_compose_state(container_name: str, service: Optional[str] = None) 
         "ui": ui,
         "backups": list_backups(container_name),
         "other_compose_files": await asyncio.to_thread(
-            find_other_compose_files,
+            visible_duplicate_files,
+            container_name,
             compose_path,
             [app_info.get("project") or "", container_name, Path(compose_path).parent.name],
         ),

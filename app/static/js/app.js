@@ -864,6 +864,27 @@
         },
 
         // ---------------- Edit App (Visual UI <-> YAML) ----------------
+        confirmMergeDuplicates() {
+          const m = this.editModal;
+          this.askConfirm({
+            tone: 'update', title: this.t('dupMergeTitle'),
+            message: `${m.composePath} → ${m.otherComposeFiles.join(', ')}. ${this.t('dupMergeMsg')}`,
+            confirmLabel: this.t('dupMerge'), onConfirm: () => this.resolveDuplicates('merge')
+          });
+        },
+
+        async resolveDuplicates(action) {
+          const m = this.editModal;
+          m.dupBusy = true;
+          try {
+            const { res, data } = await this._postJson(`/api/apps/${encodeURIComponent(m.app.name)}/compose/duplicates`, { action });
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            this.showToast(data.message || 'OK');
+            await this._loadCompose(m.app.name, m.lastService);
+          } catch (err) { this.showToast(err.message); }
+          finally { m.dupBusy = false; }
+        },
+
         async openEditModal(app) {
           this.tagMenu = { open: false, loading: false, items: [], error: '', image: '' };
           this.editModal = {

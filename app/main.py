@@ -41,6 +41,7 @@ from app.core.compose_manager import (
     get_compose_state,
     merge_ui_into_yaml,
     parse_yaml_to_ui,
+    resolve_duplicate_compose,
     rollback_compose,
     sanitize_app_id,
     save_and_apply_compose,
@@ -504,6 +505,8 @@ async def api_image_tags(image: str, _: str = Depends(require_user)):
     image = (image or "").strip()
     if not image or len(image) > 300 or any(c.isspace() for c in image):
         raise HTTPException(status_code=400, detail="Invalid image reference")
+    if "$" in image:
+        raise HTTPException(status_code=400, detail="The image uses a variable (${...}); tags cannot be suggested.")
     try:
         return await suggest_image_tags(image)
     except Exception as exc:
@@ -629,6 +632,21 @@ async def api_apply_compose(
             status_code=400,
             content={"detail": res.get("error") or "Apply failed", "logs": res.get("logs") or ""},
         )
+    return res
+
+
+class DuplicateComposePayload(BaseModel):
+    action: str  # "merge" | "skip"
+
+
+@app.post("/api/apps/{container_name}/compose/duplicates")
+async def api_compose_duplicates(
+    container_name: str, payload: DuplicateComposePayload, request: Request, user: str = Depends(require_user)
+):
+    res = await resolve_duplicate_compose(container_name, payload.action)
+    audit(request, user, f"compose_dup_{payload.action}", container_name, res.get("error") or "", bool(res.get("ok")))
+    if not res.get("ok"):
+        raise HTTPException(status_code=400, detail=res.get("error") or "Failed")
     return res
 
 
