@@ -3,7 +3,8 @@
 Tự động kiểm tra & nâng các thành phần cốt lõi của AppManager Pro, rồi viết changelog.
 
   python scripts/auto_update.py check
-      Tìm bản mới của: base image (Dockerfile), thư viện Python (requirements.txt), thư viện giao diện (npm).
+      Tìm bản mới của: base image (Dockerfile), thư viện Python (requirements.txt), thư viện giao diện (npm),
+      và action trong .github/workflows (khi BUMP_ACTIONS=true — cần secret WORKFLOW_TOKEN).
       Nếu có thay đổi: sửa file, tăng số bản vá, thêm mục mới vào CHANGELOG.md (kiểu "Component & Version Matrix"),
       ghi danh sách file đổi vào release/changed_files.txt và thông tin vào $GITHUB_OUTPUT.
 
@@ -220,6 +221,105 @@ def check_base_images(fetch=None) -> list[dict]:
 
 
 # ───────────────────────────── changelog ─────────────────────────────
+# ───────────────────────────── GitHub Actions trong workflow ─────────────────────────────
+WORKFLOW_DIR = ROOT / ".github/workflows"
+USES_RE = re.compile(r"^(?P<pre>\s*-?\s*uses:\s*)(?P<repo>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)(?P<sub>/[^@\s]*)?@(?P<ref>[^\s#]+)(?P<post>.*)$")
+
+
+def _action_tags(repo: str) -> list[str]:
+    import subprocess
+
+    r = subprocess.run(["git", "ls-remote", "--tags", f"https://github.com/{repo}"], capture_output=True, text=True, timeout=60)
+    tags = {ln.split("refs/tags/", 1)[1].removesuffix("^{}") for ln in r.stdout.splitlines() if "refs/tags/" in ln}
+    return [t for t in tags if re.fullmatch(r"v\d+(\.\d+){0,2}", t)]
+
+
+def _action_inputs(repo: str, sub: str, ref: str) -> set[str] | None:
+    """Tên các input của action ở phiên bản ref (None nếu không đọc được)."""
+    path = (sub or "").strip("/")
+    for name in ("action.yml", "action.yaml"):
+        url = f"https://raw.githubusercontent.com/{repo}/{ref}/{path + '/' if path else ''}{name}"
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=30) as r:
+                text = r.read().decode("utf-8", "replace")
+        except Exception:
+            continue
+        m = re.search(r"^inputs:\s*\n((?:[ \t]+.*\n|\s*\n)*)", text, re.M)
+        return set(re.findall(r"^  ([A-Za-z0-9_-]+):", m.group(1), re.M)) if m else set()
+    return None
+
+
+def _with_keys(lines: list[str], idx: int) -> set[str]:
+    """Các khoá trong khối `with:` ngay sau dòng uses (cùng step)."""
+    indent = len(lines[idx]) - len(lines[idx].lstrip(" -"))
+    keys, in_with, with_indent = set(), False, 0
+    for ln in lines[idx + 1:]:
+        if not ln.strip():
+            continue
+        ind = len(ln) - len(ln.lstrip())
+        if ln.lstrip().startswith("- ") and ind <= indent:
+            break
+        if ind < indent:
+            break
+        if re.match(r"\s*with:\s*$", ln):
+            in_with, with_indent = True, ind
+            continue
+        if in_with:
+            if ind <= with_indent:
+                in_with = False
+                continue
+            m = re.match(r"\s*([A-Za-z0-9_-]+):", ln)
+            if m and ind == with_indent + 2:
+                keys.add(m.group(1))
+    return keys
+
+
+def check_actions() -> list[dict]:
+    """
+    Nâng `uses: owner/repo@vX` lên major mới nhất (giữ kiểu ghi: v4 / v4.2 / v4.2.1).
+    Bỏ qua action ghim theo commit SHA (vd Trivy) và action nội bộ (./...).
+    Không nâng nếu bản mới bỏ mất input mà workflow đang dùng trong `with:`.
+    """
+    changes: list[dict] = []
+    if not WORKFLOW_DIR.is_dir():
+        return changes
+    cache: dict[str, list[str]] = {}
+    for wf in sorted(WORKFLOW_DIR.glob("*.y*ml")):
+        lines = wf.read_text(encoding="utf-8").splitlines(keepends=True)
+        changed = False
+        for i, ln in enumerate(lines):
+            m = USES_RE.match(ln.rstrip("\n"))
+            if not m or not m.group("ref").startswith("v"):
+                continue
+            repo, sub, ref = m.group("repo"), m.group("sub") or "", m.group("ref")
+            if repo not in cache:
+                try:
+                    cache[repo] = _action_tags(repo)
+                except Exception as exc:
+                    print(f"WARN tags {repo}: {exc}")
+                    cache[repo] = []
+            tags = cache[repo]
+            if not tags:
+                continue
+            parts = ref.count(".") + 1
+            same_style = [t for t in tags if t.count(".") + 1 == parts] or tags
+            akey = lambda v: vkey(v.lstrip("v"))  # noqa: E731
+            best = max(same_style, key=akey)
+            if akey(best) <= akey(ref):
+                continue
+            used = _with_keys(lines, i)
+            inputs = _action_inputs(repo, sub, best)
+            if inputs is None or (used - inputs):
+                print(f"SKIP {repo}@{best}: inputs {sorted(used - (inputs or set()))} not available")
+                continue
+            lines[i] = f"{m.group('pre')}{repo}{sub}@{best}{m.group('post')}\n"
+            changed = True
+            changes.append({"name": f"{repo}{sub}", "old": ref, "new": best, "file": wf})
+        if changed:
+            wf.write_text("".join(lines), encoding="utf-8")
+    return changes
+
+
 def read_app_version() -> str:
     m = re.search(r'APP_VERSION\s*=\s*"(\d+\.\d+\.\d+)"', VERSION_FILE.read_text(encoding="utf-8"))
     if not m:
@@ -301,6 +401,16 @@ def set_output(key: str, value: str) -> None:
 def cmd_check(args) -> int:
     changes = check_base_images() + check_python_packages() + check_npm_libs()
     bumped = [c for c in changes if c["old"].split(" ")[0] != c["new"] or "floating" in c["old"]]
+    # Action trong workflow: chỉ nâng khi có token được phép ghi .github/workflows (BUMP_ACTIONS=true).
+    # Không tự tạo bản phát hành; nếu có bản phát hành thì gộp vào cùng commit, nếu không thì commit riêng.
+    action_changes = check_actions() if os.environ.get("BUMP_ACTIONS", "").lower() == "true" else []
+    OUT_DIR.mkdir(exist_ok=True)
+    wf_list = OUT_DIR / "workflow_files.txt"
+    wf_list.unlink(missing_ok=True)
+    if action_changes:
+        wf_files = sorted({str(c["file"].relative_to(ROOT)) for c in action_changes})
+        wf_list.write_text("\n".join(wf_files) + "\n", encoding="utf-8")
+        set_output("actions_summary", "; ".join(f"{c['name']} {c['old']} -> {c['new']}" for c in action_changes)[:900])
     force = os.environ.get("FORCE_RELEASE", "").lower() == "true"
     wanted = (os.environ.get("RELEASE_VERSION") or "").strip().lstrip("v")
     notes = read_next_notes()
@@ -325,6 +435,7 @@ def cmd_check(args) -> int:
     insert_into_changelog(section)
     OUT_DIR.mkdir(exist_ok=True)
     files = [REQ, DOCKERFILE, VENDOR, *HTML_FILES, VERSION_FILE, CHANGELOG]
+    files += [c["file"] for c in action_changes if c["file"] not in files]
     if notes:
         NEXT_NOTES.write_text("# Ghi chú cho bản phát hành kế tiếp — mỗi dòng bắt đầu bằng \"- \"\n", encoding="utf-8")
         files.append(NEXT_NOTES)

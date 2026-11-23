@@ -75,6 +75,7 @@ jobs:
         id: upd
         env:
           UPDATE_POLICY: latest
+          BUMP_ACTIONS: ${{ secrets.WORKFLOW_TOKEN != '' }}
           FORCE_RELEASE: ${{ github.event.inputs.force_release }}
           RELEASE_VERSION: ${{ github.event.inputs.version }}
         run: python scripts/auto_update.py check
@@ -92,6 +93,7 @@ jobs:
         env:
           UPDATE_POLICY: safe
           HELD_BACK: "true"
+          BUMP_ACTIONS: ${{ secrets.WORKFLOW_TOKEN != '' }}
           FORCE_RELEASE: ${{ github.event.inputs.force_release }}
           RELEASE_VERSION: ${{ github.event.inputs.version }}
         run: |
@@ -135,13 +137,26 @@ jobs:
       - name: Commit (signed by GitHub)
         if: steps.final.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Token riêng (secret WORKFLOW_TOKEN, quyền Contents + Workflows) để được sửa .github/workflows;
+          # không có thì dùng token mặc định. [skip ci]: commit bằng token riêng sẽ kích hoạt workflow mới.
+          GH_TOKEN: ${{ secrets.WORKFLOW_TOKEN || secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.final.outputs.version }}
           SUMMARY: ${{ steps.final.outputs.summary }}
         run: |
           python scripts/signed_commit.py --branch main \
-            --message "chore(deps): update components to v${VERSION}"$'\n\n'"${SUMMARY}" \
+            --message "chore(deps): update components to v${VERSION} [skip ci]"$'\n\n'"${SUMMARY}" \
             --files-from release/changed_files.txt > new_sha.txt
+
+      # Chỉ có action trong workflow được nâng (không có bản phát hành): commit riêng, không build lại image
+      - name: Commit workflow action updates (signed by GitHub)
+        if: steps.final.outputs.changed != 'true' && hashFiles('release/workflow_files.txt') != ''
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+          SUMMARY: ${{ steps.safe.outputs.actions_summary || steps.upd.outputs.actions_summary }}
+        run: |
+          python scripts/signed_commit.py --branch main \
+            --message "ci: update GitHub Actions [skip ci]"$'\n\n'"${SUMMARY}" \
+            --files-from release/workflow_files.txt > /dev/null
 
       - name: Resolve head
         id: head
