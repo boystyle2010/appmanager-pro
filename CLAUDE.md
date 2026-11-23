@@ -43,4 +43,4 @@ bash scripts/verify.sh amp-test smoke    # cần Docker: build image, chạy uvi
 
 ## Việc còn mở
 - Trivy: `golang.org/x/net` v0.60.0 trong `docker-compose` (CVE-2026-78661, tạm bỏ qua trong `.trivyignore` tới 2027-02-28) — chờ Docker Compose phát hành bản dùng x/net ≥ 0.62.0 (v5.8.0 và nhánh main ngày 2026-11-18 vẫn là v0.60.0).
-- Ý tưởng tính năng: thông báo Telegram/Discord/ntfy; loại trừ/ghim app khỏi Update All; API token cho tự động hoá; sao lưu/khôi phục cấu hình AppManager; tìm & tải log container.
+- Ý tưởng tính năng: thông báo Telegram/Discord/ntfy; API token cho tự động hoá; sao lưu/khôi phục cấu hình AppManager; tìm & tải log container.

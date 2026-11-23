@@ -426,6 +426,15 @@ def _bump_compose_image_tag(
     return True, new_img, str(backup_path), ""
 
 
+def get_update_all_excluded() -> list[str]:
+    """App bị loại khỏi "Cập nhật tất cả" (người dùng tự chọn); rỗng = cập nhật tất cả."""
+    try:
+        data = json.loads(get_setting("update_all_excluded", "[]") or "[]")
+        return [str(x) for x in data if isinstance(x, str)]
+    except Exception:
+        return []
+
+
 def _write_text(path: str, text: str) -> None:
     Path(path).write_text(text, encoding="utf-8")
 
@@ -729,7 +738,8 @@ async def _update_app_stream_impl(
 async def update_all_apps_stream(send_event: EventCallback) -> None:
     """Cập nhật tuần tự toàn bộ app có bản mới; luôn đẩy self-update xuống cuối cùng."""
     data = await asyncio.to_thread(list_all_apps, True)
-    candidates = [a for a in data["apps"] if a["has_update"] and a["can_update"]]
+    excluded = set(get_update_all_excluded())
+    candidates = [a for a in data["apps"] if a["has_update"] and a["can_update"] and a["name"] not in excluded]
 
     regular = [a for a in candidates if not a["is_self"]]
     self_apps = [a for a in candidates if a["is_self"]]

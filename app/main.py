@@ -1,4 +1,5 @@
 import asyncio
+import json
 import httpx
 import threading
 import time
@@ -42,6 +43,7 @@ from app.core.compose_manager import (
     merge_ui_into_yaml,
     parse_yaml_to_ui,
     resolve_duplicate_compose,
+    visible_duplicate_files,
     rollback_compose,
     sanitize_app_id,
     save_and_apply_compose,
@@ -85,7 +87,7 @@ from app.core.registry_checker import (
 from app.core.scheduler import configure_jobs, get_auto_prune_next_run, start_scheduler, stop_scheduler
 from app.core.system_monitor import collect_task_manager_snapshot
 from app.core.system_prune import get_docker_disk_usage, prune_docker_resources
-from app.core.updater import collect_self_update_result, update_all_apps_stream, update_app_stream
+from app.core.updater import collect_self_update_result, get_update_all_excluded, update_all_apps_stream, update_app_stream
 
 BASE_DIR = Path(__file__).resolve().parent
 ASSETS_DIR = BASE_DIR.parent / "assets"
@@ -436,6 +438,23 @@ async def api_list_apps(_: str = Depends(require_user)):
         for a in data.get("apps") or []:
             a["backups"] = per_app.get(a["name"], [])
             a["latest_backup"] = a["backups"][0] if a["backups"] else None
+        # App còn file compose khác nội dung (chưa bấm Skip) -> biểu tượng trên thẻ app
+        def _dups() -> dict[str, int]:
+            out: dict[str, int] = {}
+            for a in data.get("apps") or []:
+                cp = a.get("compose_path") or ""
+                if not cp:
+                    continue
+                try:
+                    names = [a.get("project") or "", a["name"], Path(cp).parent.name]
+                    out[a["name"]] = len(visible_duplicate_files(a["name"], cp, names))
+                except Exception:
+                    pass
+            return out
+        dups = await asyncio.to_thread(_dups)
+        for a in data.get("apps") or []:
+            a["dup_compose"] = dups.get(a["name"], 0)
+        data["update_all_excluded"] = get_update_all_excluded()
         return JSONResponse(content=data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Docker socket error: {e}")
@@ -633,6 +652,18 @@ async def api_apply_compose(
             content={"detail": res.get("error") or "Apply failed", "logs": res.get("logs") or ""},
         )
     return res
+
+
+class UpdateAllExcludedPayload(BaseModel):
+    names: list[str]
+
+
+@app.post("/api/update-all/excluded")
+async def api_update_all_excluded(payload: UpdateAllExcludedPayload, request: Request, user: str = Depends(require_user)):
+    names = sorted({n.strip() for n in payload.names if n and n.strip() and len(n) <= 128})[:500]
+    set_setting("update_all_excluded", json.dumps(names))
+    audit(request, user, "update_all_excluded", ",".join(names)[:300])
+    return {"ok": True, "excluded": names}
 
 
 class DuplicateComposePayload(BaseModel):

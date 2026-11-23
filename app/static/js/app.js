@@ -77,6 +77,8 @@
         auditItems: [],
         backupsState: { loading: false, items: [], busyFile: '' },
         restorePicker: { open: false, app: null, items: [], selected: '' },
+        updateAllExcluded: [],
+        updateAllPicker: { open: false, selected: [], saving: false },
         tagMenu: { open: false, loading: false, items: [], error: '', image: '' },
         restoreRun: { open: false, running: false, title: '', version: '', status: '', message: '', log: [], elapsed: 0, timer: null },
         histOpen: {},
@@ -148,13 +150,48 @@
           });
         },
 
+        // App có bản cập nhật & cập nhật được; và phần được chọn cho "Cập nhật tất cả"
+        get updatableApps() { return this.apps.filter(a => a.has_update && a.can_update); },
+        get updateAllTargets() { return this.updatableApps.filter(a => !this.updateAllExcluded.includes(a.name)); },
+
         confirmBatchUpdate() {
+          const n = this.updateAllTargets.length, total = this.updatableApps.length;
+          if (!n) { this.openUpdateAllPicker(); return; }
+          const skipped = total - n;
           this.askConfirm({
             tone: 'update', title: this.t('confirmBatchTitle'),
-            message: `${this.summary.updates} ${this.t('confirmBatchMsg')}`,
-            confirmLabel: `${this.t('updateAll')} (${this.summary.updates})`,
+            message: `${n} ${this.t('confirmBatchMsg')}` + (skipped ? ` ${this.t('updateAllSkippedNote').replace('{n}', skipped)}` : ''),
+            confirmLabel: `${this.t('updateAll')} (${n})`,
             onConfirm: () => this.startBatchUpdate()
           });
+        },
+
+        openUpdateAllPicker() {
+          this.updateAllPicker = {
+            open: true, saving: false,
+            selected: this.updatableApps.filter(a => !this.updateAllExcluded.includes(a.name)).map(a => a.name)
+          };
+        },
+
+        toggleUpdateAllPick(name) {
+          const s = this.updateAllPicker.selected;
+          this.updateAllPicker.selected = s.includes(name) ? s.filter(x => x !== name) : [...s, name];
+        },
+
+        async saveUpdateAllPicker() {
+          const p = this.updateAllPicker;
+          // Loại trừ = app có update bị bỏ chọn + app đã loại trừ trước đó hiện không có update (giữ lựa chọn cũ)
+          const visible = this.updatableApps.map(a => a.name);
+          const names = [...visible.filter(n => !p.selected.includes(n)),
+                         ...this.updateAllExcluded.filter(n => !visible.includes(n))];
+          p.saving = true;
+          try {
+            const { res, data } = await this._postJson('/api/update-all/excluded', { names });
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            this.updateAllExcluded = data.excluded || [];
+            p.open = false;
+          } catch (err) { this.showToast(err.message); }
+          finally { p.saving = false; }
         },
 
         confirmRollback(filename) {
@@ -324,7 +361,7 @@
 
         async init() {
           this.$watch(() => [this.confirmModal, this.actionSheet, this.logModal, this.batchModal, this.deployModal, this.updateModal,
-                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker, this.restoreRun].some(m => m && m.open), (open) => {
+                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker, this.restoreRun, this.updateAllPicker].some(m => m && m.open), (open) => {
             const b = document.body, h = document.documentElement;
             if (open) {
               this._lockY = window.scrollY || 0;
@@ -428,6 +465,7 @@
             if (!res.ok) throw new Error(data.detail || 'Failed to load apps');
             this.envMode = data.environment;
             this.summary = data.summary;
+            this.updateAllExcluded = data.update_all_excluded || [];
             this.apps = data.apps;
             this.lastChecked = data.last_checked || '';
             this.checkingUpdates = !!data.checking_updates;
