@@ -93,18 +93,30 @@ def load_casaos_metadata() -> dict[str, dict[str, Any]]:
     return apps_meta
 
 
-def detect_real_version(image_tags: list[str], labels: dict[str, str], image_labels: dict[str, str]) -> str:
-    merged = {**image_labels, **labels}
-    for key in (
-        "org.opencontainers.image.version",
-        "build_version",
-        "org.label-schema.version",
-        "version",
-    ):
-        val = merged.get(key)
-        if val and str(val).lower() not in ("unknown", "none", ""):
-            return str(val).strip()
+# Image hệ điều hành gốc gắn nhãn phiên bản của CHÍNH NÓ (vd ubuntu: org.opencontainers.image.version=24.04).
+# Image ứng dụng build "FROM ubuntu" thừa hưởng nhãn đó -> không được hiểu là phiên bản của ứng dụng.
+BASE_DISTRO_REFS = {"ubuntu", "debian", "alpine", "fedora", "centos", "rockylinux", "almalinux", "archlinux", "opensuse"}
+_DISTRO_VERSION_RE = re.compile(r"^\d{1,2}(\.\d{1,2})?$")
+GENERIC_VERSIONS = {"", "unknown", "none", "latest", "main", "master", "edge", "stable", "dev", "nightly", "beta"}
 
+
+def version_from_labels(labels: dict[str, str]) -> str:
+    """Phiên bản thật của ứng dụng từ nhãn image; "" nếu không có (hoặc chỉ là nhãn của hệ điều hành gốc)."""
+    base_ref = str(labels.get("org.opencontainers.image.ref.name") or "").strip().lower()
+    for key in ("org.opencontainers.image.version", "build_version", "org.label-schema.version", "version"):
+        val = str(labels.get(key) or "").strip()
+        if not val or val.lower() in GENERIC_VERSIONS:
+            continue
+        if key == "org.opencontainers.image.version" and base_ref in BASE_DISTRO_REFS and _DISTRO_VERSION_RE.match(val):
+            continue
+        return val
+    return ""
+
+
+def detect_real_version(image_tags: list[str], labels: dict[str, str], image_labels: dict[str, str]) -> str:
+    val = version_from_labels({**image_labels, **labels})
+    if val:
+        return val
     if image_tags:
         return image_tags[0].split(":")[-1]
     return "latest"
@@ -282,6 +294,15 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
 
         cached = cache_map.get(c.name, {})
         pref = prefs_map.get(c.name, {})
+        # Tag chung (latest...): dùng phiên bản thật đã tra được trên registry cho ĐÚNG image đang chạy
+        cached_ver = str(cached.get("current_version") or "")
+        if (
+            version.lower() in GENERIC_VERSIONS
+            and cached_ver.lower() not in GENERIC_VERSIONS
+            and local_digests
+            and cached.get("local_digest") in local_digests
+        ):
+            version = cached_ver
 
         remote_digest = cached.get("remote_digest") or ""
         target_tag = cached.get("target_tag") or ""

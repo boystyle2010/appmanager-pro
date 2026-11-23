@@ -12,7 +12,7 @@ from app.core.database import (
     get_update_cache_item,
     save_update_cache,
 )
-from app.core.docker_client import list_all_apps
+from app.core.docker_client import GENERIC_VERSIONS, list_all_apps, version_from_labels
 
 MANIFEST_ACCEPT = ", ".join(
     [
@@ -437,10 +437,22 @@ async def _discover_newer_pinned_tag(
     tag_names: list[str] = []
     try:
         if registry == "registry-1.docker.io":
-            hub_url = f"https://hub.docker.com/v2/repositories/{repo}/tags?page_size=60&ordering=last_updated"
-            r = await client.get(hub_url)
-            if r.status_code == 200:
-                tag_names = [t.get("name", "") for t in (r.json().get("results") or [])]
+            # Repo lớn (vd php: >16.000 tag) -> 100 tag mới nhất chưa chắc có tag cùng biến thể.
+            # Thêm truy vấn lọc theo đuôi (vd "-apache") để chắc chắn thấy các bản mới của đúng biến thể.
+            hub_base = f"https://hub.docker.com/v2/repositories/{repo}/tags?page_size=100&ordering=last_updated"
+            urls = [hub_base]
+            if cur_suffix:
+                urls.append(f"{hub_base}&name={cur_suffix}")
+            for hub_url in urls:
+                for _page in range(3):
+                    r = await client.get(hub_url)
+                    if r.status_code != 200:
+                        break
+                    body = r.json()
+                    tag_names += [t.get("name", "") for t in (body.get("results") or [])]
+                    hub_url = body.get("next") or ""
+                    if not hub_url or hub_url == hub_base:
+                        break
         else:
             t_url = f"https://{registry}/v2/{repo}/tags/list?n=100"
             r = await _registry_request(client, t_url, "application/json", token_cache, scope_key)
@@ -482,6 +494,38 @@ async def _discover_newer_pinned_tag(
             return cand_tag, digest
 
     return None
+
+
+async def _hub_version_for_digest(client: httpx.AsyncClient, repo: str, digests: list[str]) -> str:
+    """
+    Image dùng tag chung (latest, full...) không ghi phiên bản -> tìm tag có phiên bản (vd v0.147.0-noble-full)
+    trỏ cùng digest trên Docker Hub (API của Hub, không tốn lượt pull). Trả về "v0.147.0" hoặc "".
+    """
+    want = {d for d in digests if d}
+    if not want:
+        return ""
+    url = f"https://hub.docker.com/v2/repositories/{repo}/tags?page_size=100&ordering=last_updated"
+    best: Optional[tuple[tuple[int, ...], str]] = None
+    try:
+        for _page in range(2):
+            r = await client.get(url)
+            if r.status_code != 200:
+                break
+            body = r.json()
+            for t in body.get("results") or []:
+                if t.get("digest") not in want:
+                    continue
+                parsed = _parse_pinned_tag(str(t.get("name") or ""))
+                if parsed and not parsed["is_pre"]:
+                    cand = (parsed["nums"], f"{parsed['prefix']}{parsed['ver_str']}")
+                    if best is None or cand[0] > best[0]:
+                        best = cand
+            url = body.get("next") or ""
+            if best or not url:
+                break
+    except Exception:
+        return ""
+    return best[1] if best else ""
 
 
 async def check_single_app(
@@ -591,6 +635,16 @@ async def check_single_app(
     else:
         result["error"] = "Local build (no registry digest)"
 
+    # Phiên bản thật của image đang chạy khi tag là chữ chung (latest...) / nhãn chỉ là của hệ điều hành gốc
+    if registry_ok_for_hub := (registry == "registry-1.docker.io"):
+        if current_version.lower() in GENERIC_VERSIONS and local_digests:
+            resolved = await _hub_version_for_digest(client, repo, local_digests)
+            if resolved:
+                current_version = resolved
+                result["current_version"] = resolved
+                if not result.get("has_update"):
+                    result["remote_version"] = resolved
+
     # Bước 2: Lấy Changelog từ GitHub (Releases -> CHANGELOG.md -> Commits)
     slug = extract_github_slug(source_url, image_ref, icon_url)
     if slug:
@@ -639,18 +693,11 @@ async def check_single_app(
             elif has_digest_update:
                 result["has_update"] = 1
 
-                # Lọc bỏ các chữ chung chung kiểu "latest", "main" khi đọc OCI version
-                found_real_ver = ""
-                for key in (
-                    "org.opencontainers.image.version",
-                    "build_version",
-                    "org.label-schema.version",
-                    "version",
-                ):
-                    val = str(remote_labels.get(key) or "").strip()
-                    if val and val.lower() not in GENERIC_VERSION_WORDS:
-                        found_real_ver = val
-                        break
+                # Phiên bản từ nhãn (bỏ chữ chung chung và nhãn thừa hưởng của hệ điều hành gốc);
+                # không có thì tìm tag có phiên bản cùng digest trên Docker Hub
+                found_real_ver = version_from_labels(remote_labels)
+                if not found_real_ver and registry_ok_for_hub and remote_digest:
+                    found_real_ver = await _hub_version_for_digest(client, repo, [remote_digest])
 
                 if not result["source_url"]:
                     found_src = (

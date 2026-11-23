@@ -22,3 +22,5 @@
 - Settings → Storage: aligned backup limit fields, version shown per backup, backup list and SSD schedule stay visible even if Docker disk usage cannot be read; restore picker uses amber accents; internal reload marker no longer saved in update logs
 - UI: centered port column headers and update-time / check-interval fields (incl. the time picker on iOS Safari); AppManager Pro's own ⋯ menu shows Restart next to the close button
 - Restore shows a progress window (elapsed time, then the result and each step performed); if the previous image was removed (e.g. by "auto-clean old images"), it is pulled again from the registry by its saved digest, or by its version tag for older backups
+- Version detection: version labels inherited from the base OS image (e.g. Ubuntu "24.04") are ignored; for images on generic tags (latest, full…) the real version is resolved from the Docker Hub tag with the same digest (e.g. Scrypted v0.147.0)
+- Pinned tags with a variant suffix on large Docker Hub repos (e.g. php:8.5.12-apache) now find newer tags of the same variant (8.6.0-apache)
