@@ -16,3 +16,4 @@
 - Rollback first restores only the previous image and docker-compose.yml and keeps the app data as it is (settings and logs stay); the configuration backup is used only if the previous version still does not start. Restoring a backup never replaces current log files
 - App backups now contain only settings files (json, yaml, conf, env, small databases, certificates, small JSON/text settings files such as Home Assistant's .storage), not whole data folders, media or logs
 - Settings backups also include Samba databases (.tdb, e.g. SMB passwords) and session/secret files; .jsonl audit logs are treated as logs and never replaced on restore
+- App cards: a Restore button next to Update brings the app back to the version, docker-compose.yml and settings saved before its last update; the ⋯ menu moved to the top-right corner next to the CasaOS / Docker badge

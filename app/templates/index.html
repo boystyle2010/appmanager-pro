@@ -280,11 +280,19 @@
                   <div class="flex items-center justify-between gap-2">
                     <h2 class="font-semibold text-[15px] leading-tight truncate group-hover:text-sky-400 transition"
                         :title="app.title" x-text="app.title"></h2>
-                    <span class="text-[9px] px-1.5 py-0.5 rounded-md font-semibold uppercase tracking-wider shrink-0 border"
-                          :class="app.source === 'casaos'
-                            ? 'bg-indigo-500/12 text-indigo-300 border-indigo-400/20'
-                            : 'bg-sky-500/12 text-sky-300 border-sky-400/20'"
-                          x-text="app.source"></span>
+                    <div class="flex items-center gap-1 shrink-0">
+                      <span class="text-[9px] px-1.5 py-0.5 rounded-md font-semibold uppercase tracking-wider border"
+                            :class="app.source === 'casaos'
+                              ? 'bg-indigo-500/12 text-indigo-300 border-indigo-400/20'
+                              : 'bg-sky-500/12 text-sky-300 border-sky-400/20'"
+                            x-text="app.source"></span>
+                      <button @click.stop="openActionSheet(app)" :aria-label="t('moreActions')"
+                              class="w-7 h-7 -mr-1.5 rounded-lg flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:bg-white/5 active:bg-white/10 transition">
+                        <svg class="w-4.5 h-4.5" fill="currentColor" viewBox="0 0 24 24">
+                          <circle cx="5" cy="12" r="1.75"/><circle cx="12" cy="12" r="1.75"/><circle cx="19" cy="12" r="1.75"/>
+                        </svg>
+                      </button>
+                    </div>
                   </div>
 
                   <div class="flex items-center gap-1.5 mt-1 text-[11px] font-medium">
@@ -376,11 +384,15 @@
                 </button>
               </template>
 
-              <button @click="openActionSheet(app)" :aria-label="t('moreActions')"
-                      class="glass-btn w-10 h-9 rounded-xl flex items-center justify-center text-muted hover:text-[var(--text-primary)] shrink-0">
-                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <circle cx="5" cy="12" r="1.75"/><circle cx="12" cy="12" r="1.75"/><circle cx="19" cy="12" r="1.75"/>
+              <button x-show="app.latest_backup" @click="confirmRestoreApp(app)"
+                      :disabled="backupsState.busyFile === app.latest_backup?.file"
+                      :title="app.latest_backup ? `${app.latest_backup.version || ''} • ${formatTs(app.latest_backup.created)}` : ''"
+                      class="glass-btn h-9 px-3 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5 text-amber-300 shrink-0 disabled:opacity-50">
+                <svg class="w-3.5 h-3.5" :class="backupsState.busyFile === app.latest_backup?.file ? 'animate-spin' : ''"
+                     fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"/>
                 </svg>
+                <span x-text="t('restore')"></span>
               </button>
             </div>
           </div>

@@ -1208,6 +1208,11 @@
           } catch (_) {}
         },
 
+        formatTs(epoch) {
+          if (!epoch) return '';
+          return new Date(epoch * 1000).toLocaleString(this.lang === 'vi' ? 'vi-VN' : 'en-US', { dateStyle: 'short', timeStyle: 'short' });
+        },
+
         utcToLocal(ts) {
           if (!ts) return '';
           const d = new Date(String(ts).replace(' ', 'T') + (String(ts).endsWith('Z') ? '' : 'Z'));
@@ -1238,12 +1243,24 @@
           });
         },
 
+        // Nút Khôi phục trên thẻ app: bản sao lưu mới nhất (tạo ngay trước lần cập nhật gần nhất)
+        confirmRestoreApp(app) {
+          const b = app.latest_backup;
+          if (!b) return;
+          this.askConfirm({
+            tone: 'danger', title: this.t('restoreAppTitle'),
+            message: `${app.title} → ${b.version || '?'} (${this.formatTs(b.created)}). ${this.t('restoreAppMsg')}`,
+            confirmLabel: this.t('restore'), onConfirm: () => this.restoreBackup(b)
+          });
+        },
+
         async restoreBackup(b) {
           this.backupsState.busyFile = b.file;
           try {
             const { res, data } = await this._postJson('/api/backups/restore', { app: b.app, file: b.file });
             if (!res.ok) throw new Error(data.detail || 'Restore failed');
             this.showToast(data.warning || data.message || 'OK');
+            this.loadApps();
           } catch (err) { this.showToast(err.message); }
           finally { this.backupsState.busyFile = ''; }
         },

@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+# Sản phẩm build (tạo lúc build image)
+app/static/css/tailwind.css
+app/static/vendor/
