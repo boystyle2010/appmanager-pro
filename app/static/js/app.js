@@ -76,6 +76,7 @@
         pwForm: { current: '', next: '', confirm: '', busy: false },
         auditItems: [],
         backupsState: { loading: false, items: [], busyFile: '' },
+        restorePicker: { open: false, app: null, items: [], selected: '' },
         histOpen: {},
         histData: {},
         histTotalOpen: false,
@@ -321,7 +322,7 @@
 
         async init() {
           this.$watch(() => [this.confirmModal, this.actionSheet, this.logModal, this.batchModal, this.deployModal, this.updateModal,
-                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal].some(m => m && m.open), (open) => {
+                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker].some(m => m && m.open), (open) => {
             const b = document.body, h = document.documentElement;
             if (open) {
               this._lockY = window.scrollY || 0;
@@ -1243,15 +1244,18 @@
           });
         },
 
-        // Nút Khôi phục trên thẻ app: bản sao lưu mới nhất (tạo ngay trước lần cập nhật gần nhất)
+        // Nút Khôi phục trên thẻ app: chọn bản muốn khôi phục (mặc định bản mới nhất)
         confirmRestoreApp(app) {
-          const b = app.latest_backup;
-          if (!b) return;
-          this.askConfirm({
-            tone: 'danger', title: this.t('restoreAppTitle'),
-            message: `${app.title} → ${b.version || '?'} (${this.formatTs(b.created)}). ${this.t('restoreAppMsg')}`,
-            confirmLabel: this.t('restore'), onConfirm: () => this.restoreBackup(b)
-          });
+          const items = app.backups?.length ? app.backups : (app.latest_backup ? [app.latest_backup] : []);
+          if (!items.length) return;
+          this.restorePicker = { open: true, app, items, selected: items[0].file };
+        },
+
+        runRestorePicker() {
+          const p = this.restorePicker;
+          const b = p.items.find(x => x.file === p.selected) || p.items[0];
+          p.open = false;
+          if (b) this.restoreBackup(b);
         },
 
         async restoreBackup(b) {

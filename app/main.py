@@ -425,11 +425,12 @@ async def api_list_apps(_: str = Depends(require_user)):
         data = await asyncio.to_thread(list_all_apps, True)
         data["checking_updates"] = is_check_running()
         # Bản sao lưu mới nhất của từng app (cho nút Khôi phục trên thẻ app)
-        latest: dict[str, dict] = {}
+        per_app: dict[str, list[dict]] = {}
         for b in await asyncio.to_thread(list_backups):  # đã sắp xếp mới nhất trước
-            latest.setdefault(b["app"], b)
+            per_app.setdefault(b["app"], []).append(b)
         for a in data.get("apps") or []:
-            a["latest_backup"] = latest.get(a["name"])
+            a["backups"] = per_app.get(a["name"], [])
+            a["latest_backup"] = a["backups"][0] if a["backups"] else None
         return JSONResponse(content=data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Docker socket error: {e}")

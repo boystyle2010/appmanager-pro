@@ -287,8 +287,8 @@
                               : 'bg-sky-500/12 text-sky-300 border-sky-400/20'"
                             x-text="app.source"></span>
                       <button @click.stop="openActionSheet(app)" :aria-label="t('moreActions')"
-                              class="w-7 h-7 -mr-1.5 rounded-lg flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:bg-white/5 active:bg-white/10 transition">
-                        <svg class="w-4.5 h-4.5" fill="currentColor" viewBox="0 0 24 24">
+                              class="h-[19px] px-1.5 rounded-md border border-[var(--glass-border)] bg-white/5 flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:bg-white/10 active:bg-white/15 transition">
+                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
                           <circle cx="5" cy="12" r="1.75"/><circle cx="12" cy="12" r="1.75"/><circle cx="19" cy="12" r="1.75"/>
                         </svg>
                       </button>
@@ -636,13 +636,16 @@
           <span x-show="actionSheet.app?.has_update" class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300">NEW</span>
         </button>
 
-        <button x-show="actionSheet.app?.can_update"
-                @click="const a = actionSheet.app; closeActionSheet(); openEditModal(a)" class="ios-row">
-          <span class="flex items-center gap-3">
+        <button :disabled="!actionSheet.app?.can_update"
+                @click="const a = actionSheet.app; closeActionSheet(); openEditModal(a)" class="ios-row disabled:opacity-45">
+          <span class="flex items-center gap-3 min-w-0">
             <svg class="w-4 h-4 text-indigo-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/>
             </svg>
-            <span x-text="t('editCompose')"></span>
+            <span class="min-w-0 text-left">
+              <span class="block" x-text="t('editCompose')"></span>
+              <span x-show="!actionSheet.app?.can_update" class="block text-[10.5px] font-normal text-muted" x-text="t('noComposeWarning')"></span>
+            </span>
           </span>
           <svg class="w-3.5 h-3.5 text-subtle" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
         </button>
@@ -2017,6 +2020,51 @@
       <pre x-ref="logBox"
            class="glass-terminal font-mono-code rounded-2xl p-4 mt-4 flex-1 overflow-auto text-[11px] sm:text-xs text-emerald-300/95 leading-relaxed whitespace-pre-wrap break-all"
            x-text="logModal.lines || t('connectingLogs')"></pre>
+    </div>
+  </div>
+
+  <!-- MODAL: Chọn phiên bản để khôi phục -->
+  <div x-show="restorePicker.open" x-cloak x-transition.opacity
+       class="fixed inset-0 z-[55] flex items-end sm:items-center justify-center sm:p-5 bg-black/70 backdrop-blur-md"
+       @click.self="restorePicker.open = false" @keydown.escape.window="if (!confirmModal.open) restorePicker.open = false">
+    <div class="glass-panel w-full max-w-sm rounded-t-[26px] sm:rounded-[26px] p-5 space-y-4 shadow-2xl max-h-[85dvh] flex flex-col"
+         style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
+      <div class="flex items-start gap-3.5">
+        <div class="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border bg-amber-500/15 border-amber-400/35 text-amber-400">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"/>
+          </svg>
+        </div>
+        <div class="min-w-0 flex-1">
+          <h3 class="font-bold text-[15px] leading-snug" x-text="`${t('restore')}: ${restorePicker.app?.title || ''}`"></h3>
+          <p class="text-xs text-muted mt-1.5 leading-relaxed" x-text="t('restoreAppMsg')"></p>
+        </div>
+      </div>
+
+      <div class="space-y-2 overflow-y-auto min-h-0">
+        <template x-for="(b, i) in restorePicker.items" :key="b.file">
+          <label class="glass-inset rounded-2xl px-3.5 py-3 flex items-center gap-3 cursor-pointer border transition"
+                 :class="restorePicker.selected === b.file ? 'border-amber-400/50 bg-amber-500/10' : 'border-transparent'">
+            <input type="radio" class="sr-only" :value="b.file" x-model="restorePicker.selected" />
+            <span class="w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center"
+                  :class="restorePicker.selected === b.file ? 'border-amber-400' : 'border-slate-500'">
+              <span x-show="restorePicker.selected === b.file" class="w-2 h-2 rounded-full bg-amber-400"></span>
+            </span>
+            <span class="min-w-0 flex-1">
+              <span class="flex items-center gap-2">
+                <span class="font-mono-code text-[13px] font-semibold truncate" x-text="b.version || '?'"></span>
+                <span x-show="i === 0" class="text-[9.5px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-400/25 font-semibold shrink-0" x-text="t('latestBadge')"></span>
+              </span>
+              <span class="block text-[11px] text-muted mt-0.5" x-text="`${formatTs(b.created)} • ${b.size}`"></span>
+            </span>
+          </label>
+        </template>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2.5 pt-1 shrink-0">
+        <button @click="restorePicker.open = false" class="glass-btn py-2.5 px-3 rounded-xl text-xs font-semibold" x-text="t('cancel')"></button>
+        <button @click="runRestorePicker()" class="glass-btn-update py-2.5 px-3 rounded-xl text-xs font-semibold" x-text="t('restore')"></button>
+      </div>
     </div>
   </div>
 
