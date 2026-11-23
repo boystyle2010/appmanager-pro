@@ -677,15 +677,39 @@
           this.logModal.open = false;
         },
 
+        // ---------------- Kênh phát hành (latest / beta ...) ----------------
+        channelBadge(app) {
+          const chs = app.channels || [];
+          if (chs.length < 2) return null;
+          const cur = chs.find(c => c.tag === app.image_tag);
+          if (cur && cur.kind === 'pre') return { on: true, label: cur.channel, title: this.t('onPreChannel') };
+          const pre = chs.find(c => c.kind === 'pre');
+          if (!pre) return null;
+          return { on: false, label: 'β', title: `${this.t('preChannelAvailable')}: ${pre.channel}${pre.version ? ' ' + pre.version : ''}` };
+        },
+
+        confirmChannelSwitch(ch) {
+          const app = this.updateModal.app;
+          if (!app || ch.tag === app.image_tag || this.updateModal.updating) return;
+          const toPre = ch.kind === 'pre';
+          this.askConfirm({
+            tone: toPre ? 'danger' : 'update',
+            title: `${this.t('switchChannelTitle')} ${ch.channel.toUpperCase()}${ch.version ? ' (' + ch.version + ')' : ''}?`,
+            message: `${app.image_tag} → ${ch.tag}. ${toPre ? this.t('switchToPreMsg') : this.t('switchToStableMsg')} ${this.t('switchChannelMsg')}`,
+            confirmLabel: this.t('switchChannel'), onConfirm: () => this.startAppUpdate(ch.tag)
+          });
+        },
+
         // ---------------- Update 1 app (WebSocket Terminal) ----------------
-        startAppUpdate() {
+        startAppUpdate(forceTag = '') {
           const app = this.updateModal.app;
           if (!app || this.updateModal.updating) return;
           this.updateModal.updating = true;
           this.updateModal.updateLogs = '';
           let selfUpdate = false;
 
-          const ws = new WebSocket(this.wsUrl(`/ws/update/${encodeURIComponent(app.name)}`));
+          const q = forceTag ? `?tag=${encodeURIComponent(forceTag)}` : '';
+          const ws = new WebSocket(this.wsUrl(`/ws/update/${encodeURIComponent(app.name)}${q}`));
           this.updateModal.ws = ws;
 
           ws.onmessage = (event) => {

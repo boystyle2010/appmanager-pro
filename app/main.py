@@ -866,9 +866,18 @@ async def ws_update_app(websocket: WebSocket, container_name: str):
         except Exception:
             pass
 
-    audit(websocket, ws_user, "update", container_name)
+    # ?tag=beta : chuyển kênh phát hành; chỉ nhận tag nằm trong danh sách kênh đã phát hiện của app
+    force_tag = (websocket.query_params.get("tag") or "").strip()
+    if force_tag:
+        info = await asyncio.to_thread(get_app_by_name, container_name)
+        allowed = {c.get("tag") for c in ((info or {}).get("channels") or [])}
+        if force_tag not in allowed:
+            await send_log("[ERROR] This tag is not an available release channel for this app.\n")
+            await websocket.close()
+            return
+    audit(websocket, ws_user, "channel_switch" if force_tag else "update", container_name, force_tag)
     try:
-        await update_app_stream(container_name, send_log, mode="manual")
+        await update_app_stream(container_name, send_log, mode="manual", force_tag=force_tag)
     except WebSocketDisconnect:
         pass
     finally:

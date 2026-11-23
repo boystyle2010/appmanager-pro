@@ -452,6 +452,7 @@ async def update_app_stream(
     container_name: str,
     send_log: LogCallback,
     mode: str = "manual",
+    force_tag: str = "",
 ) -> dict:
     """Mỗi app chỉ được cập nhật 1 tiến trình tại một thời điểm (tay / tự động / Update All)."""
     lock = _UPDATE_LOCKS.setdefault(container_name, asyncio.Lock())
@@ -472,7 +473,7 @@ async def update_app_stream(
         except Exception:
             before_id = None
         try:
-            return await _update_app_stream_impl(container_name, tee_log, mode)
+            return await _update_app_stream_impl(container_name, tee_log, mode, force_tag)
         except Exception as exc:  # không để một app lỗi làm dừng cả Update All / cập nhật tự động
             logger.exception("Update of %s crashed", container_name)
             msg = f"Unexpected error: {exc}"
@@ -498,6 +499,7 @@ async def _update_app_stream_impl(
     container_name: str,
     send_log: LogCallback,
     mode: str = "manual",
+    force_tag: str = "",
 ) -> dict:
     app_info = await asyncio.to_thread(get_app_by_name, container_name)
     if not app_info:
@@ -514,6 +516,12 @@ async def _update_app_stream_impl(
     from_ver = app_info.get("version") or ""
     target_tag = app_info.get("target_tag") or ""
     target_ver = app_info.get("remote_version") or target_tag or "latest"
+    if force_tag:
+        # Chuyển kênh phát hành (vd latest -> beta): đổi tag trong compose rồi cập nhật như bình thường
+        target_tag = force_tag
+        ch = next((c for c in (app_info.get("channels") or []) if c.get("tag") == force_tag), {})
+        target_ver = ch.get("version") or force_tag
+        await send_log(f"==> Switching release channel: {app_info.get('image_tag') or '?'} -> {force_tag}\n")
     old_image_id = app_info.get("image_id") or ""
     compose_dir = str(Path(compose_path).parent)
     service = app_info.get("service") or ""
@@ -675,6 +683,8 @@ async def _update_app_stream_impl(
 
     refreshed = await asyncio.to_thread(get_app_by_name, container_name)
     new_ver = refreshed["version"] if refreshed else target_ver
+    if force_tag and (not new_ver or new_ver.lower() in ("latest", "beta", "stable", "edge", "dev", "nightly", force_tag.lower())):
+        new_ver = target_ver  # tag kênh chưa có phiên bản cụ thể -> ghi phiên bản đã tra được của kênh
     new_image_id = refreshed["image_id"] if refreshed else ""
     new_status = refreshed["status"] if refreshed else "unknown"
 

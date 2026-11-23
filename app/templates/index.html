@@ -323,7 +323,13 @@
 
                   <template x-if="!app.has_update">
                     <div class="flex items-center justify-between gap-2 min-w-0 flex-1">
-                      <span class="font-mono-code font-medium text-sky-400 truncate" x-text="app.version"></span>
+                      <span class="flex items-center gap-1.5 min-w-0">
+                        <span class="font-mono-code font-medium text-sky-400 truncate" x-text="app.version"></span>
+                        <span x-show="channelBadge(app)" class="text-[9px] px-1.5 py-0.5 rounded font-bold tracking-wider shrink-0 border"
+                              :style="channelBadge(app)?.on ? 'text-transform:uppercase' : ''"
+                              :class="channelBadge(app)?.on ? 'bg-violet-500/20 text-violet-300 border-violet-400/40' : 'text-violet-300/90 border-violet-400/30'"
+                              :title="channelBadge(app)?.title" x-text="channelBadge(app)?.label"></span>
+                      </span>
                       <span x-show="app.is_skipped"
                             class="text-[10px] px-1.5 py-0.5 rounded bg-slate-500/20 text-muted shrink-0"
                             x-text="t('skippedBadge')"></span>
@@ -818,6 +824,28 @@
               <span x-text="lang === 'vi'
                 ? `App đang ghim tag cứng — khi cập nhật sẽ tự nâng tag trong docker-compose.yml lên ${updateModal.app?.target_tag} (có sao lưu tự động).`
                 : `Pinned tag detected — updating will bump docker-compose.yml to ${updateModal.app?.target_tag} (with automatic backup).`"></span>
+            </div>
+
+            <!-- Kênh phát hành: chuyển latest <-> beta... (chỉ hiện khi image có nhiều kênh) -->
+            <div x-show="(updateModal.app?.channels || []).length > 1" class="glass-inset rounded-2xl p-3.5 shrink-0 space-y-2.5">
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-xs font-semibold" x-text="t('releaseChannel')"></p>
+                <span class="text-[10.5px] font-mono-code text-muted truncate" x-text="`:${updateModal.app?.image_tag || ''}`"></span>
+              </div>
+              <div class="grid gap-1.5" :style="`grid-template-columns: repeat(${Math.min((updateModal.app?.channels || []).length, 4)}, minmax(0, 1fr))`">
+                <template x-for="ch in (updateModal.app?.channels || [])" :key="ch.tag">
+                  <button type="button" @click="confirmChannelSwitch(ch)" :disabled="updateModal.updating"
+                          class="rounded-xl px-2 py-2 border text-center transition disabled:opacity-50 min-w-0"
+                          :class="ch.tag === updateModal.app?.image_tag
+                            ? (ch.kind === 'pre' ? 'bg-violet-500/15 border-violet-400/50' : 'bg-sky-500/15 border-sky-400/50')
+                            : 'border-[var(--glass-border)] hover:bg-white/5'">
+                    <span class="block text-[11px] font-bold uppercase tracking-wider truncate"
+                          :class="ch.kind === 'pre' ? 'text-violet-300' : 'text-sky-300'" x-text="ch.channel"></span>
+                    <span class="block text-[10.5px] font-mono-code text-muted truncate mt-0.5" x-text="ch.version || ch.tag"></span>
+                  </button>
+                </template>
+              </div>
+              <p class="text-[10.5px] text-muted leading-snug" x-text="t('releaseChannelDesc')"></p>
             </div>
 
             <div class="glass-inset rounded-2xl p-3.5 shrink-0 flex items-center justify-between gap-3">

@@ -131,6 +131,8 @@ def init_db() -> None:
         }
         if "target_tag" not in cols:
             conn.execute("ALTER TABLE update_cache ADD COLUMN target_tag TEXT DEFAULT ''")
+        if "channels" not in cols:  # JSON: các kênh phát hành (latest / beta...) của image
+            conn.execute("ALTER TABLE update_cache ADD COLUMN channels TEXT DEFAULT ''")
 
         # Nhật ký đầy đủ của mỗi lần cập nhật (để xem lại vì sao hỏng sau khi container đã bị tạo lại)
         hcols = {r["name"] for r in conn.execute("PRAGMA table_info(update_history)").fetchall()}
@@ -385,6 +387,7 @@ def get_update_cache_item(container_name: str) -> dict[str, Any]:
 
 def save_update_cache(item: dict[str, Any]) -> None:
     item.setdefault("target_tag", "")
+    item.setdefault("channels", "")
     conn = get_connection()
     try:
         conn.execute(
@@ -392,11 +395,11 @@ def save_update_cache(item: dict[str, Any]) -> None:
             INSERT INTO update_cache (
                 container_name, image, local_digest, remote_digest,
                 current_version, remote_version, target_tag, has_update, source_url,
-                changelog, release_tag, release_url, published_at, checked_at, error
+                changelog, release_tag, release_url, published_at, checked_at, error, channels
             ) VALUES (
                 :container_name, :image, :local_digest, :remote_digest,
                 :current_version, :remote_version, :target_tag, :has_update, :source_url,
-                :changelog, :release_tag, :release_url, :published_at, :checked_at, :error
+                :changelog, :release_tag, :release_url, :published_at, :checked_at, :error, :channels
             )
             ON CONFLICT(container_name) DO UPDATE SET
                 image = excluded.image,
@@ -412,7 +415,8 @@ def save_update_cache(item: dict[str, Any]) -> None:
                 release_url = excluded.release_url,
                 published_at = excluded.published_at,
                 checked_at = excluded.checked_at,
-                error = excluded.error
+                error = excluded.error,
+                channels = excluded.channels
             """,
             item,
         )

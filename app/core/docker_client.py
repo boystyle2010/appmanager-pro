@@ -1,4 +1,5 @@
 import os
+import json
 import re
 import socket
 from datetime import datetime, timezone
@@ -103,7 +104,7 @@ GENERIC_VERSIONS = {"", "unknown", "none", "latest", "main", "master", "edge", "
 def version_from_labels(labels: dict[str, str]) -> str:
     """Phiên bản thật của ứng dụng từ nhãn image; "" nếu không có (hoặc chỉ là nhãn của hệ điều hành gốc)."""
     base_ref = str(labels.get("org.opencontainers.image.ref.name") or "").strip().lower()
-    for key in ("org.opencontainers.image.version", "build_version", "org.label-schema.version", "version"):
+    for key in ("org.opencontainers.image.version", "build_version", "org.label-schema.version", "io.hass.version", "version"):
         val = str(labels.get(key) or "").strip()
         if not val or val.lower() in GENERIC_VERSIONS:
             continue
@@ -111,6 +112,14 @@ def version_from_labels(labels: dict[str, str]) -> str:
             continue
         return val
     return ""
+
+
+def _parse_channels(raw: Any) -> list[dict[str, Any]]:
+    try:
+        data = json.loads(raw) if raw else []
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
 
 
 def detect_real_version(image_tags: list[str], labels: dict[str, str], image_labels: dict[str, str]) -> str:
@@ -352,6 +361,8 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
                 "is_skipped": is_skipped,
                 "skip_token": skip_token,
                 "remote_version": cached.get("remote_version") or "",
+                "channels": _parse_channels(cached.get("channels")),
+                "image_tag": image_ref.rsplit("/", 1)[-1].split(":", 1)[1] if ":" in image_ref.rsplit("/", 1)[-1] else "latest",
                 "target_tag": target_tag,
                 "remote_digest": remote_digest,
                 "local_digest": local_digests[0] if local_digests else (cached.get("local_digest") or ""),

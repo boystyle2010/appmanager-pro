@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import platform
 import re
@@ -527,6 +528,155 @@ async def _discover_newer_pinned_tag(
     return None
 
 
+# ---------------- Kênh phát hành (latest / beta ...) ----------------
+STABLE_CHANNELS = ("latest", "stable", "release", "lts")
+PRE_CHANNELS = ("beta", "next", "rc", "preview", "testing", "edge", "unstable", "nightly", "dev", "develop", "canary")
+_CHANNEL_WORDS = STABLE_CHANNELS + PRE_CHANNELS
+
+
+def channel_format(tag: str) -> Optional[tuple[str, str]]:
+    """
+    Tag kênh -> (mẫu, kênh). Vd "latest" -> ("{}", "latest"), "latest-full" -> ("{}-full", "latest"),
+    "ubuntu-latest" -> ("ubuntu-{}", "latest"), "beta" -> ("{}", "beta"). Tag phiên bản / tag khác -> None.
+    """
+    t = (tag or "").strip()
+    for w in _CHANNEL_WORDS:
+        if t == w:
+            return "{}", w
+        if t.startswith(w + "-"):
+            return "{}" + t[len(w):], w
+        if t.endswith("-" + w):
+            return t[: -len(w)] + "{}", w
+    return None
+
+
+def _channel_kind(word: str) -> str:
+    return "stable" if word in STABLE_CHANNELS else "pre"
+
+
+async def _detect_channels(
+    client: httpx.AsyncClient, registry: str, repo: str, tag: str, token_cache: dict[str, str], scope_key: str
+) -> list[dict[str, Any]]:
+    """
+    Các kênh phát hành cùng biến thể với tag đang dùng. Chỉ giữ kênh thử nghiệm khi nó khác bản ổn định
+    và mới hơn (phiên bản cao hơn hoặc được đẩy sau) -> tag beta bỏ quên không được đề xuất.
+    """
+    fmt = channel_format(tag)
+    if not fmt:
+        return []
+    pattern = fmt[0]
+    wanted = {pattern.format(w): w for w in _CHANNEL_WORDS}
+    found: dict[str, dict[str, Any]] = {}
+    digest_versions: dict[str, tuple[tuple, str]] = {}
+
+    if registry == "registry-1.docker.io":
+        base = f"https://hub.docker.com/v2/repositories/{repo}/tags"
+        url = f"{base}?page_size=100&ordering=last_updated"
+        try:
+            for _page in range(2):
+                r = await client.get(url)
+                if r.status_code != 200:
+                    break
+                body = r.json()
+                for t in body.get("results") or []:
+                    name, dg = str(t.get("name") or ""), str(t.get("digest") or "")
+                    if name in wanted:
+                        found[name] = {"digest": dg, "updated": str(t.get("last_updated") or "")[:19]}
+                    p = _parse_pinned_tag(name)
+                    if dg and p:  # tag phiên bản cùng digest -> biết kênh đó đang là phiên bản nào
+                        key = (p["nums"], f"{p['prefix']}{p['ver_str']}")
+                        if dg not in digest_versions or key[0] > digest_versions[dg][0]:
+                            digest_versions[dg] = key
+                url = body.get("next") or ""
+                if not url:
+                    break
+            # Tag đang dùng / tag ổn định có thể không nằm trong các tag mới cập nhật -> hỏi trực tiếp
+            for name in dict.fromkeys([tag, pattern.format("latest")]):
+                if name in wanted and name not in found:
+                    r = await client.get(f"{base}/{name}")
+                    if r.status_code == 200:
+                        t = r.json()
+                        found[name] = {"digest": str(t.get("digest") or ""), "updated": str(t.get("last_updated") or "")[:19]}
+        except Exception as exc:
+            logger.warning("Channel detection for %s failed: %s", repo, exc)
+    else:
+        try:
+            t_url = f"https://{registry}/v2/{repo}/tags/list?n=1000"
+            for _page in range(10):
+                r = await _registry_request(client, t_url, "application/json", token_cache, scope_key)
+                if r.status_code != 200:
+                    break
+                for name in r.json().get("tags") or []:
+                    if name in wanted:
+                        found[name] = {"digest": "", "updated": ""}
+                m = re.search(r"<([^>]+)>\s*;\s*rel=\"?next\"?", r.headers.get("link") or "")
+                if not m:
+                    break
+                nxt = m.group(1)
+                t_url = nxt if nxt.startswith("http") else f"https://{registry}{nxt}"
+            # Registry chuẩn không trả digest trong danh sách tag -> hỏi digest + nhãn phiên bản của từng kênh
+            for name in list(found)[:8]:
+                m_url = f"https://{registry}/v2/{repo}/manifests/{name}"
+                resp = await _registry_request(client, m_url, MANIFEST_ACCEPT, token_cache, scope_key)
+                if resp.status_code != 200:
+                    continue
+                dg = resp.headers.get("docker-content-digest", "").strip()
+                manifest = resp.json() if resp.content else {}
+                arch_dg = None
+                for entry in manifest.get("manifests") or []:
+                    plat = entry.get("platform") or {}
+                    if plat.get("os") == "linux" and plat.get("architecture") == _host_arch():
+                        arch_dg = entry.get("digest")
+                        break
+                _cfg, labels = await _fetch_remote_manifest_info(
+                    client, registry, repo, manifest, arch_dg, token_cache, scope_key
+                )
+                found[name]["digest"] = dg
+                ver = version_from_labels(labels)
+                p = _parse_pinned_tag(ver.split("-")[0]) if ver else None
+                if dg and ver:
+                    digest_versions[dg] = (p["nums"] if p else (), ver)
+        except Exception as exc:
+            logger.warning("Channel detection for %s/%s failed: %s", registry, repo, exc)
+
+    if tag not in found:
+        found[tag] = {"digest": "", "updated": ""}
+    channels: list[dict[str, Any]] = []
+    for name, info in found.items():
+        word = wanted.get(name, "")
+        ver = digest_versions.get(info["digest"]) if info["digest"] else None
+        channels.append({
+            "tag": name, "channel": word, "kind": _channel_kind(word),
+            "version": ver[1] if ver else "", "nums": list(ver[0]) if ver else [],
+            "digest": info["digest"], "updated": info["updated"],
+        })
+
+    stable = next((c for c in channels if c["channel"] == "latest"), None) \
+        or next((c for c in channels if c["kind"] == "stable"), None)
+    cur = next((c for c in channels if c["tag"] == tag), None)
+    kept: list[dict[str, Any]] = []
+    for c in channels:
+        if c["kind"] == "stable" and c["tag"] != tag and cur and c["digest"]:
+            # Kênh ổn định khác (vd lts) trùng hẳn với bản đang dùng / latest -> không phải lựa chọn mới
+            if c["digest"] == cur["digest"] or (stable and c is not stable and c["digest"] == stable["digest"]):
+                continue
+        if c["kind"] == "pre" and stable and c["tag"] != tag:
+            if c["digest"] and c["digest"] == stable["digest"]:
+                continue  # trùng bản ổn định
+            if c["nums"] and stable["nums"] and c["nums"] <= stable["nums"]:
+                continue  # cũ hơn / bằng bản ổn định
+            if not c["nums"] and c["updated"] and stable["updated"] and c["updated"] < stable["updated"]:
+                continue  # tag thử nghiệm bỏ quên
+        kept.append(c)
+    order = {w: i for i, w in enumerate(_CHANNEL_WORDS)}
+    kept.sort(key=lambda c: (c["kind"] != "stable", order.get(c["channel"], 99)))
+    pre = [c for c in kept if c["kind"] == "pre"][:3]  # tối đa 3 kênh thử nghiệm
+    stables = [c for c in kept if c["kind"] == "stable"]
+    if not pre and len(stables) <= 1:
+        return []  # chỉ có một kênh -> không có gì để chuyển
+    return [{k: c[k] for k in ("tag", "channel", "kind", "version", "updated")} for c in stables + pre]
+
+
 async def _hub_version_for_digest(client: httpx.AsyncClient, repo: str, digests: list[str]) -> str:
     """
     Image dùng tag chung (latest, full...) không ghi phiên bản -> tìm tag có phiên bản (vd v0.147.0-noble-full)
@@ -675,6 +825,15 @@ async def check_single_app(
                 result["current_version"] = resolved
                 if not result.get("has_update"):
                     result["remote_version"] = resolved
+
+    # Kênh phát hành (latest / beta...) cho app chạy theo tag kênh
+    if not pinned_info and channel_format(tag):
+        try:
+            result["channels"] = json.dumps(
+                await _detect_channels(client, registry, repo, tag, token_cache, scope_key)
+            )
+        except Exception as exc:
+            logger.warning("Channel detection for %s failed: %s", name, exc)
 
     # Bước 2: Lấy Changelog từ GitHub (Releases -> CHANGELOG.md -> Commits)
     slug = extract_github_slug(source_url, image_ref, icon_url)
