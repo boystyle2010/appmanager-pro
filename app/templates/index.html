@@ -974,16 +974,21 @@
       </div>
 
       <div x-show="editModal.otherComposeFiles.length" class="mt-3 rounded-2xl border border-amber-400/40 bg-amber-500/10 p-3 text-[11px] text-amber-200">
-        <p class="font-semibold" x-text="t('composeDuplicateTitle')"></p>
+        <p class="font-semibold flex items-center gap-1.5">
+          <svg class="w-4 h-4 shrink-0 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+          </svg>
+          <span x-text="t('composeDuplicateTitle')"></span>
+        </p>
         <p class="mt-1" x-text="t('composeDuplicateMsg')"></p>
         <template x-for="f in editModal.otherComposeFiles" :key="f">
           <p class="font-mono-code mt-1 break-all" x-text="f"></p>
         </template>
         <div class="grid grid-cols-2 gap-2 mt-2.5">
-          <button type="button" @click="resolveDuplicates('skip')" :disabled="editModal.dupBusy"
+          <button type="button" @click="resolveDuplicates('skip')" :disabled="!!editModal.dupBusy"
                   class="glass-btn py-2 rounded-xl text-[11px] font-semibold text-muted disabled:opacity-50" x-text="t('dupSkip')"></button>
-          <button type="button" @click="confirmMergeDuplicates()" :disabled="editModal.dupBusy"
-                  class="py-2 rounded-xl text-[11px] font-semibold bg-amber-500/20 border border-amber-400/45 text-amber-200 disabled:opacity-50"
+          <button type="button" @click="confirmMergeDuplicates()" :disabled="!!editModal.dupBusy"
+                  class="glass-btn-danger py-2 rounded-xl text-[11px] font-semibold disabled:opacity-50"
                   x-text="editModal.dupBusy ? '…' : t('dupMerge')"></button>
         </div>
       </div>

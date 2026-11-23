@@ -45,7 +45,7 @@
         },
         editModal: {
           open: false, loading: false, saving: false, tab: 'ui',
-          app: null, composePath: '', rawYaml: '', ui: null, otherComposeFiles: [],
+          app: null, composePath: '', rawYaml: '', ui: null, otherComposeFiles: [], dupBusy: false,
           backups: [], feedback: '', feedbackOk: true, feedbackLogs: '',
           sec: { container: true, ports: true, volumes: false, env: false, casaos: false }
         },
@@ -867,7 +867,7 @@
         confirmMergeDuplicates() {
           const m = this.editModal;
           this.askConfirm({
-            tone: 'update', title: this.t('dupMergeTitle'),
+            tone: 'danger', title: this.t('dupMergeTitle'),
             message: `${m.composePath} → ${m.otherComposeFiles.join(', ')}. ${this.t('dupMergeMsg')}`,
             confirmLabel: this.t('dupMerge'), onConfirm: () => this.resolveDuplicates('merge')
           });
@@ -889,7 +889,7 @@
           this.tagMenu = { open: false, loading: false, items: [], error: '', image: '' };
           this.editModal = {
             open: true, loading: true, saving: false, tab: 'ui',
-            app, composePath: '', rawYaml: '', ui: null, otherComposeFiles: [], lastService: '', yamlTouched: false,
+            app, composePath: '', rawYaml: '', ui: null, otherComposeFiles: [], dupBusy: false, lastService: '', yamlTouched: false,
             backups: [], feedback: '', feedbackOk: true, feedbackLogs: '',
             sec: { container: true, ports: true, volumes: false, env: false, casaos: false }
           };
