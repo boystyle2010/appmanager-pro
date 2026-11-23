@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import platform
 import re
 from datetime import datetime, timezone
@@ -30,7 +31,8 @@ SINGLE_MANIFEST_ACCEPT = ", ".join(
     ]
 )
 
-PINNED_TAG_RE = re.compile(r"^(v?)(\d+(?:\.\d+)+)(-[a-zA-Z0-9._-]+)?$")
+# Tag ghim phiên bản: [chữ-]v?X.Y[.Z...][-biến_thể]  vd 8.5.12-apache, v3.1.0, version-1.2.3, 1.2.3-ls45
+PINNED_TAG_RE = re.compile(r"^((?:[a-z]+-)?v?)(\d+(?:\.\d+)+)(-[a-zA-Z0-9._-]+)?$")
 PRERELEASE_RE = re.compile(r"(alpha|beta|rc\d*|dev|nightly|canary|pre|test|snapshot)", re.I)
 
 GENERIC_VERSION_WORDS = {
@@ -64,6 +66,7 @@ KNOWN_IMAGE_REPOS: dict[str, str] = {
     "linuxserver/syncthing": "syncthing/syncthing",
 }
 
+logger = logging.getLogger("appmanager.registry")
 _check_lock = asyncio.Lock()
 _is_checking = False
 
@@ -123,8 +126,29 @@ def _parse_pinned_tag(tag: str) -> Optional[dict[str, Any]]:
         "ver_str": ver_str,
         "nums": nums,
         "suffix": suffix,
+        # Biến thể bỏ số (vd "-ls45" -> "-ls#", "-alpine3.20" -> "-alpine#.#"): số build / bản OS gốc đổi
+        # theo từng lần phát hành nhưng vẫn là cùng một biến thể
+        "variant": re.sub(r"\d+", "#", suffix.lower()),
+        "build": tuple(int(x) for x in re.findall(r"\d+", suffix)),
         "is_pre": bool(PRERELEASE_RE.search(suffix)),
     }
+
+
+def _same_line(cur: dict[str, Any], cand: dict[str, Any]) -> bool:
+    """
+    Có được đề xuất cand thay cho cur không: cùng tiền tố, cùng biến thể, cùng số thành phần phiên bản,
+    và CÙNG PHIÊN BẢN LỚN (nhảy major thường phá vỡ tương thích / cần chuyển đổi dữ liệu, vd postgres 16 -> 17).
+    Phiên bản theo lịch (major là năm, vd Home Assistant 2026.11.2) thì cho qua năm mới.
+    """
+    if cand["prefix"] != cur["prefix"] or cand["variant"] != cur["variant"]:
+        return False
+    if len(cand["nums"]) != len(cur["nums"]):
+        return False
+    if cand["is_pre"] and not cur["is_pre"]:
+        return False
+    if cur["nums"][0] < 1900 and cand["nums"][0] != cur["nums"][0]:
+        return False
+    return (cand["nums"], cand["build"]) > (cur["nums"], cur["build"])
 
 
 def _parse_www_authenticate(header_val: str) -> dict[str, str]:
@@ -423,58 +447,65 @@ async def _discover_newer_pinned_tag(
     cur_suffix = cur_parsed["suffix"]
     allow_pre = cur_parsed["is_pre"]
 
-    candidates: list[tuple[tuple[int, ...], str]] = []
+    candidates: list[tuple[tuple, str]] = []
 
-    if github_release_tag:
+    if github_release_tag and not cur_parsed["build"]:
+        # Tag từ GitHub Release ghép với biến thể hiện tại (vd release 8.5.13 -> thử "8.5.13-apache");
+        # tag có số build trong đuôi (vd -ls45) thì không đoán được -> chỉ dựa vào danh sách tag
         gh_p = _parse_pinned_tag(github_release_tag)
-        if gh_p and gh_p["nums"] > cur_nums and (allow_pre or not gh_p["is_pre"]):
-            reconstructed = f"{cur_prefix}{gh_p['ver_str']}{cur_suffix}"
-            candidates.append((gh_p["nums"], reconstructed))
-            alt = f"{gh_p['prefix']}{gh_p['ver_str']}{cur_suffix}"
-            if alt != reconstructed:
-                candidates.append((gh_p["nums"], alt))
+        if gh_p and not gh_p["is_pre"] or (gh_p and allow_pre):
+            for pre in dict.fromkeys((cur_prefix, gh_p["prefix"])):
+                guess = _parse_pinned_tag(f"{pre}{gh_p['ver_str']}{cur_suffix}")
+                if guess and _same_line(cur_parsed, guess):
+                    candidates.append(((guess["nums"], guess["build"]), f"{pre}{gh_p['ver_str']}{cur_suffix}"))
 
     tag_names: list[str] = []
     try:
         if registry == "registry-1.docker.io":
-            # Repo lớn (vd php: >16.000 tag) -> 100 tag mới nhất chưa chắc có tag cùng biến thể.
-            # Thêm truy vấn lọc theo đuôi (vd "-apache") để chắc chắn thấy các bản mới của đúng biến thể.
+            # Repo lớn (vd php: >16.000 tag): ngoài các tag mới cập nhật, truy vấn thêm có lọc theo biến thể
+            # (vd "-apache", "-ls") hoặc theo phiên bản lớn (vd "16.") để chắc chắn thấy bản mới cùng dòng.
             hub_base = f"https://hub.docker.com/v2/repositories/{repo}/tags?page_size=100&ordering=last_updated"
+            name_filter = re.sub(r"\d.*$", "", cur_suffix) if cur_suffix else f"{cur_prefix}{cur_nums[0]}."
             urls = [hub_base]
-            if cur_suffix:
-                urls.append(f"{hub_base}&name={cur_suffix}")
+            if len(name_filter) > 1:
+                urls.append(f"{hub_base}&name={name_filter}")
             for hub_url in urls:
                 for _page in range(3):
-                    r = await client.get(hub_url)
+                    try:
+                        r = await client.get(hub_url)
+                    except httpx.TransportError:
+                        r = await client.get(hub_url)
                     if r.status_code != 200:
                         break
                     body = r.json()
                     tag_names += [t.get("name", "") for t in (body.get("results") or [])]
                     hub_url = body.get("next") or ""
-                    if not hub_url or hub_url == hub_base:
+                    if not hub_url:
                         break
         else:
-            t_url = f"https://{registry}/v2/{repo}/tags/list?n=100"
-            r = await _registry_request(client, t_url, "application/json", token_cache, scope_key)
-            if r.status_code == 200:
-                tag_names = r.json().get("tags") or []
-    except Exception:
-        pass
+            # Registry chuẩn (GHCR, lscr.io, quay...): đọc hết các trang (tag xếp theo chữ cái, bản mới thường ở cuối)
+            t_url = f"https://{registry}/v2/{repo}/tags/list?n=1000"
+            for _page in range(10):
+                try:
+                    r = await _registry_request(client, t_url, "application/json", token_cache, scope_key)
+                except httpx.TransportError:
+                    r = await _registry_request(client, t_url, "application/json", token_cache, scope_key)
+                if r.status_code != 200:
+                    break
+                tag_names += r.json().get("tags") or []
+                link = r.headers.get("link") or ""
+                m = re.search(r"<([^>]+)>\s*;\s*rel=\"?next\"?", link)
+                if not m:
+                    break
+                nxt = m.group(1)
+                t_url = nxt if nxt.startswith("http") else f"https://{registry}{nxt}"
+    except Exception as exc:  # giữ các tag đã đọc được; lỗi mạng giữa chừng không làm mất cả lần kiểm tra
+        logger.warning("Tag listing for %s/%s stopped early: %s", registry, repo, exc)
 
-    for tname in tag_names:
+    for tname in dict.fromkeys(tag_names):
         tp = _parse_pinned_tag(tname)
-        if not tp:
-            continue
-        if tp["suffix"].lower() != cur_suffix.lower():
-            continue
-        if tp["prefix"] != cur_prefix:
-            continue
-        if not allow_pre and tp["is_pre"]:
-            continue
-        if len(tp["nums"]) != len(cur_nums):
-            continue
-        if tp["nums"] > cur_nums:
-            candidates.append((tp["nums"], tname))
+        if tp and _same_line(cur_parsed, tp):
+            candidates.append(((tp["nums"], tp["build"]), tname))
 
     if not candidates:
         return None
