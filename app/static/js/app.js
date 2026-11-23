@@ -690,6 +690,14 @@
                    title: `${this.t('preChannelAvailable')}: ${pre.map(c => c.channel + (c.version ? ' ' + c.version : '')).join(', ')}` };
         },
 
+        // Kênh của changelog đang hiển thị: kênh đang xem trước, hoặc kênh app đang chạy (nếu app có nhiều kênh)
+        changelogChannel() {
+          const m = this.updateModal;
+          if (m.preview) return m.preview;
+          const chs = m.app?.channels || [];
+          return chs.length > 1 ? (chs.find(c => c.current || c.tag === m.app.image_tag) || null) : null;
+        },
+
         confirmChannelSwitch(ch) {
           const app = this.updateModal.app;
           if (!app || this.updateModal.updating) return;

@@ -31,3 +31,4 @@
 - Channel switch is now two steps: confirming a channel only loads that channel's changelog (header shows the target version); the switch starts when "Switch to BETA & update" is tapped, and Cancel goes back
 - Channel badges (BETA / DEV / RC…, dashed when available, filled when in use) are shown in the status line of every app card, including apps with a pending update; fixed an empty badge on apps without channels
 - Pre-release changelog falls back to the commits between the last stable release and the pre-release tag when no GitHub release exists (e.g. Scrypted betas); Ubuntu base-image version labels (24.04…) are no longer shown as the app version
+- App cards: channel (BETA / DEV…) and AUTO badges sit aligned on the image line of the version box; the selected-channel note and the changelog header show the selected channel's name and version (LATEST, STABLE, BETA, DEV…), in blue for stable and violet for pre-release channels
