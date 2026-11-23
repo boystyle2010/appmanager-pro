@@ -12,8 +12,8 @@ Các bước:
   2. docker compose up -d --force-recreate --no-deps <service>  (luôn container mới -> đếm restart chính xác)
   3. Chờ container mới chạy ổn: đang chạy, không restart, healthcheck không "unhealthy",
      và trang /login trả lời trong chính container.
-  4. Hỏng -> lưu log container hỏng -> dừng bản hỏng, trả database + compose cũ, gắn lại tag image cũ
-     -> tạo lại -> kiểm tra lại.
+  4. Hỏng -> lưu log container hỏng -> trả compose cũ + gắn lại tag image cũ (GIỮ database) -> tạo lại -> kiểm tra;
+     bản cũ vẫn không chạy (database đã bị bản mới đổi) -> trả database sao lưu -> tạo lại -> kiểm tra.
 """
 from __future__ import annotations
 
@@ -205,10 +205,9 @@ def main() -> int:
         write_result(job, "success", "Updated" if job.get("mode") == "update" else "Recreated")
         return 0
 
-    # ---- Rollback: compose + image + database của AppManager ----
+    # ---- Rollback: trước hết chỉ compose + image (giữ database); bản cũ vẫn hỏng mới trả database ----
     diagnostics(client, name)
-    log("==> Rolling back to the previous version...")
-    restore_db(client, job)
+    log("==> Rolling back to the previous version (database is kept)...")
     restore_compose(job)
     repo, tag = split_ref(job.get("image_ref") or "")
     if repo and job.get("old_image_id"):
@@ -217,12 +216,21 @@ def main() -> int:
             log(f"==> Previous image {job['old_image_id'][:19]} re-tagged as {repo}:{tag}")
         except Exception as exc:
             log(f"[ERROR] Cannot re-tag previous image: {exc}")
-    rc = run(["docker", "compose", "-f", compose, "up", "-d", "--force-recreate", "--no-deps", *svc_args], cwd)
-    if rc == 0:
-        rb_ok, rb_reason = wait_healthy(client, name, window)
-    else:
-        rb_ok, rb_reason = False, f"docker compose up failed (exit {rc})"
+
+    def recreate_and_check() -> tuple[bool, str]:
+        rc = run(["docker", "compose", "-f", compose, "up", "-d", "--force-recreate", "--no-deps", *svc_args], cwd)
+        if rc != 0:
+            return False, f"docker compose up failed (exit {rc})"
+        return wait_healthy(client, name, window)
+
+    rb_ok, rb_reason = recreate_and_check()
     log(f"==> Rollback: {rb_reason}")
+    if not rb_ok and job.get("db_backup"):
+        diagnostics(client, name)
+        log("==> Previous version does not start with the current database; restoring the database backup...")
+        restore_db(client, job)
+        rb_ok, rb_reason = recreate_and_check()
+        log(f"==> Rollback with restored database: {rb_reason}")
     if rb_ok:
         write_result(job, "rolled_back", f"{reason}; previous version restored")
         return 1

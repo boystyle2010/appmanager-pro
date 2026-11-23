@@ -51,6 +51,15 @@ SKIP_EXTS = {
 }
 
 
+_LOG_RE = re.compile(r"\.log(\.\d+)?(\.gz)?$", re.IGNORECASE)
+
+
+def _is_log(rel: str) -> bool:
+    """File log: khi khôi phục luôn giữ bản hiện tại (đầy đủ lịch sử hơn bản trong sao lưu)."""
+    parts = [x.lower() for x in Path(rel).parts]
+    return bool(_LOG_RE.search(rel)) or any(x in ("log", "logs") for x in parts[:-1])
+
+
 def _skip_name(name: str) -> bool:
     return name.strip("/").lower() in SKIP_NAMES
 
@@ -433,7 +442,7 @@ def _restore_selected(f: Path, dest: Path, previous: Path, meta: dict[str, Any])
     """
     Chỉ thay các file thuộc diện sao lưu. File hiện có sẽ bị ghi đè, và file thuộc diện sao lưu nhưng không có
     trong bản sao lưu (sinh ra sau đó, vd bản mới tạo thêm), được chuyển sang <dir>.pre-restore.
-    Media / file lớn / thư mục bị bỏ qua thì giữ nguyên.
+    Media / file lớn / thư mục bị bỏ qua và FILE LOG hiện có thì giữ nguyên.
     """
     roots = list(meta.get("roots") or [])
     file_max = int(meta.get("file_max_bytes") or DEFAULT_FILE_MAX_MB * 1024 * 1024)
@@ -446,18 +455,25 @@ def _restore_selected(f: Path, dest: Path, previous: Path, meta: dict[str, Any])
         in_backup = {os.path.normpath(m.name) for m in members if not m.isdir()}
         try:
             # 1) File hiện tại thuộc diện sao lưu: chuyển sang pre-restore (sẽ được thay bằng bản trong sao lưu)
-            current = [(p, os.path.normpath(rel)) for p, rel, is_dir in _walk_wanted(dest, roots, file_max) if not is_dir]
+            current = [
+                (p, os.path.normpath(rel)) for p, rel, is_dir in _walk_wanted(dest, roots, file_max)
+                if not is_dir and not _is_log(rel)
+            ]
             for p, rel in current:
                 if p.exists() or p.is_symlink():
                     _move(p, previous / rel)
                     moved.append((previous / rel, p))
             # 2) File trong sao lưu mà hiện có ở chỗ khác diện (vd đã lớn hơn giới hạn): cũng giữ lại bản hiện tại
+            keep_logs = set()
             for rel in in_backup:
                 p = dest / rel
                 if (p.exists() or p.is_symlink()) and not p.is_dir():
+                    if _is_log(rel):
+                        keep_logs.add(rel)  # log hiện có -> giữ nguyên, không lấy bản cũ
+                        continue
                     _move(p, previous / rel)
                     moved.append((previous / rel, p))
-            _extract(tar, dest, members)
+            _extract(tar, dest, [m for m in members if os.path.normpath(m.name) not in keep_logs])
         except Exception:
             for saved, original in reversed(moved):  # hoàn tác: trả file về chỗ cũ
                 try:

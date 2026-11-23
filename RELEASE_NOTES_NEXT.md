@@ -13,3 +13,4 @@
 - AppManager Pro backs up its own database before a self-update and restores it if the new version is rolled back
 - "Back up app data before updating" is now on by default for new installs
 - App data backups now contain only the app's own configuration: folders mounted from /DATA/AppData, without media, storage/share, downloads, sync folders, caches, the app's own backups, media files and files above a per-file limit (default 50 MB, e.g. large history databases). Restoring replaces only those files; media and large files are left untouched
+- Rollback first restores only the previous image and docker-compose.yml and keeps the app data as it is (settings and logs stay); the configuration backup is used only if the previous version still does not start. Restoring a backup never replaces current log files

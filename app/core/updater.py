@@ -163,24 +163,14 @@ async def _rollback_to_previous(
     window: int,
     data_backup: str = "",
 ) -> tuple[bool, str]:
-    """Quay về TOÀN BỘ trạng thái trước cập nhật: dữ liệu (nếu có sao lưu) + docker-compose.yml + image cũ."""
-    await send_log("\n==> New version is unhealthy. Rolling back to the previous version...\n")
-    # Bản mới có thể đã đổi cấu trúc dữ liệu -> bản cũ chạy với dữ liệu đó sẽ hỏng. Có bản sao lưu
-    # dữ liệu từ ngay trước khi cập nhật thì trả dữ liệu về luôn (giữ dữ liệu hiện tại ở *.pre-restore).
-    if data_backup:
-        from app.core.app_backup import restore_backup
-
-        await send_log(f"==> Restoring app data from {data_backup} ...\n")
-        try:
-            res = await asyncio.to_thread(
-                restore_backup, container_name, data_backup, start=False, restore_version=False
-            )
-        except Exception as exc:
-            res = {"ok": False, "error": str(exc)}
-        if res.get("ok"):
-            await send_log(f"==> {res.get('message')}\n")
-        else:
-            await send_log(f"==> [WARN] Data restore failed: {res.get('error')} — rolling back the version only.\n")
+    """
+    Quay về bản trước cập nhật, đụng tới dữ liệu ÍT NHẤT có thể:
+      1. Trả docker-compose.yml chạy tốt + image cũ, GIỮ NGUYÊN dữ liệu (cài đặt, log hiện tại) -> kiểm tra.
+         Lỗi cập nhật gần như luôn nằm ở image / compose, dữ liệu vẫn còn nguyên.
+      2. Chỉ khi bản cũ vẫn không chạy được (bản mới đã đổi dữ liệu) mới khôi phục cấu hình từ bản sao lưu
+         trước cập nhật (log hiện tại được giữ) rồi kiểm tra lại.
+    """
+    await send_log("\n==> New version is unhealthy. Rolling back to the previous version (app data is kept)...\n")
     compose_changed = False
     try:
         if Path(compose_path).read_text(encoding="utf-8") != rollback_compose:
@@ -196,21 +186,46 @@ async def _rollback_to_previous(
             err = str(exc)
         if err:
             await send_log(f"[WARN] Cannot re-tag previous image: {err}\n")
-            if not compose_changed:
+            if not compose_changed and not data_backup:
                 return False, f"Cannot restore previous image: {err}"
         else:
             await send_log(f"==> Previous image {old_image_id[:19]} re-tagged as {image_ref}\n")
-    elif not compose_changed:
+    elif not compose_changed and not data_backup:
         return False, "Previous image is unknown"
 
     cmd = ["docker", "compose", "-f", compose_path, "up", "-d", "--force-recreate", "--no-deps"]
     if service:
         cmd.append(service)
-    await send_log(f"$ {' '.join(cmd)}\n")
-    rc = await _run_cmd_stream(cmd, compose_dir, send_log)
-    if rc != 0:
-        return False, f"Rollback up failed (exit {rc})"
-    ok, reason = await _wait_healthy(container_name, send_log, window)
+
+    async def recreate_and_check() -> tuple[bool, str]:
+        await send_log(f"$ {' '.join(cmd)}\n")
+        rc = await _run_cmd_stream(cmd, compose_dir, send_log)
+        if rc != 0:
+            return False, f"Rollback up failed (exit {rc})"
+        return await _wait_healthy(container_name, send_log, window)
+
+    ok, reason = await recreate_and_check()
+    if ok:
+        await send_log("==> Previous version is running with the current app data (nothing was restored).\n")
+        return ok, reason
+    await send_log(f"==> Previous version does not start with the current data: {reason}\n")
+    await _send_diagnostics(container_name, send_log)
+    if not data_backup:
+        return ok, reason
+
+    # Bước 2: bản mới có thể đã đổi dữ liệu -> trả cấu hình về bản sao lưu ngay trước cập nhật
+    from app.core.app_backup import restore_backup
+
+    await send_log(f"==> Restoring the app configuration backed up before the update ({data_backup})...\n")
+    try:
+        res = await asyncio.to_thread(restore_backup, container_name, data_backup, start=False, restore_version=False)
+    except Exception as exc:
+        res = {"ok": False, "error": str(exc)}
+    if not res.get("ok"):
+        await send_log(f"[ERROR] Configuration restore failed: {res.get('error')}\n")
+        return False, f"{reason}; configuration restore failed"
+    await send_log(f"==> {res.get('message')}\n")
+    ok, reason = await recreate_and_check()
     if not ok:
         await send_log(f"==> Previous version is not healthy either: {reason}\n")
         await _send_diagnostics(container_name, send_log)
