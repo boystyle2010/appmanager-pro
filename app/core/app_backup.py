@@ -1,13 +1,13 @@
 """
-Sao lưu / khôi phục DỮ LIỆU CẤU HÌNH của app (trong /DATA/AppData/<app>) trước khi cập nhật.
+Sao lưu / khôi phục FILE CÀI ĐẶT của app (trong /DATA/AppData/<app>) trước khi cập nhật — không sao lưu cả thư mục.
 
-Chỉ sao lưu thứ app cần để chạy lại (cấu hình, database nhỏ, chứng chỉ, log...), KHÔNG sao lưu nội dung người dùng
-hay dữ liệu nặng (media, kho file, thư mục đồng bộ, cache, bản sao lưu của chính app...):
-  - chỉ các thư mục / file được MOUNT vào container và nằm trong /DATA/AppData;
-  - bỏ mount có tên kiểu media/storage/downloads/backups/cache... (SKIP_NAMES), cả thư mục con trùng tên;
-  - bỏ file media/ảnh đĩa (SKIP_EXTS) và file lớn hơn giới hạn mỗi file (mặc định 50 MB, vd database lịch sử
-    hàng GB của Home Assistant).
-Khôi phục chỉ ghi đè đúng các file thuộc diện sao lưu; file bị bỏ qua (media, file lớn) giữ nguyên.
+Chỉ lấy những gì giữ cài đặt người dùng đã thiết lập: file cấu hình (json, yaml, toml, ini, conf, env, xml...),
+database nhỏ (.db/.sqlite kèm -wal/-shm), chứng chỉ & khoá, file cấu hình không đuôi dạng văn bản ≤ 1 MB
+(vd .storage/core.config_entries của Home Assistant). Không lấy media, file người dùng, log, cache...:
+  - chỉ trong các thư mục / file được MOUNT vào container và nằm trong /DATA/AppData;
+  - không duyệt mount / thư mục con tên kiểu media/storage/downloads/backups/cache... (SKIP_NAMES);
+  - bỏ file cài đặt lớn hơn giới hạn mỗi file (mặc định 50 MB, vd database lịch sử hàng GB).
+Khôi phục chỉ ghi đè đúng các file cài đặt đó; mọi file khác (dữ liệu, media, log) giữ nguyên.
 
 - Bản sao lưu: <APP_DATA_DIR>/app-backups/<container>/<YYYYmmdd-HHMMSS>.tar.gz (+ file .json mô tả)
 - Bỏ qua nếu phần cần sao lưu vẫn lớn hơn giới hạn tổng (mặc định 2 GB).
@@ -44,11 +44,14 @@ SKIP_NAMES = {
     "sync", "syncthing", "backup", "backups", "cache", "caches", ".cache", "tmp", "temp", "transcode",
     "transcodes", "thumbnails", "thumbs", "trash", ".trash", ".recycle", "recycle", "host_root", "mnt",
 }
-# File media / ảnh đĩa / bản sao lưu nén -> không sao lưu dù nhỏ
-SKIP_EXTS = {
-    ".mp4", ".mkv", ".avi", ".mov", ".m4v", ".wmv", ".flv", ".webm", ".ts", ".m2ts", ".mp3", ".flac", ".wav",
-    ".aac", ".m4a", ".ogg", ".opus", ".iso", ".img", ".vmdk", ".qcow2", ".vdi",
+# CHỈ sao lưu file cài đặt / lõi của app: cấu hình, database nhỏ, chứng chỉ & khoá
+CONFIG_EXTS = {
+    ".json", ".yaml", ".yml", ".toml", ".ini", ".conf", ".cfg", ".config", ".env", ".xml", ".properties",
+    ".plist", ".db", ".sqlite", ".sqlite3", ".db3", ".pem", ".crt", ".cer", ".key", ".p12", ".pfx",
+    ".htpasswd", ".htaccess",
 }
+DB_EXTS = {".db", ".sqlite", ".sqlite3", ".db3"}
+TEXT_NOEXT_MAX = 1024 * 1024  # file không đuôi (vd .storage/core.config_entries) <= 1 MB và là văn bản
 
 
 _LOG_RE = re.compile(r"\.log(\.\d+)?(\.gz)?$", re.IGNORECASE)
@@ -64,15 +67,44 @@ def _skip_name(name: str) -> bool:
     return name.strip("/").lower() in SKIP_NAMES
 
 
+def _is_config_file(path: Path) -> bool:
+    name = path.name.lower()
+    suffix = path.suffix.lower()
+    if suffix in CONFIG_EXTS:
+        return True
+    for tail in ("-wal", "-shm", "-journal"):  # đi kèm database SQLite: phải sao lưu/khôi phục cùng nhau
+        if name.endswith(tail) and Path(name[: -len(tail)]).suffix in DB_EXTS:
+            return True
+    if suffix in (".log", ".gz", ".zip", ".tar", ".bak", ".tmp", ".lock", ".pid", ".sock"):
+        return False
+    # Còn lại: file nhỏ dạng văn bản — không đuôi (settings, .env...) bất kỳ văn bản nào; đuôi lạ
+    # (vd .storage/core.config_entries của Home Assistant) chỉ khi nội dung là JSON.
+    try:
+        if path.lstat().st_size > TEXT_NOEXT_MAX:
+            return False
+        with open(path, "rb") as f:
+            head = f.read(4096)
+        if not head or b"\x00" in head:
+            return False
+        text = head.decode("utf-8", errors="strict") if len(head) < 4096 else head[:4000].decode("utf-8", errors="ignore")
+    except (OSError, UnicodeDecodeError):
+        return False
+    if suffix == "" or name.startswith("."):
+        return True
+    return text.lstrip()[:1] in ("{", "[")
+
+
 def _wanted_file(path: Path, file_max: int) -> tuple[bool, str]:
-    """(có sao lưu không, lý do bỏ qua)."""
-    if path.suffix.lower() in SKIP_EXTS:
-        return False, "media file"
+    """(có sao lưu không, lý do bỏ qua — rỗng nếu chỉ đơn giản không phải file cài đặt)."""
+    if path.is_symlink():
+        return True, ""
+    if not _is_config_file(path):
+        return False, ""
     try:
         size = path.lstat().st_size
     except OSError:
         return False, "unreadable"
-    if not path.is_symlink() and size > file_max:
+    if size > file_max:
         return False, f"larger than {file_max // (1024 * 1024)} MB ({format_bytes(size)})"
     return True, ""
 
@@ -118,7 +150,7 @@ def _walk_wanted(top: Path, roots: list[str], file_max: int, skipped: list[str] 
             ok, why = _wanted_file(base, file_max)
             if ok:
                 yield base, rel, False
-            elif skipped is not None:
+            elif skipped is not None and why:
                 skipped.append(f"{rel} ({why})")
             continue
         if not base.is_dir():
@@ -143,7 +175,7 @@ def _walk_wanted(top: Path, roots: list[str], file_max: int, skipped: list[str] 
                 ok, why = _wanted_file(fp, file_max)
                 if ok:
                     yield fp, os.path.relpath(fp, top), False
-                elif skipped is not None:
+                elif skipped is not None and why:
                     skipped.append(f"{os.path.relpath(fp, top)} ({why})")
 _NAME_RE = re.compile(r"^\d{8}-\d{6}\.tar\.gz$")
 _SAFE_APP_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
@@ -217,7 +249,18 @@ def create_backup(
     file_max = max(1, int(file_max_mb)) * 1024 * 1024
     limit = max(1, int(max_mb)) * 1024 * 1024
     skipped: list[str] = []
-    entries = list(_walk_wanted(src, roots, file_max, skipped))
+    walked = list(_walk_wanted(src, roots, file_max, skipped))
+    files = [(p, rel, d) for p, rel, d in walked if not d]
+    # Chỉ giữ thư mục cha của file được sao lưu (giữ quyền/chủ sở hữu), không lưu cả cây thư mục rỗng
+    needed_dirs: set[str] = set()
+    for _p, rel, _d in files:
+        parent = Path(rel).parent
+        while str(parent) not in ("", "."):
+            needed_dirs.add(os.path.normpath(str(parent)))
+            parent = parent.parent
+    entries = [(p, rel, d) for p, rel, d in walked if d and os.path.normpath(rel) in needed_dirs] + files
+    if not files:
+        return {"ok": False, "skipped": True, "message": "No configuration files found to back up"}
     size = 0
     for p, _rel, is_dir in entries:
         if not is_dir and not p.is_symlink():
@@ -256,7 +299,7 @@ def create_backup(
     _apply_retention(bdir, keep)
     return {
         "ok": True, "file": name, "size": format_bytes(target.stat().st_size),
-        "message": f"Backup saved: {name} ({format_bytes(size)} of app configuration from {len(roots)} mounted path(s))",
+        "message": f"Backup saved: {name} ({len(files)} settings file(s), {format_bytes(size)})",
         "roots": roots, "skipped_mounts": skipped_mounts, "skipped": skipped,
     }
 

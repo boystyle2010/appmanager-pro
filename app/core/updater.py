@@ -577,7 +577,7 @@ async def _update_app_stream_impl(
     if get_setting("backup_before_update", "true").lower() == "true" and app_info.get("appdata_path"):
         from app.core.app_backup import create_backup
 
-        await send_log(f"==> Backing up app configuration in {app_info['appdata_path']} (media & large files are skipped)...\n")
+        await send_log(f"==> Backing up app configuration in {app_info['appdata_path']} (settings files only)...\n")
         try:
             max_mb = int(get_setting("backup_max_mb", "2048") or 2048)
             keep = int(get_setting("backup_keep", "3") or 3)
