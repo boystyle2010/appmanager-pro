@@ -399,4 +399,12 @@ html.light .pro-badge {
 .safe-bottom { padding-bottom: calc(2.5rem + env(safe-area-inset-bottom)); }
 
 [x-cloak] { display: none !important; }
+
+/* Safari iOS bỏ qua text-align cho ô giờ/ngày -> căn giữa phần giá trị */
+input[type="time"].text-center::-webkit-date-and-time-value,
+input[type="date"].text-center::-webkit-date-and-time-value { text-align: center; }
+input[type="time"].text-center { justify-content: center; }
+/* Chromium: phần giờ là một hộp flex con -> cho giãn hết chiều ngang rồi căn giữa */
+input[type="time"].text-center::-webkit-datetime-edit { display: flex; justify-content: center; width: 100%; }
+input[type="time"].text-center::-webkit-calendar-picker-indicator { display: none; }
 }

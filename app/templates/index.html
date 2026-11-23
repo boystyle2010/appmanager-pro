@@ -605,6 +605,15 @@
           <h3 class="font-bold text-sm truncate" x-text="actionSheet.app?.title"></h3>
           <p class="text-[11px] text-muted font-mono-code truncate" x-text="actionSheet.app?.name"></p>
         </div>
+        <!-- AppManager Pro chỉ có thao tác Restart -> đặt cạnh nút đóng thay vì một nút lẻ bên dưới -->
+        <button x-show="actionSheet.app?.is_self" @click="const a = actionSheet.app; closeActionSheet(); confirmRestart(a)"
+                :aria-label="t('restart')" :title="t('restart')"
+                class="glass-btn h-8 px-3 rounded-full flex items-center justify-center gap-1.5 text-sky-400 text-[11px] font-semibold shrink-0">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M20.49 9A9 9 0 005.64 5.64L4 9m16 6l-1.64 3.36A9 9 0 013.51 15"/>
+          </svg>
+          <span x-text="t('restart')"></span>
+        </button>
         <button @click="closeActionSheet()" aria-label="Close"
                 class="glass-btn w-8 h-8 rounded-full flex items-center justify-center text-muted hover:text-[var(--text-primary)] shrink-0">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
@@ -661,7 +670,7 @@
         </button>
       </div>
 
-      <div class="grid grid-cols-2 gap-2 text-xs font-semibold">
+      <div x-show="!actionSheet.app?.is_self" class="grid grid-cols-2 gap-2 text-xs font-semibold">
         <button @click="const a = actionSheet.app; closeActionSheet(); confirmRestart(a)"
                 class="glass-btn py-2.5 px-3 rounded-2xl flex items-center justify-center gap-2 text-sky-400">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -1035,7 +1044,7 @@
               <div x-show="editModal.sec.ports" class="px-4 pb-4 pt-2 space-y-2.5 border-t border-[var(--glass-border)]">
                 <div x-show="editModal.ui.service.ports.length > 0"
                      class="grid grid-cols-[1fr_14px_1fr_54px_34px] gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-subtle px-1">
-                  <span>Host</span><span></span><span>Container</span><span class="text-center">Proto</span><span></span>
+                  <span class="text-center">Host</span><span></span><span class="text-center">Container</span><span class="text-center">Proto</span><span></span>
                 </div>
                 <div x-show="editModal.ui.service.ports.length === 0" class="text-[11px] text-subtle italic" x-text="t('noPorts')"></div>
                 <template x-for="(p, idx) in editModal.ui.service.ports" :key="idx">
@@ -1382,12 +1391,12 @@
             </div>
             <div class="grid grid-cols-2 gap-3">
               <div class="glass-inset rounded-2xl p-3.5 min-w-0 overflow-hidden">
-                <label class="block text-[11px] font-semibold text-muted mb-1.5 truncate" x-text="t('autoUpdateTime')"></label>
+                <label class="block text-[11px] font-semibold text-muted mb-1.5 truncate text-center" x-text="t('autoUpdateTime')"></label>
                 <input type="time" x-model="settingsForm.auto_update_time"
                        class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code text-center" />
               </div>
               <div class="glass-inset rounded-2xl p-3.5 min-w-0 overflow-hidden">
-                <label class="block text-[11px] font-semibold text-muted mb-1.5 truncate" x-text="t('checkInterval')"></label>
+                <label class="block text-[11px] font-semibold text-muted mb-1.5 truncate text-center" x-text="t('checkInterval')"></label>
                 <input type="number" min="1" max="168" x-model.number="settingsForm.check_interval_hours"
                        class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code text-center" />
               </div>
