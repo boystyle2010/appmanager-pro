@@ -42,15 +42,15 @@ jobs:
       short_sha: ${{ steps.head.outputs.short }}
       image: ${{ steps.head.outputs.image }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: "24"
 
@@ -61,7 +61,7 @@ jobs:
       - uses: docker/setup-buildx-action@v4
       # Cho các lệnh "docker buildx build" trong verify.sh đọc cache GHA (do bước build & push ghi):
       # lớp apt / pip không đổi -> không build lại (nhất là bản arm64 chạy giả lập QEMU rất chậm)
-      - uses: crazy-max/ghaction-github-runtime@v3
+      - uses: crazy-max/ghaction-github-runtime@v4
 
       - name: Check source
         run: |
@@ -168,7 +168,7 @@ jobs:
       digest: ${{ steps.build.outputs.digest }}
       scan: ${{ steps.scan_sum.outputs.summary }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.update.outputs.head_sha }}
 
@@ -289,10 +289,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.update.outputs.head_sha }}
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
