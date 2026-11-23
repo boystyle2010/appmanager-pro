@@ -562,20 +562,30 @@ async def _update_app_stream_impl(
     if get_setting("backup_before_update", "true").lower() == "true" and app_info.get("appdata_path"):
         from app.core.app_backup import create_backup
 
-        await send_log(f"==> Backing up app data: {app_info['appdata_path']} ...\n")
+        await send_log(f"==> Backing up app configuration in {app_info['appdata_path']} (media & large files are skipped)...\n")
         try:
             max_mb = int(get_setting("backup_max_mb", "2048") or 2048)
             keep = int(get_setting("backup_keep", "3") or 3)
+            file_max_mb = int(get_setting("backup_file_max_mb", "50") or 50)
         except ValueError:
-            max_mb, keep = 2048, 3
+            max_mb, keep, file_max_mb = 2048, 3, 50
         bres = await asyncio.to_thread(
             create_backup, container_name, app_info["appdata_path"], from_ver, max_mb, keep,
-            image_id=old_image_id, image_ref=app_info["image"], compose_path=compose_path, service=service,
+            mounts=attrs.get("Mounts") or [], file_max_mb=file_max_mb, image_id=old_image_id, image_ref=app_info["image"], compose_path=compose_path, service=service,
             compose_text=rollback_compose,
         )
         if bres.get("ok"):
             backup_name = bres["file"]
-            await send_log(f"==> {bres['message']} ({bres.get('size', '')})\n\n")
+            await send_log(f"==> {bres['message']} — archive {bres.get('size', '')}\n")
+            await send_log(f"    Included: {', '.join(bres.get('roots') or [])}\n")
+            for sm in bres.get("skipped_mounts") or []:
+                await send_log(f"    Skipped mount: {sm}\n")
+            skipped = bres.get("skipped") or []
+            for item in skipped[:15]:
+                await send_log(f"    Skipped: {item}\n")
+            if len(skipped) > 15:
+                await send_log(f"    ... and {len(skipped) - 15} more skipped item(s)\n")
+            await send_log("\n")
         else:
             await send_log(
                 f"==> [WARN] {bres.get('message')} — continuing without data backup "

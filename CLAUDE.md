@@ -14,7 +14,7 @@ Hướng dẫn cho Claude khi làm việc trên repo này (Claude Code / phiên 
   - `updater.py` (pull/recreate, health check, auto-rollback, khoá mỗi app), `compose_manager.py` (sửa/deploy/gỡ compose),
   - `scheduler.py` (APScheduler: kiểm tra định kỳ, auto-update, dọn SSD theo lịch, lấy mẫu CPU/RAM 5 phút),
   - `auth.py` (Argon2, TOTP 2FA + mã dự phòng, khoá IP bền vững, `TRUSTED_PROXIES`, kiểm tra Origin), `database.py` (SQLite: settings, cache, lịch sử, audit log, mẫu tài nguyên),
-  - `app_backup.py` (sao lưu/khôi phục `/DATA/AppData/<app>` kèm phiên bản image), `system_prune.py`, `system_monitor.py`.
+  - `app_backup.py` (sao lưu/khôi phục **chỉ cấu hình** của app: mount trong `/DATA/AppData`, bỏ media/storage/share/downloads/sync/cache/backups, file media và file > giới hạn mỗi file — mặc định 50 MB; khôi phục chỉ thay đúng các file đó; kèm compose + image), `system_prune.py`, `system_monitor.py`.
   - `compose_snapshot.py`: nhớ "compose chạy tốt gần nhất" mỗi app (`<data>/compose-good/`). Cập nhật/Save & Apply hỏng → quay về **dữ liệu (sao lưu trước cập nhật) + compose chạy tốt + image cũ**; compose bị sửa sau lúc tạo container thì quay về bản chạy tốt chứ không phải file hiện tại.
   - `app/self_update_helper.py`: container phụ chạy bằng **image cũ** để tự cập nhật/tạo lại AppManager → kiểm tra `/login` trong container mới → hỏng thì trả database (`self-update-db.bak`) + compose + gắn lại tag image cũ. Trao đổi qua `<data>/self-update-job.json` → `self-update-result.json` (AppManager đọc lúc khởi động & mỗi phút, ghi vào Lịch sử).
 - Frontend: Alpine.js — `app/templates/index.html` (markup), `app/static/js/app.js` (logic), `app/static/js/i18n.js` (EN/VI, **mọi key phải có ở cả hai ngôn ngữ**), `app/templates/auth.html`.

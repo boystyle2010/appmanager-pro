@@ -1,11 +1,20 @@
 """
-Sao lưu / khôi phục thư mục dữ liệu của app (vd: /DATA/AppData/<app>) trước khi cập nhật.
+Sao lưu / khôi phục DỮ LIỆU CẤU HÌNH của app (trong /DATA/AppData/<app>) trước khi cập nhật.
+
+Chỉ sao lưu thứ app cần để chạy lại (cấu hình, database nhỏ, chứng chỉ, log...), KHÔNG sao lưu nội dung người dùng
+hay dữ liệu nặng (media, kho file, thư mục đồng bộ, cache, bản sao lưu của chính app...):
+  - chỉ các thư mục / file được MOUNT vào container và nằm trong /DATA/AppData;
+  - bỏ mount có tên kiểu media/storage/downloads/backups/cache... (SKIP_NAMES), cả thư mục con trùng tên;
+  - bỏ file media/ảnh đĩa (SKIP_EXTS) và file lớn hơn giới hạn mỗi file (mặc định 50 MB, vd database lịch sử
+    hàng GB của Home Assistant).
+Khôi phục chỉ ghi đè đúng các file thuộc diện sao lưu; file bị bỏ qua (media, file lớn) giữ nguyên.
 
 - Bản sao lưu: <APP_DATA_DIR>/app-backups/<container>/<YYYYmmdd-HHMMSS>.tar.gz (+ file .json mô tả)
-- Bỏ qua nếu thư mục lớn hơn giới hạn (mặc định 2 GB) để không làm đầy SSD.
+- Bỏ qua nếu phần cần sao lưu vẫn lớn hơn giới hạn tổng (mặc định 2 GB).
 - Chỉ giữ N bản mới nhất cho mỗi app.
 - Bản sao lưu ghi kèm PHIÊN BẢN app lúc đó (image id + tên image + file compose + service).
-- Khôi phục: dừng container -> đổi tên thư mục hiện tại thành "<dir>.pre-restore" -> giải nén ->
+- Khôi phục: dừng container -> chuyển các file sẽ bị ghi đè / không có trong bản sao lưu sang "<dir>.pre-restore"
+  -> giải nén ->
   nếu container đang chạy image khác và image cũ vẫn còn trên máy -> đưa lại đúng phiên bản cũ
   (gắn lại tag, sửa image trong compose nếu cần, tạo lại container); nếu không thì chạy lại container.
   Dữ liệu mà không kèm phiên bản thì vô ích khi bản mới đã đổi cấu trúc dữ liệu.
@@ -13,6 +22,7 @@ Sao lưu / khôi phục thư mục dữ liệu của app (vd: /DATA/AppData/<app
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -25,6 +35,107 @@ from app.core.database import DATA_DIR
 from app.core.docker_client import APPDATA_DIR, get_docker_client
 
 BACKUP_ROOT = DATA_DIR / "app-backups"
+DEFAULT_FILE_MAX_MB = 50
+
+# Tên thư mục (mount đích hoặc thư mục con) chứa nội dung người dùng / dữ liệu nặng / tạo lại được -> không sao lưu
+SKIP_NAMES = {
+    "media", "movies", "movie", "tv", "series", "music", "audio", "photos", "photo", "pictures", "images",
+    "videos", "video", "downloads", "download", "torrents", "storage", "share", "shares", "files", "library",
+    "sync", "syncthing", "backup", "backups", "cache", "caches", ".cache", "tmp", "temp", "transcode",
+    "transcodes", "thumbnails", "thumbs", "trash", ".trash", ".recycle", "recycle", "host_root", "mnt",
+}
+# File media / ảnh đĩa / bản sao lưu nén -> không sao lưu dù nhỏ
+SKIP_EXTS = {
+    ".mp4", ".mkv", ".avi", ".mov", ".m4v", ".wmv", ".flv", ".webm", ".ts", ".m2ts", ".mp3", ".flac", ".wav",
+    ".aac", ".m4a", ".ogg", ".opus", ".iso", ".img", ".vmdk", ".qcow2", ".vdi",
+}
+
+
+def _skip_name(name: str) -> bool:
+    return name.strip("/").lower() in SKIP_NAMES
+
+
+def _wanted_file(path: Path, file_max: int) -> tuple[bool, str]:
+    """(có sao lưu không, lý do bỏ qua)."""
+    if path.suffix.lower() in SKIP_EXTS:
+        return False, "media file"
+    try:
+        size = path.lstat().st_size
+    except OSError:
+        return False, "unreadable"
+    if not path.is_symlink() and size > file_max:
+        return False, f"larger than {file_max // (1024 * 1024)} MB ({format_bytes(size)})"
+    return True, ""
+
+
+def plan_backup_roots(top: Path, mounts: list[dict[str, Any]]) -> tuple[list[str], list[str]]:
+    """
+    Các đường dẫn (tương đối so với thư mục app) cần sao lưu, và các mount bị bỏ qua.
+    Chỉ mount bind nằm trong thư mục app; bỏ mount có tên kiểu media/storage/backups...
+    """
+    roots: list[str] = []
+    skipped: list[str] = []
+    top_r = top.resolve()
+    for m in mounts or []:
+        src = m.get("Source") or ""
+        dst = m.get("Destination") or ""
+        if m.get("Type", "bind") != "bind" or not src:
+            continue
+        try:
+            sp = Path(src).resolve()
+        except Exception:
+            continue
+        if sp != top_r and top_r not in sp.parents:
+            continue  # ngoài thư mục app (vd /DATA, /media, /) -> không phải dữ liệu riêng của app
+        if _skip_name(Path(dst).name) or (sp != top_r and _skip_name(sp.name)):
+            skipped.append(f"{src} -> {dst}")
+            continue
+        rel = "." if sp == top_r else str(sp.relative_to(top_r))
+        roots.append(rel)
+    # Bỏ mục nằm trong mục khác đã chọn
+    roots = sorted(set(roots), key=lambda r: (r.count("/"), r))
+    final: list[str] = []
+    for r in roots:
+        if not any(r == f or f == "." or r.startswith(f + "/") for f in final):
+            final.append(r)
+    return final, skipped
+
+
+def _walk_wanted(top: Path, roots: list[str], file_max: int, skipped: list[str] | None = None):
+    """Duyệt các file/thư mục thuộc diện sao lưu: trả về (đường_dẫn, tên_tương_đối, là_thư_mục)."""
+    for rel in roots:
+        base = (top / rel) if rel != "." else top
+        if base.is_symlink() or base.is_file():
+            ok, why = _wanted_file(base, file_max)
+            if ok:
+                yield base, rel, False
+            elif skipped is not None:
+                skipped.append(f"{rel} ({why})")
+            continue
+        if not base.is_dir():
+            continue
+        for dirpath, dirnames, filenames in os.walk(base):
+            d = Path(dirpath)
+            drel = os.path.relpath(d, top)
+            yield d, drel, True
+            keep_dirs = []
+            for dn in dirnames:
+                full = d / dn
+                if _skip_name(dn):
+                    if skipped is not None:
+                        skipped.append(f"{os.path.relpath(full, top)}/ (folder skipped)")
+                elif full.is_symlink():
+                    yield full, os.path.relpath(full, top), False  # link thư mục: lưu link, không đi theo
+                else:
+                    keep_dirs.append(dn)
+            dirnames[:] = keep_dirs
+            for fn in filenames:
+                fp = d / fn
+                ok, why = _wanted_file(fp, file_max)
+                if ok:
+                    yield fp, os.path.relpath(fp, top), False
+                elif skipped is not None:
+                    skipped.append(f"{os.path.relpath(fp, top)} ({why})")
 _NAME_RE = re.compile(r"^\d{8}-\d{6}\.tar\.gz$")
 _SAFE_APP_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 
@@ -74,6 +185,8 @@ def create_backup(
     max_mb: int,
     keep: int,
     *,
+    mounts: list[dict[str, Any]] | None = None,
+    file_max_mb: int = DEFAULT_FILE_MAX_MB,
     image_id: str = "",
     image_ref: str = "",
     compose_path: str = "",
@@ -88,10 +201,24 @@ def create_backup(
     if _inside(BACKUP_ROOT, src) or src.resolve() == DATA_DIR.resolve() or _inside(DATA_DIR, src):
         return {"ok": False, "skipped": True, "message": "Refusing to back up AppManager Pro's own data"}
 
+    roots, skipped_mounts = plan_backup_roots(src, mounts or [])
+    if not roots:
+        return {"ok": False, "skipped": True,
+                "message": "No app configuration folder to back up (only media / large folders are mounted)"}
+    file_max = max(1, int(file_max_mb)) * 1024 * 1024
     limit = max(1, int(max_mb)) * 1024 * 1024
-    size = dir_size(src, stop_after=limit)
+    skipped: list[str] = []
+    entries = list(_walk_wanted(src, roots, file_max, skipped))
+    size = 0
+    for p, _rel, is_dir in entries:
+        if not is_dir and not p.is_symlink():
+            try:
+                size += p.stat().st_size
+            except OSError:
+                pass
     if size > limit:
-        return {"ok": False, "skipped": True, "message": f"Data folder is larger than {max_mb} MB — backup skipped"}
+        return {"ok": False, "skipped": True,
+                "message": f"App configuration is larger than {max_mb} MB ({format_bytes(size)}) — backup skipped"}
 
     bdir = _app_dir(container_name)
     bdir.mkdir(parents=True, exist_ok=True)
@@ -100,7 +227,8 @@ def create_backup(
     tmp = bdir / (name + ".part")
     try:
         with tarfile.open(tmp, "w:gz", compresslevel=6) as tar:
-            tar.add(str(src), arcname=".")
+            for p, rel, _is_dir in entries:
+                tar.add(str(p), arcname=rel, recursive=False)
         tmp.rename(target)
     except Exception as exc:
         tmp.unlink(missing_ok=True)
@@ -109,13 +237,19 @@ def create_backup(
     (bdir / (name + ".json")).write_text(
         json.dumps({
             "source": str(src), "version": version, "created": int(time.time()), "data_bytes": size,
+            "roots": roots, "file_max_bytes": file_max, "skipped_mounts": skipped_mounts,
+            "skipped": skipped[:200], "skipped_count": len(skipped),
             "image_id": image_id, "image_ref": image_ref, "compose_path": compose_path, "service": service,
             "compose_text": compose_text,
         }),
         encoding="utf-8",
     )
     _apply_retention(bdir, keep)
-    return {"ok": True, "file": name, "size": format_bytes(target.stat().st_size), "message": f"Backup saved: {name}"}
+    return {
+        "ok": True, "file": name, "size": format_bytes(target.stat().st_size),
+        "message": f"Backup saved: {name} ({format_bytes(size)} of app configuration from {len(roots)} mounted path(s))",
+        "roots": roots, "skipped_mounts": skipped_mounts, "skipped": skipped,
+    }
 
 
 def _apply_retention(bdir: Path, keep: int) -> None:
@@ -250,6 +384,89 @@ def _restore_version(client, meta: dict[str, Any], current_image_id: str) -> tup
     return True, (msg[:1].upper() + msg[1:] + ".") if msg else ""
 
 
+def _safe_members(tar: tarfile.TarFile, root: Path) -> list[tarfile.TarInfo]:
+    """Bản sao lưu do chính app tạo -> giữ quyền & chủ sở hữu, nhưng chặn đường dẫn thoát ra ngoài."""
+    root = root.resolve()
+    members = tar.getmembers()
+    for m in members:
+        target = (root / m.name).resolve() if not m.issym() else (root / m.name).parent.resolve()
+        if m.name.startswith("/") or (target != root and root not in target.parents):
+            raise ValueError(f"Unsafe path in backup: {m.name}")
+        if m.islnk() and m.linkname.startswith("/"):
+            raise ValueError(f"Unsafe link in backup: {m.name}")
+    return members
+
+
+def _extract(tar: tarfile.TarFile, dest: Path, members: list[tarfile.TarInfo]) -> None:
+    try:
+        tar.extractall(dest, members=members, numeric_owner=True, filter="fully_trusted")
+    except TypeError:  # Python cũ không có tham số filter
+        tar.extractall(dest, members=members, numeric_owner=True)
+
+
+def _restore_whole_folder(f: Path, dest: Path, previous: Path) -> None:
+    if previous.exists():
+        shutil.rmtree(previous)
+    if dest.exists():
+        dest.rename(previous)
+    dest.mkdir(parents=True, exist_ok=True)
+    try:
+        with tarfile.open(f, "r:gz") as tar:
+            _extract(tar, dest, _safe_members(tar, dest))
+    except Exception:
+        if dest.exists():
+            shutil.rmtree(dest, ignore_errors=True)
+        if previous.exists():
+            previous.rename(dest)
+        raise
+
+
+def _move(src: Path, dst: Path) -> None:
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.replace(src, dst)
+    except OSError:
+        shutil.move(str(src), str(dst))
+
+
+def _restore_selected(f: Path, dest: Path, previous: Path, meta: dict[str, Any]) -> None:
+    """
+    Chỉ thay các file thuộc diện sao lưu. File hiện có sẽ bị ghi đè, và file thuộc diện sao lưu nhưng không có
+    trong bản sao lưu (sinh ra sau đó, vd bản mới tạo thêm), được chuyển sang <dir>.pre-restore.
+    Media / file lớn / thư mục bị bỏ qua thì giữ nguyên.
+    """
+    roots = list(meta.get("roots") or [])
+    file_max = int(meta.get("file_max_bytes") or DEFAULT_FILE_MAX_MB * 1024 * 1024)
+    if previous.exists():
+        shutil.rmtree(previous)
+    previous.mkdir(parents=True)
+    moved: list[tuple[Path, Path]] = []
+    with tarfile.open(f, "r:gz") as tar:
+        members = _safe_members(tar, dest)
+        in_backup = {os.path.normpath(m.name) for m in members if not m.isdir()}
+        try:
+            # 1) File hiện tại thuộc diện sao lưu: chuyển sang pre-restore (sẽ được thay bằng bản trong sao lưu)
+            current = [(p, os.path.normpath(rel)) for p, rel, is_dir in _walk_wanted(dest, roots, file_max) if not is_dir]
+            for p, rel in current:
+                if p.exists() or p.is_symlink():
+                    _move(p, previous / rel)
+                    moved.append((previous / rel, p))
+            # 2) File trong sao lưu mà hiện có ở chỗ khác diện (vd đã lớn hơn giới hạn): cũng giữ lại bản hiện tại
+            for rel in in_backup:
+                p = dest / rel
+                if (p.exists() or p.is_symlink()) and not p.is_dir():
+                    _move(p, previous / rel)
+                    moved.append((previous / rel, p))
+            _extract(tar, dest, members)
+        except Exception:
+            for saved, original in reversed(moved):  # hoàn tác: trả file về chỗ cũ
+                try:
+                    _move(saved, original)
+                except Exception:
+                    pass
+            raise
+
+
 def restore_backup(
     container_name: str, filename: str, *, start: bool = True, restore_version: bool = True
 ) -> dict[str, Any]:
@@ -283,33 +500,11 @@ def restore_backup(
 
     previous = dest.with_name(dest.name + ".pre-restore")
     try:
-        if previous.exists():
-            shutil.rmtree(previous)
-        if dest.exists():
-            dest.rename(previous)
-        dest.mkdir(parents=True, exist_ok=True)
-        with tarfile.open(f, "r:gz") as tar:
-            # Bản sao lưu do chính app tạo -> giữ nguyên quyền & chủ sở hữu, nhưng vẫn chặn đường dẫn thoát ra ngoài
-            root = dest.resolve()
-            for m in tar.getmembers():
-                target = (root / m.name).resolve()
-                if m.name.startswith("/") or (target != root and root not in target.parents):
-                    raise ValueError(f"Unsafe path in backup: {m.name}")
-                if m.islnk() and m.linkname.startswith("/"):
-                    raise ValueError(f"Unsafe link in backup: {m.name}")
-            try:
-                tar.extractall(dest, numeric_owner=True, filter="fully_trusted")
-            except TypeError:  # Python cũ không có tham số filter
-                tar.extractall(dest, numeric_owner=True)
+        if meta.get("roots") is not None:
+            _restore_selected(f, dest, previous, meta)
+        else:
+            _restore_whole_folder(f, dest, previous)  # bản sao lưu cũ: cả thư mục
     except Exception as exc:
-        # Hoàn tác: trả lại thư mục cũ
-        try:
-            if dest.exists():
-                shutil.rmtree(dest)
-            if previous.exists():
-                previous.rename(dest)
-        except Exception:
-            pass
         if container is not None and was_running and start:
             try:
                 container.start()

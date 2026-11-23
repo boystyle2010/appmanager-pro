@@ -62,7 +62,7 @@
           auto_update_time: '03:30', prune_old_images: true, auto_rollback: true, health_wait_seconds: 25,
           auto_prune_enabled: false, auto_prune_freq: 'weekly', auto_prune_weekday: 6, auto_prune_time: '04:00',
           auto_prune_images: 'dangling', auto_prune_cache: true, auto_prune_next_run: '', auto_prune_last: '',
-          backup_before_update: true, backup_max_mb: 2048, backup_keep: 3,
+          backup_before_update: true, backup_max_mb: 2048, backup_file_max_mb: 50, backup_keep: 3,
           github_token: '', has_github_token: false
         },
         storageState: { loading: false, pruning: false, data: null, lastFreed: '' },
@@ -1104,6 +1104,7 @@
             auto_prune_cache: !!f.auto_prune_cache,
             backup_before_update: !!f.backup_before_update,
             backup_max_mb: Math.max(50, Math.min(102400, parseInt(f.backup_max_mb, 10) || 2048)),
+            backup_file_max_mb: Math.max(1, Math.min(10240, parseInt(f.backup_file_max_mb, 10) || 50)),
             backup_keep: Math.max(1, Math.min(20, parseInt(f.backup_keep, 10) || 3))
           };
           if ((f.github_token || '').trim()) payload.github_token = f.github_token.trim();

@@ -12,3 +12,4 @@
 - Save & Apply in the compose editor checks that the app really starts; if not, the previous docker-compose.yml is restored automatically and the log is shown in the editor
 - AppManager Pro backs up its own database before a self-update and restores it if the new version is rolled back
 - "Back up app data before updating" is now on by default for new installs
+- App data backups now contain only the app's own configuration: folders mounted from /DATA/AppData, without media, storage/share, downloads, sync folders, caches, the app's own backups, media files and files above a per-file limit (default 50 MB, e.g. large history databases). Restoring replaces only those files; media and large files are left untouched

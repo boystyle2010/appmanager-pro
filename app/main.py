@@ -193,6 +193,7 @@ class SettingsPayload(BaseModel):
     auto_prune_cache: bool = True
     backup_before_update: bool = True
     backup_max_mb: int = 2048
+    backup_file_max_mb: int = 50
     backup_keep: int = 3
     github_token: Optional[str] = None
 
@@ -673,6 +674,7 @@ async def api_save_settings(payload: SettingsPayload, request: Request, user: st
     set_setting("auto_prune_cache", "true" if payload.auto_prune_cache else "false")
     set_setting("backup_before_update", "true" if payload.backup_before_update else "false")
     set_setting("backup_max_mb", str(max(50, min(102400, payload.backup_max_mb))))
+    set_setting("backup_file_max_mb", str(max(1, min(10240, payload.backup_file_max_mb))))
     set_setting("backup_keep", str(max(1, min(20, payload.backup_keep))))
     if payload.github_token is not None:
         set_setting("github_token", payload.github_token.strip())

@@ -1597,7 +1597,11 @@
                       <div class="w-11 h-6 bg-slate-600/60 rounded-full peer peer-checked:bg-emerald-500 relative transition after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5"></div>
                     </label>
                   </div>
-                  <div x-show="settingsForm.backup_before_update" x-cloak class="grid grid-cols-2 gap-2">
+                  <div x-show="settingsForm.backup_before_update" x-cloak class="grid grid-cols-3 gap-2">
+                    <label class="space-y-1">
+                      <span class="text-[11px] text-muted" x-text="t('bkFileMax')"></span>
+                      <input type="number" min="1" max="10240" x-model.number="settingsForm.backup_file_max_mb" class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code text-center" />
+                    </label>
                     <label class="space-y-1">
                       <span class="text-[11px] text-muted" x-text="t('bkMax')"></span>
                       <input type="number" min="50" max="102400" x-model.number="settingsForm.backup_max_mb" class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code text-center" />
