@@ -45,7 +45,7 @@
         },
         editModal: {
           open: false, loading: false, saving: false, tab: 'ui',
-          app: null, composePath: '', rawYaml: '', ui: null,
+          app: null, composePath: '', rawYaml: '', ui: null, otherComposeFiles: [],
           backups: [], feedback: '', feedbackOk: true,
           sec: { container: true, ports: true, volumes: false, env: false, casaos: false }
         },
@@ -772,7 +772,7 @@
         async openEditModal(app) {
           this.editModal = {
             open: true, loading: true, saving: false, tab: 'ui',
-            app, composePath: '', rawYaml: '', ui: null, lastService: '', yamlTouched: false,
+            app, composePath: '', rawYaml: '', ui: null, otherComposeFiles: [], lastService: '', yamlTouched: false,
             backups: [], feedback: '', feedbackOk: true,
             sec: { container: true, ports: true, volumes: false, env: false, casaos: false }
           };
@@ -788,6 +788,7 @@
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || 'Cannot load docker-compose.yml');
             this.editModal.composePath = data.compose_path || '';
+            this.editModal.otherComposeFiles = data.other_compose_files || [];
             this.editModal.rawYaml = data.raw_yaml || '';
             this.editModal.ui = data.ui || null;
             this.editModal.lastService = data.ui?.selected_service || '';

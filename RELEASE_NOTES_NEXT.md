@@ -5,3 +5,5 @@
 - Update history now shows why an update failed and keeps the full update log (View log), including the failing container's last log lines and healthcheck output captured before rollback
 - Rollback after a failed update now also restores the app data backed up just before the update (the new version may have changed the data), not only the old image
 - Restoring an app data backup also brings back the app version from that backup when the app now runs a different one (if the old image is still on the server), and always starts the app again
+- The compose editor keeps extra settings of long-syntax ports and volumes (e.g. `bind.create_host_path`, `mode`) instead of dropping them, and no longer adds empty `icon`/`port_map` values
+- The compose editor warns when the app has another compose file with different content (e.g. a CasaOS copy and one in /DATA/AppData), which can bring back an old configuration

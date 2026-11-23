@@ -199,6 +199,14 @@ def parse_yaml_to_ui(raw_yaml: str, preferred_service: Optional[str] = None) -> 
     }
 
 
+def _pop_matching_long(entries: list[Any], key: str, value: Any) -> Optional[dict[str, Any]]:
+    """Lấy (và bỏ khỏi danh sách) mục dạng dài đầu tiên có entries[i][key] == value, để giữ các khoá phụ."""
+    for i, e in enumerate(entries):
+        if isinstance(e, dict) and str(e.get(key)) == str(value):
+            return entries.pop(i)
+    return None
+
+
 def merge_ui_into_yaml(base_yaml: str, ui_data: dict[str, Any]) -> str:
     ryaml = _make_yaml()
     data = ryaml.load(base_yaml) or {}
@@ -237,7 +245,7 @@ def merge_ui_into_yaml(base_yaml: str, ui_data: dict[str, Any]) -> str:
     elif "privileged" in svc:
         del svc["privileged"]
 
-    orig_ports = svc.get("ports") or []
+    orig_ports = list(svc.get("ports") or [])
     use_long_ports = bool(data.get("x-casaos")) or any(isinstance(p, dict) for p in orig_ports)
     clean_ports = []
     for p in s_ui.get("ports") or []:
@@ -247,9 +255,14 @@ def merge_ui_into_yaml(base_yaml: str, ui_data: dict[str, Any]) -> str:
         if not c_port:
             continue
         if use_long_ports and ":" not in h_port and c_port.isdigit():
-            entry: dict[str, Any] = {"target": int(c_port), "protocol": proto}
+            # Giữ nguyên các khoá khác của mục cũ (mode, host_ip, name, app_protocol...)
+            entry = _pop_matching_long(orig_ports, "target", int(c_port)) or {}
+            entry["target"] = int(c_port)
+            entry["protocol"] = proto
             if h_port:
                 entry["published"] = h_port
+            elif "published" in entry:
+                del entry["published"]
             clean_ports.append(entry)
         else:
             base = f"{h_port}:{c_port}" if h_port else c_port
@@ -260,7 +273,7 @@ def merge_ui_into_yaml(base_yaml: str, ui_data: dict[str, Any]) -> str:
     elif "ports" in svc:
         del svc["ports"]
 
-    orig_vols = svc.get("volumes") or []
+    orig_vols = list(svc.get("volumes") or [])
     use_long_vols = any(isinstance(v, dict) for v in orig_vols)
     clean_vols = []
     for v in s_ui.get("volumes") or []:
@@ -270,9 +283,19 @@ def merge_ui_into_yaml(base_yaml: str, ui_data: dict[str, Any]) -> str:
         if not dst:
             continue
         if use_long_vols and src:
-            ventry: dict[str, Any] = {"type": "bind", "source": src, "target": dst}
+            # Giữ nguyên các khoá khác của mục cũ (bind.create_host_path, propagation, volume.nocopy...);
+            # mục mới tự tạo thư mục trên máy chủ như dạng ngắn "src:dst" (dạng dài mặc định KHÔNG tạo -> lỗi).
+            ventry = _pop_matching_long(orig_vols, "target", dst)
+            if ventry is None:
+                ventry = {"type": "bind" if src.startswith(("/", ".", "~")) else "volume"}
+                if ventry["type"] == "bind":
+                    ventry["bind"] = {"create_host_path": True}
+            ventry["source"] = src
+            ventry["target"] = dst
             if ro:
                 ventry["read_only"] = True
+            elif "read_only" in ventry:
+                del ventry["read_only"]
             clean_vols.append(ventry)
         else:
             s_val = f"{src}:{dst}" if src else dst
@@ -320,10 +343,12 @@ def merge_ui_into_yaml(base_yaml: str, ui_data: dict[str, Any]) -> str:
                 x_root["title"]["en_US"] = c_ui["title"].strip()
             else:
                 x_root["title"] = {"en_US": c_ui["title"].strip()}
-        if "icon" in c_ui:
-            x_root["icon"] = c_ui["icon"].strip()
-        if "port_map" in c_ui:
-            x_root["port_map"] = str(c_ui["port_map"]).strip()
+        # Không ghi giá trị rỗng cho khoá vốn không có (tránh làm bẩn compose / CasaOS hiển thị sai)
+        for key in ("icon", "port_map"):
+            if key in c_ui:
+                val = str(c_ui[key] or "").strip()
+                if val or key in x_root:
+                    x_root[key] = val
         if c_ui.get("scheme"):
             x_root["scheme"] = c_ui["scheme"].strip()
         if "index" in c_ui:
@@ -547,6 +572,31 @@ async def deploy_new_app_stream(
     return {"ok": True, "app_id": app_id, "compose_path": str(compose_path)}
 
 
+def find_other_compose_files(compose_path: str, names: list[str]) -> list[str]:
+    """
+    Các file compose KHÁC NỘI DUNG cho cùng app ở chỗ quen thuộc (CasaOS / AppData). Hai bản lệch nhau rất dễ
+    gây sập app: CasaOS hoặc Terminal tạo lại container từ bản này trong khi người dùng chỉ sửa bản kia.
+    """
+    try:
+        current = Path(compose_path).resolve()
+        current_text = current.read_text(encoding="utf-8")
+    except Exception:
+        return []
+    found: list[str] = []
+    for base in (CASAOS_APPS_DIR, APPDATA_DIR):
+        for name in dict.fromkeys(n for n in names if n and re.match(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$", n)):
+            for fname in ("docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"):
+                p = base / name / fname
+                try:
+                    if not p.is_file() or p.resolve() == current:
+                        continue
+                    if p.read_text(encoding="utf-8") != current_text:
+                        found.append(str(p))
+                except Exception:
+                    continue
+    return found
+
+
 async def get_compose_state(container_name: str, service: Optional[str] = None) -> dict[str, Any]:
     app_info = await asyncio.to_thread(get_app_by_name, container_name)
     if not app_info:
@@ -563,6 +613,11 @@ async def get_compose_state(container_name: str, service: Optional[str] = None) 
         "raw_yaml": raw_yaml,
         "ui": ui,
         "backups": list_backups(container_name),
+        "other_compose_files": await asyncio.to_thread(
+            find_other_compose_files,
+            compose_path,
+            [app_info.get("project") or "", container_name, Path(compose_path).parent.name],
+        ),
     }
 
 
