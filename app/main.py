@@ -1,4 +1,5 @@
 import asyncio
+import httpx
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -74,6 +75,8 @@ from app.core.docker_client import (
 )
 from app.core.registry_checker import (
     check_all_updates,
+    extract_github_slug,
+    fetch_github_release,
     check_one_app_by_name,
     is_check_running,
 )
@@ -467,6 +470,31 @@ async def api_app_details(
         "published_at": cache.get("published_at") or "",
         "pref": pref,
     }
+
+
+@app.get("/api/apps/{container_name}/channel-preview")
+async def api_channel_preview(container_name: str, tag: str, _: str = Depends(require_user)):
+    """Changelog của một kênh phát hành (chỉ xem, không đổi gì) — trước khi người dùng bấm cập nhật."""
+    app_info = await asyncio.to_thread(get_app_by_name, container_name)
+    if not app_info:
+        raise HTTPException(status_code=404, detail="App not found")
+    ch = next((c for c in (app_info.get("channels") or []) if c.get("tag") == tag), None)
+    if not ch:
+        raise HTTPException(status_code=400, detail="This tag is not an available release channel for this app.")
+    pref = get_app_pref(container_name)
+    slug = extract_github_slug(
+        (pref.get("custom_repo") or "").strip() or app_info.get("source_url") or "", app_info["image"], app_info.get("icon") or ""
+    )
+    out = {"channel": ch, "changelog": "", "release_tag": "", "release_url": "", "error": ""}
+    if not slug:
+        out["error"] = "No GitHub repository known for this app."
+        return out
+    async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        gh = await fetch_github_release(
+            client, slug, prefer_version=str(ch.get("version") or ""), prerelease=ch.get("kind") == "pre"
+        )
+    out.update({k: gh.get(k, "") for k in ("changelog", "release_tag", "release_url", "error")})
+    return out
 
 
 @app.post("/api/apps/{container_name}/prefs")

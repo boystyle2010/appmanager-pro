@@ -41,7 +41,7 @@
         updateModal: {
           open: false, loading: false, updating: false, app: null,
           changelogHtml: '', changelogError: '', releaseTag: '', releaseUrl: '',
-          autoUpdate: false, customRepo: '', showRepoInput: false, updateLogs: '', ws: null
+          autoUpdate: false, customRepo: '', showRepoInput: false, updateLogs: '', ws: null, preview: null
         },
         editModal: {
           open: false, loading: false, saving: false, tab: 'ui',
@@ -464,7 +464,7 @@
         async openUpdateModal(app) {
           this.updateModal.open = true; this.updateModal.loading = true;
           this.updateModal.updating = false; this.updateModal.showRepoInput = false;
-          this.updateModal.updateLogs = ''; this.updateModal.app = app;
+          this.updateModal.updateLogs = ''; this.updateModal.app = app; this.updateModal.preview = null;
           await this._fetchAppDetails(app.name, false);
         },
 
@@ -683,21 +683,48 @@
           if (chs.length < 2) return null;
           const cur = chs.find(c => c.current || c.tag === app.image_tag);
           if (cur && cur.kind === 'pre') return { on: true, label: cur.channel, title: this.t('onPreChannel') };
-          const pre = chs.find(c => c.kind === 'pre');
-          if (!pre) return null;
-          return { on: false, label: 'β', title: `${this.t('preChannelAvailable')}: ${pre.channel}${pre.version ? ' ' + pre.version : ''}` };
+          const pre = chs.filter(c => c.kind === 'pre');
+          if (!pre.length) return null;
+          // Có kênh thử nghiệm: viền nét đứt + tên kênh (BETA / DEV / RC...), nhiều kênh thì ghi "+1"
+          return { on: false, label: pre[0].channel + (pre.length > 1 ? ` +${pre.length - 1}` : ''),
+                   title: `${this.t('preChannelAvailable')}: ${pre.map(c => c.channel + (c.version ? ' ' + c.version : '')).join(', ')}` };
         },
 
         confirmChannelSwitch(ch) {
           const app = this.updateModal.app;
-          if (!app || ch.current || ch.tag === app.image_tag || this.updateModal.updating) return;
+          if (!app || this.updateModal.updating) return;
+          if (ch.current || ch.tag === app.image_tag) { if (this.updateModal.preview) this.cancelChannelPreview(); return; }
+          if (this.updateModal.preview?.tag === ch.tag) return;
           const toPre = ch.kind === 'pre';
           this.askConfirm({
             tone: toPre ? 'danger' : 'update',
             title: `${this.t('switchChannelTitle')} ${ch.channel.toUpperCase()}${ch.version ? ' (' + ch.version + ')' : ''}?`,
             message: `${app.image_tag} → ${ch.tag}. ${toPre ? this.t('switchToPreMsg') : this.t('switchToStableMsg')} ${this.t('switchChannelMsg')}`,
-            confirmLabel: this.t('switchChannel'), onConfirm: () => this.startAppUpdate(ch.tag)
+            confirmLabel: this.t('switchChannel'), onConfirm: () => this.previewChannel(ch)
           });
+        },
+
+        // Chọn kênh: chỉ tải changelog của kênh đó; cập nhật thật khi người dùng bấm nút cập nhật
+        async previewChannel(ch) {
+          const m = this.updateModal;
+          m.preview = ch; m.loading = true;
+          try {
+            const res = await fetch(`/api/apps/${encodeURIComponent(m.app.name)}/channel-preview?tag=${encodeURIComponent(ch.tag)}`);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            if (m.preview?.tag !== ch.tag) return;
+            m.releaseTag = data.release_tag || ch.version || ch.tag;
+            m.releaseUrl = data.release_url || m.releaseUrl;
+            m.changelogError = data.changelog ? '' : (data.error || '');
+            const cleaned = data.changelog ? this._cleanChangelog(data.changelog) : '';
+            m.changelogHtml = cleaned ? this._renderMarkdown(cleaned) : '';
+          } catch (err) { this.showToast(err.message); }
+          finally { m.loading = false; }
+        },
+
+        async cancelChannelPreview() {
+          this.updateModal.preview = null;
+          await this._fetchAppDetails(this.updateModal.app.name, false);
         },
 
         // ---------------- Update 1 app (WebSocket Terminal) ----------------

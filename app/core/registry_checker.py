@@ -329,11 +329,38 @@ async def fetch_github_release(
                         break
                     if r_tag.status_code == 403:
                         break
+            rels: list = []
             if picked is None and prerelease:
                 r_list = await client.get(f"https://api.github.com/repos/{slug}/releases?per_page=20", headers=headers)
                 if r_list.status_code == 200 and isinstance(r_list.json(), list):
                     rels = r_list.json()
-                    picked = next((x for x in rels if x.get("prerelease")), None) or (rels[0] if rels else None)
+                    picked = next((x for x in rels if x.get("prerelease")), None)
+            if picked is None and prefer_version:
+                # Bản beta không có GitHub Release -> các commit từ bản phát hành ổn định gần nhất đến tag beta
+                base_rel = next((x for x in rels if not x.get("prerelease") and not x.get("draft")), None)
+                if base_rel is None:
+                    r_lat = await client.get(f"https://api.github.com/repos/{slug}/releases/latest", headers=headers)
+                    base_rel = r_lat.json() if r_lat.status_code == 200 else None
+                base_tag = str((base_rel or {}).get("tag_name") or "")
+                for head in dict.fromkeys((prefer_version, f"v{prefer_version.lstrip('v')}", prefer_version.lstrip("v"))):
+                    if not base_tag or head == base_tag:
+                        break
+                    r_cmp = await client.get(f"https://api.github.com/repos/{slug}/compare/{base_tag}...{head}", headers=headers)
+                    if r_cmp.status_code != 200:
+                        continue
+                    commits = (r_cmp.json() or {}).get("commits") or []
+                    if not commits:
+                        break
+                    lines = [f"### {head} — commits since {base_tag}"]
+                    for cm in reversed(commits[-40:]):
+                        msg = str((cm.get("commit") or {}).get("message") or "").splitlines()[0].strip()
+                        lines.append(f"- `{str(cm.get('sha') or '')[:7]}` {msg}")
+                    out["release_tag"] = head
+                    out["release_url"] = f"https://github.com/{slug}/compare/{base_tag}...{head}"
+                    out["changelog"] = "\n".join(lines)
+                    return out
+            if picked is None and rels:
+                picked = rels[0]
             if picked:
                 body = strip_checksums(str(picked.get("body") or "").strip())
                 if body:
