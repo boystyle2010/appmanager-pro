@@ -1,11 +1,14 @@
 import asyncio
+import json
 import logging
+import time
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Optional
 
 from ruamel.yaml import YAML
 
 from app.core.database import (
+    DATA_DIR,
     add_update_history,
     attach_update_log,
     get_last_update_history_id,
@@ -206,37 +209,127 @@ async def _rollback_to_previous(
     return ok, reason
 
 
-def _trigger_self_update_helper(compose_path: str) -> None:
+SELF_HELPER_NAME = "appmanager-pro-self-updater"
+SELF_JOB_FILE = DATA_DIR / "self-update-job.json"
+SELF_RESULT_FILE = DATA_DIR / "self-update-result.json"
+
+
+def _own_container(client):
+    import socket
+
+    try:
+        return client.containers.get(socket.gethostname())
+    except Exception:
+        return client.containers.get("appmanager-pro")
+
+
+def _trigger_self_update_helper(
+    compose_path: str,
+    *,
+    mode: str = "update",
+    title: str = "AppManager Pro",
+    from_version: str = "",
+    to_version: str = "",
+    compose_original: Optional[str] = None,
+    history_mode: str = "manual",
+) -> None:
+    """
+    Chạy container phụ (bằng image hiện tại — bản đang chạy ổn) để cập nhật / tạo lại AppManager Pro,
+    kiểm tra sức khoẻ bản mới và tự rollback nếu hỏng. Kết quả được ghi vào Lịch sử khi AppManager chạy lại.
+    mode: "update" (pull + tạo lại) hoặc "recreate" (sau khi sửa compose).
+    compose_original: nội dung compose trước khi đổi (để trả lại khi rollback); None = compose không đổi.
+    """
     compose_dir = str(Path(compose_path).parent)
     client = get_docker_client()
     try:
-        old = client.containers.get("appmanager-pro-self-updater")
-        old.remove(force=True)
+        client.containers.get(SELF_HELPER_NAME).remove(force=True)
     except Exception:
         pass
-    # Dùng chính image AppManager Pro đang chạy (đã có sẵn Docker CLI + Compose) -> không phụ thuộc tag cũ
-    helper_image = "docker:cli"
-    try:
-        import socket
+    collect_self_update_result()  # kết quả cũ chưa đọc (nếu có) -> ghi lại trước khi ghi đè
 
-        helper_image = client.containers.get(socket.gethostname()).image.id
+    own = _own_container(client)
+    labels = (own.attrs.get("Config") or {}).get("Labels") or {}
+    data_volume: dict[str, dict[str, str]] = {}
+    for m in own.attrs.get("Mounts") or []:
+        if m.get("Destination") == str(DATA_DIR):
+            key = m.get("Name") if m.get("Type") == "volume" else m.get("Source")
+            if key:
+                data_volume = {key: {"bind": str(DATA_DIR), "mode": "rw"}}
+    if not data_volume:
+        raise RuntimeError(f"{DATA_DIR} is not mounted from the host; cannot run a safe self-update")
+
+    try:
+        window = max(90, min(300, int(get_setting("health_wait_seconds", "25")) * 4))
     except Exception:
-        pass
-    client.containers.run(
-        image=helper_image,
-        command=[
-            "sh",
-            "-c",
-            f"sleep 2 && docker compose -f '{compose_path}' pull && docker compose -f '{compose_path}' up -d",
-        ],
-        remove=True,
-        detach=True,
-        volumes={
-            "/var/run/docker.sock": {"bind": "/var/run/docker.sock", "mode": "rw"},
-            compose_dir: {"bind": compose_dir, "mode": "rw"},
-        },
-        name="appmanager-pro-self-updater",
-    )
+        window = 120
+    job = {
+        "container": own.name,
+        "service": labels.get("com.docker.compose.service") or "",
+        "compose_path": compose_path,
+        "compose_original": compose_original,
+        "old_image_id": own.image.id,
+        "image_ref": (own.attrs.get("Config") or {}).get("Image") or "",
+        "mode": mode,
+        "history_mode": history_mode,
+        "title": title,
+        "from_version": from_version,
+        "to_version": to_version,
+        "window": window,
+        "prune_old_image": get_setting("prune_old_images", "true").lower() == "true",
+        "started": int(time.time()),
+    }
+    SELF_JOB_FILE.write_text(json.dumps(job), encoding="utf-8")
+    try:
+        client.containers.run(
+            image=own.image.id,  # image hiện tại: có Docker CLI + Compose + chính script phụ này
+            command=["python", "-m", "app.self_update_helper"],
+            working_dir="/app",
+            environment={"APP_DATA_DIR": str(DATA_DIR)},
+            remove=True,
+            detach=True,
+            volumes={
+                "/var/run/docker.sock": {"bind": "/var/run/docker.sock", "mode": "rw"},
+                compose_dir: {"bind": compose_dir, "mode": "rw"},
+                **data_volume,
+            },
+            name=SELF_HELPER_NAME,
+        )
+    except Exception:
+        SELF_JOB_FILE.unlink(missing_ok=True)
+        raise
+
+
+def collect_self_update_result() -> None:
+    """Ghi kết quả tự cập nhật (do container phụ để lại) vào Lịch sử. Gọi lúc khởi động và mỗi phút."""
+    try:
+        if SELF_RESULT_FILE.exists():
+            res = json.loads(SELF_RESULT_FILE.read_text(encoding="utf-8"))
+            before = get_last_update_history_id()
+            add_update_history(
+                res.get("container") or "appmanager-pro", res.get("title") or "AppManager Pro",
+                res.get("from_version") or "", res.get("to_version") or "",
+                res.get("history_mode") or "manual", res.get("status") or "failed", (res.get("message") or "")[:300],
+            )
+            attach_update_log(res.get("container") or "appmanager-pro", before, res.get("log") or "")
+            SELF_RESULT_FILE.unlink(missing_ok=True)
+            return
+        if SELF_JOB_FILE.exists():
+            job = json.loads(SELF_JOB_FILE.read_text(encoding="utf-8"))
+            if time.time() - int(job.get("started") or 0) < 20 * 60:
+                return  # container phụ có thể vẫn đang chạy
+            try:
+                get_docker_client().containers.get(SELF_HELPER_NAME)
+                return
+            except Exception:
+                pass
+            add_update_history(
+                job.get("container") or "appmanager-pro", job.get("title") or "AppManager Pro",
+                job.get("from_version") or "", job.get("to_version") or "", job.get("history_mode") or "manual",
+                "failed", "Self-update helper stopped without reporting a result",
+            )
+            SELF_JOB_FILE.unlink(missing_ok=True)
+    except Exception:
+        logger.exception("Cannot collect self-update result")
 
 
 def _bump_compose_image_tag(
@@ -399,11 +492,17 @@ async def _update_app_stream_impl(
         await send_log(f"==> Detected self-update for {title}.\n")
         await send_log("==> Launching detached helper container to pull & recreate...\n")
         try:
-            await asyncio.to_thread(_trigger_self_update_helper, compose_path)
-            add_update_history(
-                container_name, title, from_ver, target_ver, mode, "success", "Self-update triggered"
+            await asyncio.to_thread(
+                lambda: _trigger_self_update_helper(
+                    compose_path, mode="update", title=title, from_version=from_ver, to_version=target_ver,
+                    compose_original=(Path(backup_path).read_text(encoding="utf-8") if bumped and backup_path else None),
+                    history_mode=mode,
+                )
             )
-            await send_log("==> Helper launched! AppManager Pro will restart in ~10 seconds.\n")
+            await send_log(
+                "==> Helper launched! AppManager Pro restarts in a few seconds. The new version is checked and "
+                "rolled back automatically if it does not start; the result appears in Settings → History.\n"
+            )
             await send_log("__SELF_UPDATE_RELOAD__\n")
             return {"ok": True, "self_update": True, "to_version": target_ver}
         except Exception as exc:

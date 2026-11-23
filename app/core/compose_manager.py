@@ -643,7 +643,13 @@ async def save_and_apply_compose(container_name: str, raw_yaml: str) -> dict[str
 
     if app_info.get("is_self"):
         try:
-            await asyncio.to_thread(_trigger_self_update_helper, compose_path)
+            await asyncio.to_thread(
+                lambda: _trigger_self_update_helper(
+                    compose_path, mode="recreate", title=app_info.get("title") or "AppManager Pro",
+                    from_version=app_info.get("version") or "", to_version="compose edit",
+                    compose_original=original_text,
+                )
+            )
             return {
                 "ok": True,
                 "self_update": True,

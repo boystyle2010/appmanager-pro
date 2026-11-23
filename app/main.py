@@ -80,7 +80,7 @@ from app.core.registry_checker import (
 from app.core.scheduler import configure_jobs, get_auto_prune_next_run, start_scheduler, stop_scheduler
 from app.core.system_monitor import collect_task_manager_snapshot
 from app.core.system_prune import get_docker_disk_usage, prune_docker_resources
-from app.core.updater import update_all_apps_stream, update_app_stream
+from app.core.updater import collect_self_update_result, update_all_apps_stream, update_app_stream
 
 BASE_DIR = Path(__file__).resolve().parent
 ASSETS_DIR = BASE_DIR.parent / "assets"
@@ -89,6 +89,7 @@ ASSETS_DIR = BASE_DIR.parent / "assets"
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
+    collect_self_update_result()
     start_scheduler()
     yield
     stop_scheduler()

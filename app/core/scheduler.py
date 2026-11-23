@@ -9,7 +9,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from app.core.database import add_resource_samples, add_update_history, get_all_update_cache, get_public_settings, set_setting
 from app.core.docker_client import list_all_apps
 from app.core.registry_checker import check_all_updates
-from app.core.updater import update_app_stream
+from app.core.updater import collect_self_update_result, update_app_stream
 
 logger = logging.getLogger("appmanager.scheduler")
 _BACKGROUND_TASKS: set = set()  # giữ tham chiếu để task nền không bị thu hồi giữa chừng
@@ -159,6 +159,14 @@ def configure_jobs() -> None:
         run_resource_sampler,
         trigger=IntervalTrigger(minutes=RESOURCE_SAMPLE_MINUTES),
         id="resource_sampler",
+        replace_existing=True,
+    )
+
+    # Kết quả tự cập nhật do container phụ ghi lại (bản mới khởi động trước khi kiểm tra sức khoẻ xong)
+    scheduler.add_job(
+        collect_self_update_result,  # hàm thường -> APScheduler chạy trong thread pool
+        trigger=IntervalTrigger(minutes=1),
+        id="self_update_result",
         replace_existing=True,
     )
 

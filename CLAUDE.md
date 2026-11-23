@@ -14,7 +14,8 @@ Hướng dẫn cho Claude khi làm việc trên repo này (Claude Code / phiên 
   - `updater.py` (pull/recreate, health check, auto-rollback, khoá mỗi app), `compose_manager.py` (sửa/deploy/gỡ compose),
   - `scheduler.py` (APScheduler: kiểm tra định kỳ, auto-update, dọn SSD theo lịch, lấy mẫu CPU/RAM 5 phút),
   - `auth.py` (Argon2, TOTP 2FA + mã dự phòng, khoá IP bền vững, `TRUSTED_PROXIES`, kiểm tra Origin), `database.py` (SQLite: settings, cache, lịch sử, audit log, mẫu tài nguyên),
-  - `app_backup.py` (sao lưu/khôi phục `/DATA/AppData/<app>`), `system_prune.py`, `system_monitor.py`.
+  - `app_backup.py` (sao lưu/khôi phục `/DATA/AppData/<app>` kèm phiên bản image), `system_prune.py`, `system_monitor.py`.
+  - `app/self_update_helper.py`: container phụ chạy bằng **image cũ** để tự cập nhật/tạo lại AppManager → kiểm tra `/login` trong container mới → hỏng thì trả compose + gắn lại tag image cũ. Trao đổi qua `<data>/self-update-job.json` → `self-update-result.json` (AppManager đọc lúc khởi động & mỗi phút, ghi vào Lịch sử).
 - Frontend: Alpine.js — `app/templates/index.html` (markup), `app/static/js/app.js` (logic), `app/static/js/i18n.js` (EN/VI, **mọi key phải có ở cả hai ngôn ngữ**), `app/templates/auth.html`.
 - CSS: **Tailwind v4** biên dịch lúc build image từ `app/static/css/tailwind.input.css` (stage `css` trong Dockerfile). `glass.css` và khối `<style>` trong `index.html` nằm trong `@layer components` để class tiện ích Tailwind luôn thắng. File `tailwind.css` là sản phẩm build, không commit.
 - Thư viện JS (Alpine, marked, DOMPurify) và font được tải vào image bởi `scripts/fetch_vendor.py`, có CDN dự phòng trong HTML.
