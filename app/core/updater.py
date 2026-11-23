@@ -5,7 +5,12 @@ from typing import Any, Awaitable, Callable, Optional
 
 from ruamel.yaml import YAML
 
-from app.core.database import add_update_history, get_setting
+from app.core.database import (
+    add_update_history,
+    attach_update_log,
+    get_last_update_history_id,
+    get_setting,
+)
 from app.core.docker_client import get_app_by_name, get_docker_client, list_all_apps
 from app.core.registry_checker import check_one_app_by_name
 
@@ -101,6 +106,36 @@ async def _wait_healthy(
     return (last == "running"), (f"Status after {window}s: {last}")
 
 
+def _diagnostics_sync(name: str, tail: int = 60) -> str:
+    """Kết quả healthcheck gần nhất + log cuối của container — lưu lại trước khi rollback xoá mất nó."""
+    client = get_docker_client()
+    c = client.containers.get(name)
+    c.reload()
+    st = c.attrs.get("State", {}) or {}
+    out = [
+        f"--- Container state: status={st.get('Status')} exit_code={st.get('ExitCode')} "
+        f"restarts={c.attrs.get('RestartCount', 0)} error={st.get('Error') or '-'}"
+    ]
+    for entry in ((st.get("Health") or {}).get("Log") or [])[-3:]:
+        msg = str(entry.get("Output") or "").strip() or "(no output)"
+        out.append(f"--- Healthcheck exit {entry.get('ExitCode')}: {msg[:500]}")
+    try:
+        logs = c.logs(tail=tail, timestamps=False).decode("utf-8", errors="replace").rstrip()
+    except Exception as exc:
+        logs = f"(cannot read logs: {exc})"
+    out.append(f"--- Last {tail} log lines of {name}:")
+    out.append(logs or "(empty)")
+    return "\n".join(out) + "\n"
+
+
+async def _send_diagnostics(name: str, send_log: LogCallback) -> None:
+    try:
+        text = await asyncio.to_thread(_diagnostics_sync, name)
+    except Exception as exc:
+        text = f"--- Cannot collect diagnostics: {exc}\n"
+    await send_log("\n" + text)
+
+
 def _retag_image_sync(old_image_id: str, image_ref: str) -> str:
     repo, tag = _split_image_ref(image_ref)
     if not repo:
@@ -148,6 +183,9 @@ async def _rollback_to_previous(
     if rc != 0:
         return False, f"Rollback up failed (exit {rc})"
     ok, reason = await _wait_healthy(container_name, send_log, window)
+    if not ok:
+        await send_log(f"==> Previous version is not healthy either: {reason}\n")
+        await _send_diagnostics(container_name, send_log)
     return ok, reason
 
 
@@ -263,8 +301,18 @@ async def update_app_stream(
         await send_log(f"[ERROR] {msg}\n")
         return {"ok": False, "error": msg}
     async with lock:
+        chunks: list[str] = []
+
+        async def tee_log(text: str) -> None:
+            chunks.append(text)
+            await send_log(text)
+
         try:
-            return await _update_app_stream_impl(container_name, send_log, mode)
+            before_id = await asyncio.to_thread(get_last_update_history_id)
+        except Exception:
+            before_id = None
+        try:
+            return await _update_app_stream_impl(container_name, tee_log, mode)
         except Exception as exc:  # không để một app lỗi làm dừng cả Update All / cập nhật tự động
             logger.exception("Update of %s crashed", container_name)
             msg = f"Unexpected error: {exc}"
@@ -272,11 +320,18 @@ async def update_app_stream(
                 await send_log(f"\n[ERROR] {msg}\n")
             except Exception:
                 pass
+            chunks.append(f"\n[ERROR] {msg}\n")
             try:
                 add_update_history(container_name, container_name, "", "", mode, "failed", msg[:300])
             except Exception:
                 pass
             return {"ok": False, "error": msg}
+        finally:
+            if before_id is not None:
+                try:
+                    await asyncio.to_thread(attach_update_log, container_name, before_id, "".join(chunks))
+                except Exception:
+                    logger.exception("Cannot save update log of %s", container_name)
 
 
 async def _update_app_stream_impl(
@@ -413,6 +468,8 @@ async def _update_app_stream_impl(
     await send_log(f"\n==> Checking the new container for {window}s...\n")
     healthy, reason = await _wait_healthy(container_name, send_log, window, baseline)
     await send_log(f"==> {reason}\n")
+    if not healthy:
+        await _send_diagnostics(container_name, send_log)
 
     rolled_back = False
     if not healthy and get_setting("auto_rollback", "true").lower() == "true":
@@ -437,6 +494,7 @@ async def _update_app_stream_impl(
             await check_one_app_by_name(container_name)
             return {"ok": False, "error": f"Update failed ({reason}); rolled back to {from_ver or 'previous version'}"}
         await send_log(f"\n[ERROR] Rollback failed: {rb_reason}\n")
+        reason = f"{reason}; rollback failed: {rb_reason}"
 
     refreshed = await asyncio.to_thread(get_app_by_name, container_name)
     new_ver = refreshed["version"] if refreshed else target_ver
@@ -461,7 +519,7 @@ async def _update_app_stream_impl(
         new_ver,
         mode,
         final_status,
-        f"Container status: {new_status}",
+        f"Container status: {new_status}" if final_status == "success" else f"{reason} (status: {new_status})"[:300],
     )
 
     if final_status == "success":

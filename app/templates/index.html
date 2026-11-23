@@ -1742,7 +1742,8 @@
           <div class="space-y-2.5">
             <div x-show="updateHistory.length === 0" class="text-center py-8 text-xs text-muted" x-text="t('noHistory')"></div>
             <template x-for="h in updateHistory" :key="h.id">
-              <div class="glass-inset rounded-2xl p-3.5 text-xs flex items-center justify-between gap-3">
+              <div class="glass-inset rounded-2xl p-3.5 text-xs">
+              <div class="flex items-center justify-between gap-3">
                 <div class="min-w-0">
                   <div class="flex items-center gap-2">
                     <span class="font-semibold truncate" x-text="h.app_title"></span>
@@ -1754,6 +1755,16 @@
                   <p class="font-mono-code text-[11px] text-muted mt-1" x-text="`${h.from_version || '?'} → ${h.to_version || '?'}`"></p>
                 </div>
                 <span class="text-[10px] text-subtle shrink-0" x-text="utcToLocal(h.created_at)"></span>
+              </div>
+              <p x-show="h.status !== 'success' && h.message" class="text-[11px] text-rose-300/90 mt-2 break-words" x-text="h.message"></p>
+              <button x-show="h.has_log" type="button" @click="toggleHistoryLog(h)"
+                      class="mt-2 text-[11px] font-semibold text-sky-400 active:opacity-70"
+                      x-text="historyLog.id === h.id ? t('hideUpdateLog') : t('viewUpdateLog')"></button>
+              <div x-show="historyLog.id === h.id" class="mt-2">
+                <div x-show="historyLog.loading" class="text-[11px] text-muted" x-text="t('loadingLog')"></div>
+                <pre x-show="!historyLog.loading" x-text="historyLog.text"
+                     class="font-mono-code text-[10.5px] leading-snug whitespace-pre-wrap break-words max-h-80 overflow-y-auto rounded-xl bg-black/40 p-2.5 text-slate-300"></pre>
+              </div>
               </div>
             </template>
           </div>

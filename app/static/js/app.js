@@ -31,6 +31,7 @@
         confirmModal: { open: false, tone: 'primary', title: '', message: '', confirmLabel: '', onConfirm: null },
         actionSheet: { open: false, app: null },
         logModal: { open: false, title: '', containerName: '', lines: '', ws: null },
+        historyLog: { id: null, text: '', loading: false },
         batchModal: { open: false, running: false, items: [], doneCount: 0, succeeded: 0, failed: 0, logs: '', ws: null },
         deployModal: {
           open: false, tab: 'yaml', appName: '', rawYaml: '',
@@ -463,6 +464,22 @@
           this.updateModal.updating = false; this.updateModal.showRepoInput = false;
           this.updateModal.updateLogs = ''; this.updateModal.app = app;
           await this._fetchAppDetails(app.name, false);
+        },
+
+        // Mở/đóng nhật ký đầy đủ của một lần cập nhật trong tab Lịch sử
+        async toggleHistoryLog(h) {
+          if (this.historyLog.id === h.id) { this.historyLog = { id: null, text: '', loading: false }; return; }
+          this.historyLog = { id: h.id, text: '', loading: true };
+          try {
+            const res = await fetch(`/api/history/${h.id}/log`);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            if (this.historyLog.id === h.id) this.historyLog.text = data.log || this.t('noUpdateLog');
+          } catch (err) {
+            if (this.historyLog.id === h.id) this.historyLog.text = err.message;
+          } finally {
+            if (this.historyLog.id === h.id) this.historyLog.loading = false;
+          }
         },
 
         // Markdown -> HTML an toàn. Thiếu thư viện (CDN/vendor hỏng) thì vẫn hiện chữ thô thay vì báo lỗi.

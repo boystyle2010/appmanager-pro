@@ -58,6 +58,7 @@ from app.core.database import (
     get_public_settings,
     get_update_cache_item,
     get_update_history,
+    get_update_log,
     get_user_by_username,
     has_admin_user,
     init_db,
@@ -631,6 +632,14 @@ async def api_get_settings(_: str = Depends(require_user)):
         "settings": {**get_public_settings(), "auto_prune_next_run": get_auto_prune_next_run()},
         "history": get_update_history(30),
     }
+
+
+@app.get("/api/history/{history_id}/log")
+async def api_update_log(history_id: int, _: str = Depends(require_user)):
+    item = await asyncio.to_thread(get_update_log, history_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Not found")
+    return item
 
 
 def _valid_hhmm(value: str, default: str) -> str:

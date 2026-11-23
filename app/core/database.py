@@ -3,7 +3,7 @@ import secrets
 import sqlite3
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 DATA_DIR = Path(os.getenv("APP_DATA_DIR", "/app/data"))
 DB_PATH = DATA_DIR / "appmanager.db"
@@ -130,6 +130,11 @@ def init_db() -> None:
         }
         if "target_tag" not in cols:
             conn.execute("ALTER TABLE update_cache ADD COLUMN target_tag TEXT DEFAULT ''")
+
+        # Nhật ký đầy đủ của mỗi lần cập nhật (để xem lại vì sao hỏng sau khi container đã bị tạo lại)
+        hcols = {r["name"] for r in conn.execute("PRAGMA table_info(update_history)").fetchall()}
+        if "log" not in hcols:
+            conn.execute("ALTER TABLE update_history ADD COLUMN log TEXT DEFAULT ''")
 
         row = conn.execute(
             "SELECT value FROM settings WHERE key = 'session_secret'"
@@ -495,12 +500,60 @@ def add_update_history(
         conn.close()
 
 
+UPDATE_LOG_MAX_CHARS = 60_000  # giữ phần cuối nhật ký (chỗ báo lỗi) nếu quá dài
+
+
 def get_update_history(limit: int = 40) -> list[dict[str, Any]]:
+    """Danh sách lịch sử (không kèm nội dung nhật ký cho nhẹ; chỉ báo có hay không)."""
     conn = get_connection()
     try:
         rows = conn.execute(
-            "SELECT * FROM update_history ORDER BY id DESC LIMIT ?", (limit,)
+            "SELECT id, container_name, app_title, from_version, to_version, mode, status, message, created_at, "
+            "(COALESCE(log, '') != '') AS has_log FROM update_history ORDER BY id DESC LIMIT ?",
+            (limit,),
         ).fetchall()
-        return [dict(r) for r in rows]
+        return [{**dict(r), "has_log": bool(r["has_log"])} for r in rows]
+    finally:
+        conn.close()
+
+
+def get_last_update_history_id() -> int:
+    conn = get_connection()
+    try:
+        row = conn.execute("SELECT COALESCE(MAX(id), 0) AS m FROM update_history").fetchone()
+        return int(row["m"] or 0)
+    finally:
+        conn.close()
+
+
+def attach_update_log(container_name: str, after_id: int, log: str) -> None:
+    """Gắn nhật ký vào (các) dòng lịch sử mà lần cập nhật này vừa ghi cho app đó."""
+    if len(log) > UPDATE_LOG_MAX_CHARS:
+        log = "…(truncated)…\n" + log[-UPDATE_LOG_MAX_CHARS:]
+    conn = get_connection()
+    try:
+        conn.execute(
+            "UPDATE update_history SET log = ? WHERE container_name = ? AND id > ?",
+            (log, container_name, after_id),
+        )
+        # Chỉ giữ nhật ký của 50 lần cập nhật gần nhất để database không phình to
+        conn.execute(
+            "UPDATE update_history SET log = '' WHERE log != '' AND id NOT IN "
+            "(SELECT id FROM update_history WHERE log != '' ORDER BY id DESC LIMIT 50)"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_update_log(history_id: int) -> Optional[dict[str, Any]]:
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT id, app_title, status, message, created_at, COALESCE(log, '') AS log "
+            "FROM update_history WHERE id = ?",
+            (history_id,),
+        ).fetchone()
+        return dict(row) if row else None
     finally:
         conn.close()
