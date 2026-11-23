@@ -12,7 +12,11 @@ python scripts/check_project.py
 node --check app/static/js/app.js
 node --check app/static/js/i18n.js
 
-docker buildx build --load --quiet -t "$TAG" . >/dev/null
+# BUILDX_CACHE_FROM (vd "type=gha" trên GitHub Actions): dùng lại các lớp đã build ở lần phát hành trước
+CACHE_ARGS=()
+if [ -n "${BUILDX_CACHE_FROM:-}" ]; then CACHE_ARGS=(--cache-from "$BUILDX_CACHE_FROM"); fi
+
+docker buildx build "${CACHE_ARGS[@]}" --load --quiet -t "$TAG" . >/dev/null
 echo "Image $TAG built"
 
 if [ "$SMOKE" = "smoke" ]; then
@@ -34,6 +38,6 @@ fi
 
 # 3) Build thử bản arm64 (bắt lỗi thư viện thiếu bản dựng sẵn cho ARM) — cần QEMU/buildx
 if [ "${VERIFY_ARM64:-}" = "1" ]; then
-  docker buildx build --platform linux/arm64 -t "$TAG-arm64" . >/dev/null
+  docker buildx build "${CACHE_ARGS[@]}" --platform linux/arm64 -t "$TAG-arm64" . >/dev/null
   echo "arm64 image built"
 fi

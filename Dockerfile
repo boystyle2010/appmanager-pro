@@ -32,9 +32,12 @@ RUN apt-get update && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-# Nâng pip & setuptools trước (bản đi kèm image hay dính lỗ hổng, vd CVE-2025-47273) rồi cài thư viện
+# Nâng setuptools (bản đi kèm image dính CVE-2025-47273), cài thư viện, rồi GỠ pip: app không cần pip khi chạy,
+# và pip tự đóng gói kèm pkg_resources của setuptools 70.3.0 (pip/_vendor/vendor.txt) -> Trivy báo lỗ hổng.
 RUN pip install --no-cache-dir --upgrade pip setuptools \
-    && pip install --no-cache-dir -r requirements.txt
+    && pip install --no-cache-dir -r requirements.txt \
+    && python -m pip uninstall -y pip \
+    && rm -rf /root/.cache
 
 COPY app/ ./app/
 COPY --from=css /out/tailwind.css ./app/static/css/tailwind.css
