@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.11.0
+
+*Released: 2026-11-23*
+
+### 📦 Component & Version Matrix
+
+- **App Release:** Bumped from `v0.10.0` ➡️ `v0.11.0`
+- **Supported Architectures:** `linux/amd64` (x86_64) & `linux/arm64` (ARM64) *(Multi-arch GHCR Image)*
+- **Python Base Image:** `python 3.15.2`
+- **Docker CLI:** `docker 29.10.0`
+- **Core Python Stack:** `FastAPI 0.165.0` • `Uvicorn 0.54.0` • `Docker SDK 7.2.0` • `ruamel.yaml 0.19.1` • `Argon2 25.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.28.1` • `APScheduler 3.11.3` • `segno 1.6.6`
+- **Frontend Libraries:** `Alpine.js 3.17.5` • `Tailwind CSS 4.3.5` • `marked 18.2.1` • `DOMPurify 3.5.0`
+
+### 🚀 What's Changed
+
+- Security: pip is removed from the image after installing dependencies (not needed at runtime); its vendored pkg_resources from setuptools 70.3.0 was the remaining Trivy HIGH finding (CVE-2025-47273)
+- CI: the verify builds (amd64 + emulated arm64) reuse the GitHub Actions build cache, so unchanged apt / pip layers are no longer rebuilt on every run
+- Fixed the Merge / Skip buttons of the duplicate-compose warning being disabled; Merge is now red and the warning uses a vector icon instead of an emoji
+- CI: GitHub Actions updated to their latest majors (checkout v7, setup-python v7, setup-node v7, ghaction-github-runtime v4), all on Node.js 24 — no more Node 20 deprecation warning
+- CI: the update bot also upgrades GitHub Actions in the workflow to their latest major (skipped when a used input disappears; SHA-pinned actions untouched) when the WORKFLOW_TOKEN secret is set
+- App cards show an amber badge (file icon + count) when the app has more than one docker-compose file; tapping it opens Edit Config with the Merge / Skip options
+- Update All can be customized: a settings button next to it lets you untick apps to skip (remembered); the button shows "selected/total" and a dot when some apps are excluded. By default every app is updated; the nightly auto-update is unaffected
+
 ## 0.10.0
 
 *Released: 2026-11-23*
