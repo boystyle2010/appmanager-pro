@@ -49,12 +49,14 @@ CONFIG_EXTS = {
     ".json", ".yaml", ".yml", ".toml", ".ini", ".conf", ".cfg", ".config", ".env", ".xml", ".properties",
     ".plist", ".db", ".sqlite", ".sqlite3", ".db3", ".pem", ".crt", ".cer", ".key", ".p12", ".pfx",
     ".htpasswd", ".htaccess",
+    ".tdb", ".ldb",                          # database của Samba (mật khẩu SMB, vd OmniDrive data/wpro/samba)
+    ".secret", ".token", ".passwd", ".shadow",  # khoá phiên / mật khẩu đã băm
 }
 DB_EXTS = {".db", ".sqlite", ".sqlite3", ".db3"}
 TEXT_NOEXT_MAX = 1024 * 1024  # file không đuôi (vd .storage/core.config_entries) <= 1 MB và là văn bản
 
 
-_LOG_RE = re.compile(r"\.log(\.\d+)?(\.gz)?$", re.IGNORECASE)
+_LOG_RE = re.compile(r"\.(log|jsonl|ndjson)(\.\d+)?(\.gz)?$", re.IGNORECASE)
 
 
 def _is_log(rel: str) -> bool:
@@ -75,8 +77,8 @@ def _is_config_file(path: Path) -> bool:
     for tail in ("-wal", "-shm", "-journal"):  # đi kèm database SQLite: phải sao lưu/khôi phục cùng nhau
         if name.endswith(tail) and Path(name[: -len(tail)]).suffix in DB_EXTS:
             return True
-    if suffix in (".log", ".gz", ".zip", ".tar", ".bak", ".tmp", ".lock", ".pid", ".sock"):
-        return False
+    if suffix in (".log", ".jsonl", ".ndjson", ".gz", ".zip", ".tar", ".bak", ".tmp", ".lock", ".pid", ".sock"):
+        return False  # nhật ký / file tạm / file nén: không phải cài đặt
     # Còn lại: file nhỏ dạng văn bản — không đuôi (settings, .env...) bất kỳ văn bản nào; đuôi lạ
     # (vd .storage/core.config_entries của Home Assistant) chỉ khi nội dung là JSON.
     try:
