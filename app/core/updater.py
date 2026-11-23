@@ -587,7 +587,8 @@ async def _update_app_stream_impl(
             max_mb, keep, file_max_mb = 2048, 3, 50
         bres = await asyncio.to_thread(
             create_backup, container_name, app_info["appdata_path"], from_ver, max_mb, keep,
-            mounts=attrs.get("Mounts") or [], file_max_mb=file_max_mb, image_id=old_image_id, image_ref=app_info["image"], compose_path=compose_path, service=service,
+            mounts=attrs.get("Mounts") or [], file_max_mb=file_max_mb, image_id=old_image_id,
+            image_digest=(app_info.get("local_digests") or [""])[0], image_ref=app_info["image"], compose_path=compose_path, service=service,
             compose_text=rollback_compose,
         )
         if bres.get("ok"):

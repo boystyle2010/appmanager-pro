@@ -21,3 +21,4 @@
 - UI polish: the ⋯ button matches the CasaOS / Docker badge size, "Edit Config (UI/YAML)" label, cleaner restore version picker with technical descriptions
 - Settings → Storage: aligned backup limit fields, version shown per backup, backup list and SSD schedule stay visible even if Docker disk usage cannot be read; restore picker uses amber accents; internal reload marker no longer saved in update logs
 - UI: centered port column headers and update-time / check-interval fields (incl. the time picker on iOS Safari); AppManager Pro's own ⋯ menu shows Restart next to the close button
+- Restore shows a progress window (elapsed time, then the result and each step performed); if the previous image was removed (e.g. by "auto-clean old images"), it is pulled again from the registry by its saved digest, or by its version tag for older backups

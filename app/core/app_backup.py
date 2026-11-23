@@ -232,6 +232,7 @@ def create_backup(
     file_max_mb: int = DEFAULT_FILE_MAX_MB,
     image_id: str = "",
     image_ref: str = "",
+    image_digest: str = "",
     compose_path: str = "",
     service: str = "",
     compose_text: str | None = None,
@@ -293,8 +294,8 @@ def create_backup(
             "source": str(src), "version": version, "created": int(time.time()), "data_bytes": size,
             "roots": roots, "file_max_bytes": file_max, "skipped_mounts": skipped_mounts,
             "skipped": skipped[:200], "skipped_count": len(skipped),
-            "image_id": image_id, "image_ref": image_ref, "compose_path": compose_path, "service": service,
-            "compose_text": compose_text,
+            "image_id": image_id, "image_ref": image_ref, "image_digest": image_digest,
+            "compose_path": compose_path, "service": service, "compose_text": compose_text,
         }),
         encoding="utf-8",
     )
@@ -386,7 +387,47 @@ def _set_compose_image(compose_path: str, service: str, image_ref: str) -> bool:
     return True
 
 
-def _restore_version(client, meta: dict[str, Any], current_image_id: str) -> tuple[bool, str]:
+def _image_exists(client, ref: str) -> str:
+    try:
+        return client.images.get(ref).id
+    except Exception:
+        return ""
+
+
+def _pull_previous_image(client, meta: dict[str, Any], log: list[str]) -> str:
+    """
+    Image cũ đã bị xoá (vd "Tự xoá image cũ sau khi update") -> tải lại từ registry.
+    Thứ tự: đúng digest đã lưu lúc sao lưu (chính xác tuyệt đối) -> tag theo phiên bản (bản sao lưu cũ chưa có digest).
+    Trả về image id, hoặc "" nếu không tải được.
+    """
+    repo, _tag = _split_ref(meta.get("image_ref") or "")
+    if not repo:
+        return ""
+    candidates: list[str] = []
+    if meta.get("image_digest"):
+        candidates.append(f"{repo}@{meta['image_digest']}")
+    version = str(meta.get("version") or "").strip()
+    if version and re.match(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$", version) and not version.startswith("build-"):
+        candidates.append(f"{repo}:{version}")
+        if not version.startswith("v"):
+            candidates.append(f"{repo}:v{version}")
+    for ref in candidates:
+        log.append(f"Pulling {ref} ...")
+        try:
+            proc = subprocess.run(["docker", "pull", ref], capture_output=True, text=True, timeout=900)
+        except Exception as exc:
+            log.append(f"  failed: {exc}")
+            continue
+        if proc.returncode == 0:
+            image_id = _image_exists(client, ref)
+            if image_id:
+                log.append(f"  OK ({image_id[:19]})")
+                return image_id
+        log.append(f"  failed: {((proc.stderr or proc.stdout or '').strip().splitlines() or ['?'])[-1][:200]}")
+    return ""
+
+
+def _restore_version(client, meta: dict[str, Any], current_image_id: str, log: list[str]) -> tuple[bool, str]:
     """
     Đưa app về đúng trạng thái lúc sao lưu: docker-compose.yml + image. Trả về (đã_tạo_lại_container, thông_báo).
     Không làm gì nếu container đang chạy đúng image đó và compose không khác.
@@ -398,42 +439,52 @@ def _restore_version(client, meta: dict[str, Any], current_image_id: str) -> tup
     service = meta.get("service") or ""
     if not compose_path or not Path(compose_path).is_file() or not service:
         if image_id and image_id != current_image_id:
-            return False, "Data restored; the app version was not changed (compose file unknown)."
+            return False, "Image was not changed: docker-compose.yml of the app is unknown."
         return False, ""
 
     current_text = Path(compose_path).read_text(encoding="utf-8")
     compose_differs = compose_text is not None and compose_text != current_text
     image_differs = bool(image_id) and image_id != current_image_id
     if not compose_differs and not image_differs:
+        log.append("Image and docker-compose.yml already match the backup.")
         return False, ""
 
     notes: list[str] = []
     if image_differs:
         repo, tag = _split_ref(image_ref)
-        try:
-            if not repo:
-                raise ValueError("pinned by digest")
-            client.images.get(image_id).tag(repo, tag=tag)
-            notes.append(f"previous version {meta.get('version') or image_ref} restored")
-        except Exception:
-            if not compose_differs:
-                return False, "Data restored, but the previous app version's image is no longer on this server."
-            notes.append("previous image is no longer on this server")
+        version = meta.get("version") or image_ref
+        source_id = image_id if _image_exists(client, image_id) else ""
+        if not source_id:
+            log.append(f"Image {image_id[:19]} ({version}) is not on this host.")
+            source_id = _pull_previous_image(client, meta, log)
+        if source_id and repo:
+            client.images.get(source_id).tag(repo, tag=tag)
+            log.append(f"Tagged {source_id[:19]} as {repo}:{tag}")
+            notes.append(f"image {version} restored")
+        elif not compose_differs:
+            log.append("Previous image could not be restored.")
+            return False, f"Image {version} is not available (removed from host and not pullable from the registry)."
+        else:
+            notes.append(f"image {version} unavailable")
     if compose_differs:
         path = Path(compose_path)
         path.with_name(path.name + ".bak").write_text(current_text, encoding="utf-8")
         path.write_text(compose_text, encoding="utf-8")
-        notes.append("docker-compose.yml restored (current file saved as .bak)")
+        log.append("docker-compose.yml restored (current file saved as .bak)")
+        notes.append("docker-compose.yml restored")
     elif image_differs and _set_compose_image(compose_path, service, image_ref):
-        notes.append("compose image reverted (previous file saved as .bak)")
+        log.append("Image reference in docker-compose.yml reverted (previous file saved as .bak)")
 
+    log.append(f"$ docker compose -f {compose_path} up -d --force-recreate --no-deps {service}")
     proc = subprocess.run(
         ["docker", "compose", "-f", compose_path, "up", "-d", "--force-recreate", "--no-deps", service],
         cwd=str(Path(compose_path).parent), capture_output=True, text=True, timeout=600,
     )
+    out = (proc.stdout or "") + (proc.stderr or "")
+    if out.strip():
+        log.append(out.strip()[-1500:])
     if proc.returncode != 0:
-        tail = (proc.stderr or proc.stdout or "").strip()[-400:]
-        raise RuntimeError(f"Data restored, but recreating the container failed: {tail}")
+        raise RuntimeError(f"Recreating the container failed (exit {proc.returncode}).")
     msg = "; ".join(notes)
     return True, (msg[:1].upper() + msg[1:] + ".") if msg else ""
 
@@ -534,7 +585,9 @@ def restore_backup(
     """
     start=False: chỉ khôi phục dữ liệu, để container dừng (dùng khi rollback, bước sau tự tạo lại container).
     restore_version=False: không đụng tới image/compose.
+    Kết quả có "log": các bước đã làm (hiện trong giao diện).
     """
+    log: list[str] = []
     f = _backup_file(container_name, filename)
     try:
         meta = json.loads(Path(str(f) + ".json").read_text(encoding="utf-8"))
@@ -555,11 +608,13 @@ def restore_backup(
         # dừng trước khi ghi đè dữ liệu và chạy lại sau khi khôi phục.
         was_running = container.status in ("running", "restarting")
         if was_running:
+            log.append(f"Stopping container {container_name} ...")
             container.stop(timeout=30)
     except Exception:
         container = None
 
     previous = dest.with_name(dest.name + ".pre-restore")
+    log.append(f"Restoring config files from {filename} into {dest} ...")
     try:
         if meta.get("roots") is not None:
             _restore_selected(f, dest, previous, meta)
@@ -571,25 +626,31 @@ def restore_backup(
                 container.start()
             except Exception:
                 pass
-        return {"ok": False, "error": f"Restore failed: {exc}"}
+        log.append(f"[ERROR] {exc}")
+        return {"ok": False, "error": f"Restore failed: {exc}", "log": log}
 
-    base_msg = f"Restored {filename}. Previous data kept at {previous.name}."
+    log.append(f"Config files restored. Replaced files kept in {previous.name}.")
+    base_msg = f"Config files restored from {filename}."
     if not start:
-        return {"ok": True, "message": base_msg}
+        return {"ok": True, "message": base_msg, "log": log}
     version_note = ""
     if restore_version:
         try:
-            recreated, version_note = _restore_version(client, meta, current_image_id)
+            recreated, version_note = _restore_version(client, meta, current_image_id, log)
         except Exception as exc:
-            return {"ok": True, "warning": str(exc)}
+            log.append(f"[ERROR] {exc}")
+            return {"ok": True, "warning": f"{base_msg} {exc}", "log": log}
         if recreated:
-            return {"ok": True, "message": f"{base_msg} {version_note}"}
+            log.append("Container recreated.")
+            return {"ok": True, "message": f"{base_msg} {version_note}".strip(), "log": log}
     if container is not None:
         # Sau khi khôi phục luôn chạy lại app (kể cả khi trước đó nó đã dừng vì lỗi)
+        log.append(f"Starting container {container_name} ...")
         try:
             container.start()
         except Exception as exc:
-            return {"ok": True, "warning": f"Data restored, but the container did not start: {exc}"}
+            log.append(f"[ERROR] {exc}")
+            return {"ok": True, "warning": f"{base_msg} Container failed to start: {exc}", "log": log}
     if version_note:
-        return {"ok": True, "warning": f"{base_msg} {version_note}"}
-    return {"ok": True, "message": base_msg}
+        return {"ok": True, "warning": f"{base_msg} {version_note}", "log": log}
+    return {"ok": True, "message": base_msg, "log": log}

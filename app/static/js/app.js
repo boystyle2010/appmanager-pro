@@ -77,6 +77,7 @@
         auditItems: [],
         backupsState: { loading: false, items: [], busyFile: '' },
         restorePicker: { open: false, app: null, items: [], selected: '' },
+        restoreRun: { open: false, running: false, title: '', version: '', status: '', message: '', log: [], elapsed: 0, timer: null },
         histOpen: {},
         histData: {},
         histTotalOpen: false,
@@ -322,7 +323,7 @@
 
         async init() {
           this.$watch(() => [this.confirmModal, this.actionSheet, this.logModal, this.batchModal, this.deployModal, this.updateModal,
-                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker].some(m => m && m.open), (open) => {
+                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker, this.restoreRun].some(m => m && m.open), (open) => {
             const b = document.body, h = document.documentElement;
             if (open) {
               this._lockY = window.scrollY || 0;
@@ -1258,15 +1259,34 @@
           if (b) this.restoreBackup(b);
         },
 
+        // Khôi phục có cửa sổ tiến trình: đang chạy (đếm giây) -> kết quả + các bước đã làm
         async restoreBackup(b) {
+          const app = this.apps.find(a => a.name === b.app);
+          if (this.restoreRun.timer) clearInterval(this.restoreRun.timer);
+          this.restoreRun = { open: true, running: true, title: app?.title || b.app, version: b.version || '', status: '', message: '', log: [], elapsed: 0, timer: null };
+          this.restoreRun.timer = setInterval(() => { this.restoreRun.elapsed += 1; }, 1000);
           this.backupsState.busyFile = b.file;
           try {
             const { res, data } = await this._postJson('/api/backups/restore', { app: b.app, file: b.file });
-            if (!res.ok) throw new Error(data.detail || 'Restore failed');
-            this.showToast(data.warning || data.message || 'OK');
+            this.restoreRun.log = data.log || [];
+            if (!res.ok) {
+              this.restoreRun.status = 'error';
+              this.restoreRun.message = data.detail || 'Restore failed';
+            } else {
+              this.restoreRun.status = data.warning ? 'warning' : 'success';
+              this.restoreRun.message = data.warning || data.message || 'OK';
+            }
             this.loadApps();
-          } catch (err) { this.showToast(err.message); }
-          finally { this.backupsState.busyFile = ''; }
+            if (this.settingsModal.open) this.loadBackups();
+          } catch (err) {
+            this.restoreRun.status = 'error';
+            this.restoreRun.message = err.message;
+          } finally {
+            clearInterval(this.restoreRun.timer);
+            this.restoreRun.timer = null;
+            this.restoreRun.running = false;
+            this.backupsState.busyFile = '';
+          }
         },
 
         confirmDeleteBackup(b) {

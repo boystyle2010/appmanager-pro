@@ -715,7 +715,7 @@ async def api_restore_backup(payload: BackupActionPayload, request: Request, use
         raise HTTPException(status_code=400, detail=str(e))
     audit(request, user, "backup_restore", payload.app, payload.file, bool(res.get("ok")))
     if not res.get("ok"):
-        raise HTTPException(status_code=400, detail=res.get("error") or "Restore failed")
+        return JSONResponse(status_code=400, content={"detail": res.get("error") or "Restore failed", "log": res.get("log") or []})
     return res
 
 

@@ -400,6 +400,11 @@ html.light .pro-badge {
 
 [x-cloak] { display: none !important; }
 
+/* Thanh tiến trình không xác định (khôi phục) */
+@keyframes restore-indeterminate { 0% { transform: translateX(-110%); } 100% { transform: translateX(310%); } }
+.restore-indeterminate { animation: restore-indeterminate 1.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .restore-indeterminate { animation: none; width: 100%; opacity: .6; } }
+
 /* Safari iOS bỏ qua text-align cho ô giờ/ngày -> căn giữa phần giá trị */
 input[type="time"].text-center::-webkit-date-and-time-value,
 input[type="date"].text-center::-webkit-date-and-time-value { text-align: center; }

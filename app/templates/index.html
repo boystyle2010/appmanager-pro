@@ -385,12 +385,16 @@
               </template>
 
               <button x-show="app.latest_backup" @click="confirmRestoreApp(app)"
-                      :disabled="backupsState.busyFile === app.latest_backup?.file"
+                      :disabled="(app.backups || []).some(x => x.file === backupsState.busyFile)"
                       :title="app.latest_backup ? `${app.latest_backup.version || ''} • ${formatTs(app.latest_backup.created)}` : ''"
                       class="glass-btn h-9 px-3 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5 text-amber-300 shrink-0 disabled:opacity-50">
-                <svg class="w-3.5 h-3.5" :class="backupsState.busyFile === app.latest_backup?.file ? 'animate-spin' : ''"
+                <svg x-show="!(app.backups || []).some(x => x.file === backupsState.busyFile)" class="w-3.5 h-3.5"
                      fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"/>
+                </svg>
+                <svg x-show="(app.backups || []).some(x => x.file === backupsState.busyFile)" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2.5" class="opacity-25"/>
+                  <path d="M21 12a9 9 0 00-9-9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
                 </svg>
                 <span x-text="t('restore')"></span>
               </button>
@@ -2087,6 +2091,51 @@
         <button @click="restorePicker.open = false" class="glass-btn py-2.5 px-3 rounded-xl text-xs font-semibold" x-text="t('cancel')"></button>
         <button @click="runRestorePicker()" class="glass-btn-update py-2.5 px-3 rounded-xl text-xs font-semibold" x-text="t('restore')"></button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Tiến trình khôi phục -->
+  <div x-show="restoreRun.open" x-cloak x-transition.opacity
+       class="fixed inset-0 z-[56] flex items-end sm:items-center justify-center sm:p-5 bg-black/70 backdrop-blur-md"
+       @click.self="if (!restoreRun.running) restoreRun.open = false"
+       @keydown.escape.window="if (!restoreRun.running && !confirmModal.open) restoreRun.open = false">
+    <div class="glass-panel w-full max-w-sm rounded-t-[26px] sm:rounded-[26px] p-5 space-y-4 shadow-2xl max-h-[85dvh] flex flex-col"
+         style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border"
+             :class="{
+               'bg-amber-500/15 border-amber-400/35 text-amber-400': restoreRun.running,
+               'bg-emerald-500/15 border-emerald-400/35 text-emerald-400': restoreRun.status === 'success',
+               'bg-amber-500/15 border-amber-400/45 text-amber-300': restoreRun.status === 'warning',
+               'bg-rose-500/15 border-rose-500/35 text-rose-400': restoreRun.status === 'error'
+             }">
+          <svg x-show="restoreRun.running" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2.5" class="opacity-25"/>
+            <path d="M21 12a9 9 0 00-9-9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+          <svg x-show="!restoreRun.running && restoreRun.status === 'success'" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+          <svg x-show="!restoreRun.running && restoreRun.status !== 'success'" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0 3.75h.008M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <div class="min-w-0 flex-1">
+          <h3 class="font-bold text-[15px] leading-tight truncate" x-text="`${t('restore')}: ${restoreRun.title}`"></h3>
+          <p class="text-[11px] text-muted font-mono-code mt-0.5" x-text="`${restoreRun.version ? restoreRun.version + ' • ' : ''}${restoreRun.elapsed}s`"></p>
+        </div>
+      </div>
+
+      <div x-show="restoreRun.running" class="space-y-2">
+        <div class="h-1.5 rounded-full bg-white/10 overflow-hidden"><div class="h-full w-1/3 rounded-full bg-amber-400 restore-indeterminate"></div></div>
+        <p class="text-xs text-muted leading-relaxed" x-text="t('restoreRunning')"></p>
+      </div>
+
+      <p x-show="!restoreRun.running" class="text-xs leading-relaxed"
+         :class="{ 'text-emerald-300': restoreRun.status === 'success', 'text-amber-300': restoreRun.status === 'warning', 'text-rose-300': restoreRun.status === 'error' }"
+         x-text="restoreRun.message"></p>
+
+      <pre x-show="!restoreRun.running && restoreRun.log.length" x-text="restoreRun.log.join('\n')"
+           class="font-mono-code text-[10.5px] leading-snug whitespace-pre-wrap break-words overflow-y-auto min-h-0 max-h-64 rounded-xl bg-black/40 p-2.5 text-slate-300"></pre>
+
+      <button @click="restoreRun.open = false" :disabled="restoreRun.running"
+              class="glass-btn w-full py-2.5 rounded-xl text-xs font-semibold disabled:opacity-40 shrink-0" x-text="t('close')"></button>
     </div>
   </div>
 
