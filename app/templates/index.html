@@ -592,11 +592,9 @@
 
   <!-- iOS GROUPED GLASS ACTION SHEET -->
   <div x-show="actionSheet.open" x-cloak x-transition.opacity
-       class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/60 backdrop-blur-xs"
+       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
        @click.self="closeActionSheet()" @keydown.escape.window="closeActionSheet()">
-    <div class="glass-panel w-full max-w-sm rounded-t-[28px] sm:rounded-[28px] p-5 space-y-3.5"
-         style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
-      <div class="sheet-handle sm:hidden"></div>
+    <div class="glass-panel w-full max-w-sm rounded-[28px] p-5 space-y-3.5 max-h-[90dvh] overflow-y-auto">
 
       <div class="flex items-center gap-3 pb-1" x-show="actionSheet.app">
         <template x-if="actionSheet.app?.icon">
