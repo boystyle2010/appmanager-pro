@@ -77,6 +77,7 @@
         auditItems: [],
         backupsState: { loading: false, items: [], busyFile: '' },
         restorePicker: { open: false, app: null, items: [], selected: '' },
+        tagMenu: { open: false, loading: false, items: [], error: '', image: '' },
         restoreRun: { open: false, running: false, title: '', version: '', status: '', message: '', log: [], elapsed: 0, timer: null },
         histOpen: {},
         histData: {},
@@ -677,6 +678,39 @@
           this.logModal.open = false;
         },
 
+        // ---------------- Gợi ý tag cho ô Image & Tag ----------------
+        _imageRepo(ref) {
+          const r = String(ref || '').split('@')[0];
+          const last = r.lastIndexOf('/'), colon = r.lastIndexOf(':');
+          return colon > last ? r.slice(0, colon) : r;
+        },
+
+        async toggleTagMenu() {
+          const m = this.tagMenu;
+          if (m.open) { m.open = false; return; }
+          const img = (this.editModal.ui?.service?.image || '').trim();
+          if (!img) return;
+          m.open = true;
+          if (m.image === img && m.items.length) return;
+          m.loading = true; m.error = ''; m.items = [];
+          try {
+            const res = await fetch(`/api/image-tags?image=${encodeURIComponent(img)}`);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            m.items = data.tags || []; m.image = img;
+            if (!m.items.length) m.error = this.t('noTagsFound');
+          } catch (err) { m.error = err.message; }
+          finally { m.loading = false; }
+        },
+
+        pickTag(tag) {
+          const s = this.editModal.ui.service;
+          s.image = `${this._imageRepo(s.image)}:${tag}`;
+          this.tagMenu.open = false;
+          this.tagMenu.image = s.image;
+          this.tagMenu.items = this.tagMenu.items.map(o => ({ ...o, current: o.tag === tag }));
+        },
+
         // ---------------- Kênh phát hành (latest / beta ...) ----------------
         channelBadge(app) {
           const chs = app.channels || [];
@@ -831,6 +865,7 @@
 
         // ---------------- Edit App (Visual UI <-> YAML) ----------------
         async openEditModal(app) {
+          this.tagMenu = { open: false, loading: false, items: [], error: '', image: '' };
           this.editModal = {
             open: true, loading: true, saving: false, tab: 'ui',
             app, composePath: '', rawYaml: '', ui: null, otherComposeFiles: [], lastService: '', yamlTouched: false,

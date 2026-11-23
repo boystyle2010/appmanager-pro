@@ -1035,8 +1035,34 @@
               <div x-show="editModal.sec.container" class="px-4 pb-4 pt-1 space-y-3.5 border-t border-[var(--glass-border)]">
                 <div>
                   <label class="block text-[11px] font-semibold text-muted mb-1">Image & Tag</label>
-                  <input type="text" x-model="editModal.ui.service.image"
-                         class="glass-input w-full rounded-xl px-3 py-2.5 text-xs font-mono-code" />
+                  <div class="relative" @click.outside="tagMenu.open = false">
+                    <input type="text" x-model="editModal.ui.service.image" @input="tagMenu.open = false"
+                           class="glass-input w-full rounded-xl pl-3 pr-11 py-2.5 text-xs font-mono-code" />
+                    <button type="button" @click="toggleTagMenu()" :aria-label="t('suggestTags')"
+                            class="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-8 rounded-lg flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:bg-white/5">
+                      <svg x-show="!tagMenu.loading" class="w-4 h-4 transition" :class="tagMenu.open ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
+                      </svg>
+                      <svg x-show="tagMenu.loading" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2.5" class="opacity-25"/>
+                        <path d="M21 12a9 9 0 00-9-9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+                      </svg>
+                    </button>
+                    <div x-show="tagMenu.open" x-cloak x-transition.opacity
+                         class="absolute left-0 right-0 top-full mt-1.5 z-20 rounded-xl p-1 shadow-2xl max-h-64 overflow-y-auto border border-[var(--glass-border)] bg-[var(--bg-base)]">
+                      <p x-show="tagMenu.error" class="px-3 py-2 text-[11px] text-rose-300" x-text="tagMenu.error"></p>
+                      <template x-for="o in tagMenu.items" :key="o.tag">
+                        <button type="button" @click="pickTag(o.tag)"
+                                class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-left hover:bg-white/5"
+                                :class="o.current ? 'bg-sky-500/10' : ''">
+                          <span class="font-mono-code text-xs truncate" x-text="o.tag"></span>
+                          <span class="text-[9.5px] font-bold uppercase tracking-wider shrink-0 px-1.5 py-0.5 rounded"
+                                :class="o.current ? 'bg-sky-500/20 text-sky-300' : (o.kind === 'channel' ? 'bg-emerald-500/15 text-emerald-300' : 'text-subtle')"
+                                x-text="o.current ? t('currentChannel') : (o.kind === 'channel' ? t('tagRolling') : (o === tagMenu.items.find(x => x.kind === 'version') ? t('tagNewest') : ''))"></span>
+                        </button>
+                      </template>
+                    </div>
+                  </div>
                 </div>
                 <div>
                   <label class="block text-[11px] font-semibold text-muted mb-1">Container Name</label>

@@ -550,6 +550,12 @@ async def _update_app_stream_impl(
             await send_log(f"[ERROR] {bump_err}\n")
             return {"ok": False, "error": bump_err}
         if bumped:
+            try:
+                from app.core.compose_manager import _create_backup as _compose_backup
+
+                await asyncio.to_thread(_compose_backup, container_name, pre_compose)
+            except Exception:
+                logger.exception("Cannot add compose backup for %s", container_name)
             await send_log(f"==> Backup created: {backup_path}\n")
             await send_log(f"==> Updated compose image: {app_info['image']} -> {new_img}\n\n")
 
@@ -583,10 +589,10 @@ async def _update_app_stream_impl(
 
     # Sao lưu dữ liệu app trước khi cập nhật (tuỳ chọn trong Settings)
     backup_name = ""
-    if get_setting("backup_before_update", "true").lower() == "true" and app_info.get("appdata_path"):
+    if get_setting("backup_before_update", "true").lower() == "true":
         from app.core.app_backup import create_backup
 
-        await send_log(f"==> Backing up app configuration in {app_info['appdata_path']} (settings files only)...\n")
+        await send_log(f"==> Backing up image + docker-compose.yml and config files ({app_info.get('appdata_path') or 'no config folder'})...\n")
         try:
             max_mb = int(get_setting("backup_max_mb", "2048") or 2048)
             keep = int(get_setting("backup_keep", "3") or 3)
@@ -594,7 +600,7 @@ async def _update_app_stream_impl(
         except ValueError:
             max_mb, keep, file_max_mb = 2048, 3, 50
         bres = await asyncio.to_thread(
-            create_backup, container_name, app_info["appdata_path"], from_ver, max_mb, keep,
+            create_backup, container_name, app_info.get("appdata_path") or "", from_ver, max_mb, keep,
             mounts=attrs.get("Mounts") or [], file_max_mb=file_max_mb, image_id=old_image_id,
             image_digest=(app_info.get("local_digests") or [""])[0], image_ref=app_info["image"], compose_path=compose_path, service=service,
             compose_text=rollback_compose,

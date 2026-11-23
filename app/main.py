@@ -77,6 +77,7 @@ from app.core.registry_checker import (
     check_all_updates,
     extract_github_slug,
     fetch_github_release,
+    suggest_image_tags,
     check_one_app_by_name,
     is_check_running,
 )
@@ -495,6 +496,18 @@ async def api_channel_preview(container_name: str, tag: str, _: str = Depends(re
         )
     out.update({k: gh.get(k, "") for k in ("changelog", "release_tag", "release_url", "error")})
     return out
+
+
+@app.get("/api/image-tags")
+async def api_image_tags(image: str, _: str = Depends(require_user)):
+    """Gợi ý tag (latest + vài phiên bản ổn định mới nhất) cho ô Image & Tag trong trình sửa."""
+    image = (image or "").strip()
+    if not image or len(image) > 300 or any(c.isspace() for c in image):
+        raise HTTPException(status_code=400, detail="Invalid image reference")
+    try:
+        return await suggest_image_tags(image)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Cannot read tags from the registry: {str(exc)[:120]}")
 
 
 @app.post("/api/apps/{container_name}/prefs")

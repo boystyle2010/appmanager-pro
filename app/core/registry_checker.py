@@ -916,6 +916,92 @@ async def _detect_pinned_channels(
     ]
 
 
+async def suggest_image_tags(image_ref: str, limit: int = 3) -> dict[str, Any]:
+    """
+    Gợi ý tag cho ô Image & Tag: tag kênh ổn định (latest...) + `limit` phiên bản ổn định mới nhất
+    cùng biến thể (bỏ bản thử nghiệm và bản đang ở kênh beta).
+    """
+    registry, repo, tag = parse_image_ref(image_ref)
+    cur = _parse_pinned_tag(tag)
+    fmt = channel_format(tag)
+    if cur and not cur["is_pre"]:
+        prefixes, variant, n_parts = {cur["prefix"]}, cur["variant"], len(cur["nums"])
+        pattern = "{}"
+    elif fmt:
+        pattern = fmt[0]
+        prefixes, variant, n_parts = {"", "v"}, re.sub(r"\d+", "#", pattern.replace("{}", "").lower()), None
+        if pattern.startswith("{}") is False:
+            variant = ""  # vd "ubuntu-{}": biến thể nằm phía trước, không suy ra được
+    else:
+        prefixes, variant, n_parts, pattern = {"", "v"}, "", None, "{}"
+    word = re.sub(r"[#.]+", "", variant.strip("-")) if variant else ""
+    token_cache: dict[str, str] = {}
+    scope_key = f"{registry}/{repo}"
+    async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        tags = await _list_repo_tags(client, registry, repo, token_cache, scope_key, ["", word, "latest"])
+    names = {n for n, _ in tags}
+    digest_of = {n: d for n, d in tags}
+    if fmt and not (cur and not cur["is_pre"]):
+        # Tag kênh (vd latest): suy biến thể từ tag phiên bản cùng digest (Scrypted latest = v0.147.0-noble-full)
+        same = [_parse_pinned_tag(n) for n, d in tags if d and d == digest_of.get(tag) and n != tag]
+        same = [x for x in same if x and not x["is_pre"]]
+        if same:
+            best = max(same, key=lambda x: (len(x["variant"]), x["nums"]))
+            prefixes, variant, n_parts = {best["prefix"]}, best["variant"], len(best["nums"])
+    pre_digests = _pre_channel_digests(tags)
+    stable_digests = {d for n, d in tags if d and channel_format(n) and channel_format(n)[1] in STABLE_CHANNELS}
+    # Trần theo từng phiên bản lớn: phiên bản mà kênh ổn định (latest...) đang trỏ tới. Bản thử nghiệm chỉ bị loại khi
+    # kênh ổn định có CÙNG phiên bản lớn (Scrypted 0.x beta); dòng mới hẳn ở kênh "next" (Uptime Kuma 2.x) vẫn giữ.
+    caps: dict[int, tuple] = {}
+    parsed: list[tuple[dict, str, str]] = []
+    for n, d in tags:
+        p = _parse_pinned_tag(n)
+        if not p or p["is_pre"] or p["prefix"] not in prefixes or p["variant"] != variant:
+            continue
+        if n_parts and len(p["nums"]) != n_parts:
+            continue
+        parsed.append((p, n, d))
+        if d and d in stable_digests:
+            mj = p["nums"][0]
+            caps[mj] = max(caps.get(mj, p["nums"]), p["nums"])
+    versions: list[tuple[tuple, str]] = []
+    for p, n, d in parsed:
+        mj = p["nums"][0]
+        if mj in caps and (p["nums"] > caps[mj] or (d and d in pre_digests and d not in stable_digests)):
+            continue
+        versions.append(((p["nums"], p["build"]), n))
+    # cùng phiên bản có thể có cả "1.2.3" lẫn "v1.2.3" -> giữ một
+    seen_ver: set = set()
+    picked: list[str] = []
+    for key, n in sorted(versions, reverse=True):
+        if key in seen_ver:
+            continue
+        seen_ver.add(key)
+        picked.append(n)
+        if len(picked) >= limit:
+            break
+    out: list[dict[str, str]] = []
+    # Tag kênh của đúng biến thể: "latest-apache" / "apache" (php), "latest-full"; không có biến thể thì "latest"
+    chan_candidates = [pattern.format(w) for w in ("latest", "stable")]
+    if variant and pattern == "{}":
+        chan_candidates = [f"latest{variant}", f"stable{variant}", variant.strip("-")] if "#" not in variant else []
+    # Kênh ổn định nào trỏ tới một tag phiên bản đúng biến thể (vd latest = v0.147.0-noble-full) cũng được gợi ý
+    variant_digests = {d for p_, n_, d in parsed if d}
+    chan_candidates += [n for n, d in tags if d in variant_digests and channel_format(n)
+                        and channel_format(n)[1] in STABLE_CHANNELS and n not in chan_candidates]
+    for ch in chan_candidates:
+        if ch in names:
+            out.append({"tag": ch, "kind": "channel"})
+            break
+    out += [{"tag": n, "kind": "version"} for n in picked]
+    if tag not in {o["tag"] for o in out}:
+        out.append({"tag": tag, "kind": "current"})
+    for o in out:
+        o["current"] = o["tag"] == tag
+    return {"repo": image_ref.split("@", 1)[0].rsplit(":", 1)[0] if ":" in image_ref.rsplit("/", 1)[-1] else image_ref.split("@", 1)[0],
+            "current": tag, "tags": out}
+
+
 async def _hub_version_for_digest(client: httpx.AsyncClient, repo: str, digests: list[str]) -> str:
     """
     Image dùng tag chung (latest, full...) không ghi phiên bản -> tìm tag có phiên bản (vd v0.147.0-noble-full)

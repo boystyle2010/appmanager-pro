@@ -237,43 +237,51 @@ def create_backup(
     service: str = "",
     compose_text: str | None = None,
 ) -> dict[str, Any]:
-    if not source_dir:
-        return {"ok": False, "skipped": True, "message": "No app data folder detected"}
-    src = Path(source_dir)
-    if not src.is_dir() or not _inside(src, APPDATA_DIR):
-        return {"ok": False, "skipped": True, "message": f"Data folder is not inside {APPDATA_DIR}"}
-    if _inside(BACKUP_ROOT, src) or src.resolve() == DATA_DIR.resolve() or _inside(DATA_DIR, src):
-        return {"ok": False, "skipped": True, "message": "Refusing to back up AppManager Pro's own data"}
-
-    roots, skipped_mounts = plan_backup_roots(src, mounts or [])
-    if not roots:
-        return {"ok": False, "skipped": True,
-                "message": "No app configuration folder to back up (only media / large folders are mounted)"}
-    file_max = max(1, int(file_max_mb)) * 1024 * 1024
-    limit = max(1, int(max_mb)) * 1024 * 1024
+    # Luôn tạo bản sao lưu: tối thiểu là PHIÊN BẢN (image + digest) + docker-compose.yml để khôi phục được,
+    # kể cả app không có thư mục cấu hình trong /DATA/AppData (vd cloudflared chỉ có biến môi trường).
+    note = ""
+    roots: list[str] = []
+    skipped_mounts: list[str] = []
     skipped: list[str] = []
-    walked = list(_walk_wanted(src, roots, file_max, skipped))
-    files = [(p, rel, d) for p, rel, d in walked if not d]
-    # Chỉ giữ thư mục cha của file được sao lưu (giữ quyền/chủ sở hữu), không lưu cả cây thư mục rỗng
-    needed_dirs: set[str] = set()
-    for _p, rel, _d in files:
-        parent = Path(rel).parent
-        while str(parent) not in ("", "."):
-            needed_dirs.add(os.path.normpath(str(parent)))
-            parent = parent.parent
-    entries = [(p, rel, d) for p, rel, d in walked if d and os.path.normpath(rel) in needed_dirs] + files
-    if not files:
-        return {"ok": False, "skipped": True, "message": "No configuration files found to back up"}
+    entries: list[tuple[Path, str, bool]] = []
+    files: list[tuple[Path, str, bool]] = []
     size = 0
-    for p, _rel, is_dir in entries:
-        if not is_dir and not p.is_symlink():
-            try:
-                size += p.stat().st_size
-            except OSError:
-                pass
-    if size > limit:
-        return {"ok": False, "skipped": True,
-                "message": f"App configuration is larger than {max_mb} MB ({format_bytes(size)}) — backup skipped"}
+    file_max = max(1, int(file_max_mb)) * 1024 * 1024
+    src = Path(source_dir) if source_dir else None
+    if src is None:
+        note = "no config folder in " + str(APPDATA_DIR)
+    elif not src.is_dir() or not _inside(src, APPDATA_DIR):
+        note = f"data folder is not inside {APPDATA_DIR}"
+        src = None
+    elif _inside(BACKUP_ROOT, src) or src.resolve() == DATA_DIR.resolve() or _inside(DATA_DIR, src):
+        note = "AppManager Pro's own data is not archived"
+        src = None
+    if src is not None:
+        roots, skipped_mounts = plan_backup_roots(src, mounts or [])
+        limit = max(1, int(max_mb)) * 1024 * 1024
+        walked = list(_walk_wanted(src, roots, file_max, skipped)) if roots else []
+        files = [(p, rel, d) for p, rel, d in walked if not d]
+        # Chỉ giữ thư mục cha của file được sao lưu (giữ quyền/chủ sở hữu), không lưu cả cây thư mục rỗng
+        needed_dirs: set[str] = set()
+        for _p, rel, _d in files:
+            parent = Path(rel).parent
+            while str(parent) not in ("", "."):
+                needed_dirs.add(os.path.normpath(str(parent)))
+                parent = parent.parent
+        entries = [(p, rel, d) for p, rel, d in walked if d and os.path.normpath(rel) in needed_dirs] + files
+        for p, _rel, is_dir in entries:
+            if not is_dir and not p.is_symlink():
+                try:
+                    size += p.stat().st_size
+                except OSError:
+                    pass
+        if size > limit:
+            note = f"config files ({format_bytes(size)}) exceed {max_mb} MB — not archived"
+            entries, files, size = [], [], 0
+        elif not files:
+            note = "no config files found"
+    if not files:
+        roots = []  # bản chỉ có phiên bản: khôi phục không đụng tới file nào
 
     bdir = _app_dir(container_name)
     bdir.mkdir(parents=True, exist_ok=True)
@@ -291,7 +299,7 @@ def create_backup(
 
     (bdir / (name + ".json")).write_text(
         json.dumps({
-            "source": str(src), "version": version, "created": int(time.time()), "data_bytes": size,
+            "source": str(src) if (src is not None and files) else "", "version": version, "version_only": not files, "created": int(time.time()), "data_bytes": size,
             "roots": roots, "file_max_bytes": file_max, "skipped_mounts": skipped_mounts,
             "skipped": skipped[:200], "skipped_count": len(skipped),
             "image_id": image_id, "image_ref": image_ref, "image_digest": image_digest,
@@ -302,7 +310,8 @@ def create_backup(
     _apply_retention(bdir, keep)
     return {
         "ok": True, "file": name, "size": format_bytes(target.stat().st_size),
-        "message": f"Backup saved: {name} ({len(files)} settings file(s), {format_bytes(size)})",
+        "message": (f"Backup saved: {name} ({len(files)} settings file(s), {format_bytes(size)})" if files
+                    else f"Backup saved: {name} (image + docker-compose.yml only; {note})"),
         "roots": roots, "skipped_mounts": skipped_mounts, "skipped": skipped,
     }
 
@@ -593,8 +602,9 @@ def restore_backup(
         meta = json.loads(Path(str(f) + ".json").read_text(encoding="utf-8"))
     except Exception:
         return {"ok": False, "error": "Backup metadata is missing"}
+    version_only = not meta.get("source")
     dest = Path(meta.get("source") or "")
-    if not _inside(dest, APPDATA_DIR):
+    if not version_only and not _inside(dest, APPDATA_DIR):
         return {"ok": False, "error": "Backup target is outside the app data folder"}
 
     client = get_docker_client()
@@ -613,10 +623,15 @@ def restore_backup(
     except Exception:
         container = None
 
-    previous = dest.with_name(dest.name + ".pre-restore")
-    log.append(f"Restoring config files from {filename} into {dest} ...")
+    previous = dest.with_name(dest.name + ".pre-restore") if not version_only else dest
+    if version_only:
+        log.append("Backup contains image + docker-compose.yml only (no config files to restore).")
+    else:
+        log.append(f"Restoring config files from {filename} into {dest} ...")
     try:
-        if meta.get("roots") is not None:
+        if version_only:
+            pass
+        elif meta.get("roots") is not None:
             _restore_selected(f, dest, previous, meta)
         else:
             _restore_whole_folder(f, dest, previous)  # bản sao lưu cũ: cả thư mục
@@ -629,8 +644,9 @@ def restore_backup(
         log.append(f"[ERROR] {exc}")
         return {"ok": False, "error": f"Restore failed: {exc}", "log": log}
 
-    log.append(f"Config files restored. Replaced files kept in {previous.name}.")
-    base_msg = f"Config files restored from {filename}."
+    if not version_only:
+        log.append(f"Config files restored. Replaced files kept in {previous.name}.")
+    base_msg = f"Restored from {filename}." if version_only else f"Config files restored from {filename}."
     if not start:
         return {"ok": True, "message": base_msg, "log": log}
     version_note = ""

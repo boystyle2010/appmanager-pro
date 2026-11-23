@@ -34,3 +34,5 @@
 - App cards: channel (BETA / DEV…) and AUTO badges sit aligned on the image line of the version box; the selected-channel note and the changelog header show the selected channel's name and version (LATEST, STABLE, BETA, DEV…), in blue for stable and violet for pre-release channels
 - Fixed a stale Ubuntu base-image version (24.04) kept in the update cache being shown again as the app version; the real version is resolved on the next check (e.g. Scrypted beta v0.148.6)
 - Pre-release changelog for projects that build betas from the main branch without tags (e.g. Scrypted): commits on the default branch since the last stable release
+- Every update now creates a restorable backup: apps without config folders in /DATA/AppData (e.g. cloudflared) get an image + docker-compose.yml backup, so the Restore button works for them; when a pinned tag is bumped, the previous compose also appears under Edit Config → Backups
+- Edit Config → Image & Tag has a dropdown with the rolling tag of the same variant (latest / latest-full / apache…) and the 3 newest stable versions from the registry (pre-release builds excluded)
