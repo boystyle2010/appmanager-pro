@@ -1465,7 +1465,7 @@
 
                 <!-- Các mục dọn dẹp -->
                 <div class="space-y-2 text-xs">
-                  <div class="glass-inset rounded-2xl p-3.5 space-y-2.5" :class="pruneOpts.prune_images ? 'ring-inset-sky' : ''">
+                  <div class="glass-inset rounded-2xl p-3.5 flex flex-col gap-2.5" :class="pruneOpts.prune_images ? 'ring-inset-sky' : ''">
                     <label class="flex items-center gap-3 cursor-pointer">
                       <div class="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-400/30 text-sky-400 flex items-center justify-center shrink-0">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/></svg>
@@ -1489,7 +1489,7 @@
                     <p x-show="pruneOpts.prune_images && pruneOpts.all_unused_images" x-cloak class="text-[10.5px] text-amber-300/90 leading-snug" x-text="t('pruneAllUnusedImages')"></p>
                   </div>
 
-                  <div class="glass-inset rounded-2xl p-3.5 space-y-2.5" :class="pruneOpts.prune_build_cache ? 'ring-inset-violet' : ''">
+                  <div class="glass-inset rounded-2xl p-3.5 flex flex-col gap-2.5" :class="pruneOpts.prune_build_cache ? 'ring-inset-violet' : ''">
                     <label class="flex items-center gap-3 cursor-pointer">
                       <div class="w-10 h-10 rounded-xl bg-violet-500/15 border border-violet-400/30 text-violet-400 flex items-center justify-center shrink-0">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375"/></svg>
@@ -1506,7 +1506,7 @@
                     </label>
                   </div>
 
-                  <div class="glass-inset rounded-2xl p-3.5 space-y-2.5" :class="pruneOpts.prune_containers ? 'ring-inset-amber' : ''">
+                  <div class="glass-inset rounded-2xl p-3.5 flex flex-col gap-2.5" :class="pruneOpts.prune_containers ? 'ring-inset-amber' : ''">
                     <label class="flex items-center gap-3 cursor-pointer">
                       <div class="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-400/30 text-amber-400 flex items-center justify-center shrink-0">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/></svg>
@@ -1524,7 +1524,7 @@
                     <p x-show="pruneOpts.prune_containers" x-cloak class="text-[10.5px] text-amber-300/90 leading-snug" x-text="t('pruneContainersWarn')"></p>
                   </div>
 
-                  <div class="glass-inset rounded-2xl p-3.5 space-y-2.5" :class="pruneOpts.prune_volumes ? 'ring-inset-rose' : ''">
+                  <div class="glass-inset rounded-2xl p-3.5 flex flex-col gap-2.5" :class="pruneOpts.prune_volumes ? 'ring-inset-rose' : ''">
                     <label class="flex items-center gap-3 cursor-pointer">
                       <div class="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-400/30 text-rose-400 flex items-center justify-center shrink-0">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z"/></svg>
@@ -1619,15 +1619,21 @@
                   </div>
                   <div x-show="settingsForm.backup_before_update" x-cloak class="grid grid-cols-3 gap-2">
                     <label class="space-y-1">
-                      <span class="block truncate text-[11px] text-muted" x-text="t('bkFileMax')"></span>
-                      <input type="number" min="1" max="10240" x-model.number="settingsForm.backup_file_max_mb" class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code text-center" />
+                      <span class="block truncate text-center text-[11px] text-muted" x-text="t('bkFileMax')"></span>
+                      <span class="relative block">
+                        <input type="number" min="1" max="10240" x-model.number="settingsForm.backup_file_max_mb" class="glass-input w-full rounded-xl px-8 py-2 text-xs font-mono-code text-center" />
+                        <span class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-subtle font-mono-code">MB</span>
+                      </span>
                     </label>
                     <label class="space-y-1">
-                      <span class="block truncate text-[11px] text-muted" x-text="t('bkMax')"></span>
-                      <input type="number" min="50" max="102400" x-model.number="settingsForm.backup_max_mb" class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code text-center" />
+                      <span class="block truncate text-center text-[11px] text-muted" x-text="t('bkMax')"></span>
+                      <span class="relative block">
+                        <input type="number" min="50" max="102400" x-model.number="settingsForm.backup_max_mb" class="glass-input w-full rounded-xl px-8 py-2 text-xs font-mono-code text-center" />
+                        <span class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-subtle font-mono-code">MB</span>
+                      </span>
                     </label>
                     <label class="space-y-1">
-                      <span class="block truncate text-[11px] text-muted" x-text="t('bkKeep')"></span>
+                      <span class="block truncate text-center text-[11px] text-muted" x-text="t('bkKeep')"></span>
                       <input type="number" min="1" max="20" x-model.number="settingsForm.backup_keep" class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code text-center" />
                     </label>
                   </div>
