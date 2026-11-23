@@ -762,6 +762,17 @@
                    title: `${this.t('preChannelAvailable')}: ${pre.map(c => c.channel + (c.version ? ' ' + c.version : '')).join(', ')}` };
         },
 
+        // Phiên bản hiển thị của một kênh: số phiên bản, hoặc ngày build nếu tag không ghi phiên bản (vd beszel:dev)
+        channelVersion(ch) {
+          if (!ch) return '';
+          if (ch.version) return ch.version;
+          if (ch.updated) {
+            const d = new Date(ch.updated.replace(' ', 'T') + (ch.updated.endsWith('Z') ? '' : 'Z'));
+            if (!isNaN(d)) return `build ${d.toLocaleDateString(this.lang === 'vi' ? 'vi-VN' : 'en-US', { day: '2-digit', month: '2-digit' })}`;
+          }
+          return ch.tag;
+        },
+
         // Kênh của changelog đang hiển thị: kênh đang xem trước, hoặc kênh app đang chạy (nếu app có nhiều kênh)
         changelogChannel() {
           const m = this.updateModal;

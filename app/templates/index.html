@@ -819,7 +819,7 @@
                       : (updateModal.app?.raw_has_update
                         ? 'bg-amber-500/20 text-amber-300 border-amber-400/40'
                         : 'bg-emerald-500/15 text-emerald-400 border-emerald-400/30')"
-                    x-text="updateModal.preview ? (updateModal.preview.version || updateModal.preview.tag) : (updateModal.app?.remote_version || updateModal.app?.version)"></span>
+                    x-text="updateModal.preview ? channelVersion(updateModal.preview) : (updateModal.app?.remote_version || updateModal.app?.version)"></span>
             </div>
           </div>
         </div>
@@ -839,7 +839,7 @@
           <div class="flex flex-col gap-3.5 flex-1 min-h-0">
             <div x-show="updateModal.preview" class="rounded-2xl px-3.5 py-2.5 text-[11.5px] leading-snug border shrink-0"
                  :class="updateModal.preview?.kind === 'pre' ? 'bg-violet-500/12 border-violet-400/35 text-violet-200' : 'bg-sky-500/10 border-sky-400/35 text-sky-200'"
-                 x-text="t('channelPreviewNote').replaceAll('{ch}', (updateModal.preview?.channel || '').toUpperCase()).replace('{tag}', updateModal.preview?.tag || '').replace('{ver}', updateModal.preview?.version || updateModal.preview?.tag || '')"></div>
+                 x-text="t('channelPreviewNote').replaceAll('{ch}', (updateModal.preview?.channel || '').toUpperCase()).replace('{tag}', updateModal.preview?.tag || '').replace('{ver}', channelVersion(updateModal.preview))"></div>
 
             <div x-show="updateModal.app?.target_tag && !updateModal.preview"
                  class="rounded-2xl px-3.5 py-2.5 bg-amber-500/12 border border-amber-400/30 text-[11px] text-amber-300 flex items-center gap-2">
@@ -868,7 +868,7 @@
                             : 'border-[var(--glass-border)] hover:bg-white/5'">
                     <span class="block text-[11px] font-bold uppercase tracking-wider truncate"
                           :class="ch.kind === 'pre' ? 'text-violet-300' : 'text-sky-300'" x-text="ch.channel"></span>
-                    <span class="block text-[10.5px] font-mono-code text-muted truncate mt-0.5" x-text="ch.version || ch.tag"></span>
+                    <span class="block text-[10.5px] font-mono-code text-muted truncate mt-0.5" x-text="channelVersion(ch)"></span>
                     <span x-show="(ch.current || ch.tag === updateModal.app?.image_tag) && updateModal.preview" class="block text-[9.5px] text-subtle truncate" x-text="t('currentChannel')"></span>
                   </button>
                 </template>

@@ -335,14 +335,14 @@ async def fetch_github_release(
                 if r_list.status_code == 200 and isinstance(r_list.json(), list):
                     rels = r_list.json()
                     picked = next((x for x in rels if x.get("prerelease")), None)
-            if picked is None and prefer_version:
+            if picked is None and (prefer_version or prerelease):
                 # Bản beta không có GitHub Release -> các commit từ bản phát hành ổn định gần nhất đến tag beta
                 base_rel = next((x for x in rels if not x.get("prerelease") and not x.get("draft")), None)
                 if base_rel is None:
                     r_lat = await client.get(f"https://api.github.com/repos/{slug}/releases/latest", headers=headers)
                     base_rel = r_lat.json() if r_lat.status_code == 200 else None
                 base_tag = str((base_rel or {}).get("tag_name") or "")
-                heads = list(dict.fromkeys((prefer_version, f"v{prefer_version.lstrip('v')}", prefer_version.lstrip("v"))))
+                heads = list(dict.fromkeys((prefer_version, f"v{prefer_version.lstrip('v')}", prefer_version.lstrip("v")))) if prefer_version else []
                 n_version_heads = len(heads)
                 if prerelease and base_tag:
                     # Bản beta build thẳng từ nhánh chính, không có tag riêng (vd Scrypted) -> so với nhánh mặc định
@@ -359,16 +359,17 @@ async def fetch_github_release(
                     if not commits:
                         break
                     on_branch = heads.index(head) >= n_version_heads
-                    lines = [f"### {prefer_version} — commits on `{head}` since {base_tag}" if on_branch
+                    label = prefer_version or "Pre-release"
+                    lines = [f"### {label} — commits on `{head}` since {base_tag}" if on_branch
                              else f"### {head} — commits since {base_tag}"]
                     for cm in reversed(commits[-40:]):
                         msg = str((cm.get("commit") or {}).get("message") or "").splitlines()[0].strip()
                         lines.append(f"- `{str(cm.get('sha') or '')[:7]}` {msg}")
-                    out["release_tag"] = prefer_version if on_branch else head
+                    out["release_tag"] = (prefer_version or head) if on_branch else head
                     out["release_url"] = f"https://github.com/{slug}/compare/{base_tag}...{head}"
                     out["changelog"] = "\n".join(lines)
                     return out
-            if picked is None and rels:
+            if picked is None and rels and not prerelease:
                 picked = rels[0]
             if picked:
                 body = strip_checksums(str(picked.get("body") or "").strip())
@@ -652,7 +653,8 @@ async def _detect_channels(
                 for t in body.get("results") or []:
                     name, dg = str(t.get("name") or ""), str(t.get("digest") or "")
                     if name in wanted:
-                        found[name] = {"digest": dg, "updated": str(t.get("last_updated") or "")[:19]}
+                        found[name] = {"digest": dg, "updated": str(t.get("last_updated") or "")[:19],
+                                       "archs": {i.get("architecture") for i in t.get("images") or [] if i.get("architecture")}}
                     p = _parse_pinned_tag(name)
                     if dg and p:  # tag phiên bản cùng digest -> biết kênh đó đang là phiên bản nào
                         key = (p["nums"], f"{p['prefix']}{p['ver_str']}")
@@ -667,7 +669,8 @@ async def _detect_channels(
                     r = await client.get(f"{base}/{name}")
                     if r.status_code == 200:
                         t = r.json()
-                        found[name] = {"digest": str(t.get("digest") or ""), "updated": str(t.get("last_updated") or "")[:19]}
+                        found[name] = {"digest": str(t.get("digest") or ""), "updated": str(t.get("last_updated") or "")[:19],
+                                       "archs": {i.get("architecture") for i in t.get("images") or [] if i.get("architecture")}}
         except Exception as exc:
             logger.warning("Channel detection for %s failed: %s", repo, exc)
     else:
@@ -725,8 +728,12 @@ async def _detect_channels(
     stable = next((c for c in channels if c["channel"] == "latest"), None) \
         or next((c for c in channels if c["kind"] == "stable"), None)
     cur = next((c for c in channels if c["tag"] == tag), None)
+    host = _host_arch()
     kept: list[dict[str, Any]] = []
     for c in channels:
+        archs = (found.get(c["tag"]) or {}).get("archs") or set()
+        if c["tag"] != tag and archs and host not in archs:
+            continue  # kênh không có bản cho kiến trúc CPU của máy chủ (vd beszel:dev chỉ có amd64)
         if c["kind"] == "stable" and c["tag"] != tag and cur and c["digest"]:
             # Kênh ổn định khác (vd lts) trùng hẳn với bản đang dùng / latest -> không phải lựa chọn mới
             if c["digest"] == cur["digest"] or (stable and c is not stable and c["digest"] == stable["digest"]):
