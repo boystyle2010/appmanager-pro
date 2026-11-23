@@ -1555,6 +1555,11 @@
                   <span x-text="storageState.pruning ? t('pruningWait') : `${t('pruneNowBtn')} • ≈ ${formatBytesJs(Math.max(0, pruneEstimateBytes))}`"></span>
                 </button>
 
+              </div>
+            </template>
+
+            <!-- Lịch dọn & sao lưu: luôn hiện, kể cả khi không đọc được dung lượng Docker -->
+            <div class="space-y-3">
                 <!-- Lịch dọn SSD tự động -->
                 <div class="glass-inset rounded-2xl p-4 space-y-3 text-xs">
                   <div class="flex items-center justify-between gap-3">
@@ -1614,15 +1619,15 @@
                   </div>
                   <div x-show="settingsForm.backup_before_update" x-cloak class="grid grid-cols-3 gap-2">
                     <label class="space-y-1">
-                      <span class="text-[11px] text-muted" x-text="t('bkFileMax')"></span>
+                      <span class="block truncate text-[11px] text-muted" x-text="t('bkFileMax')"></span>
                       <input type="number" min="1" max="10240" x-model.number="settingsForm.backup_file_max_mb" class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code text-center" />
                     </label>
                     <label class="space-y-1">
-                      <span class="text-[11px] text-muted" x-text="t('bkMax')"></span>
+                      <span class="block truncate text-[11px] text-muted" x-text="t('bkMax')"></span>
                       <input type="number" min="50" max="102400" x-model.number="settingsForm.backup_max_mb" class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code text-center" />
                     </label>
                     <label class="space-y-1">
-                      <span class="text-[11px] text-muted" x-text="t('bkKeep')"></span>
+                      <span class="block truncate text-[11px] text-muted" x-text="t('bkKeep')"></span>
                       <input type="number" min="1" max="20" x-model.number="settingsForm.backup_keep" class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code text-center" />
                     </label>
                   </div>
@@ -1638,12 +1643,14 @@
                     <template x-for="b in backupsState.items" :key="b.app + b.file">
                       <div class="rounded-xl bg-[var(--glass-surface)] px-3 py-2.5 flex items-center gap-2.5">
                         <div class="min-w-0 flex-1">
-                          <p class="font-semibold text-[12px] truncate" x-text="b.app"></p>
-                          <p class="text-[10.5px] text-muted font-mono-code truncate"
-                             x-text="`${new Date(b.created * 1000).toLocaleString(lang === 'vi' ? 'vi-VN' : 'en-US', { dateStyle: 'short', timeStyle: 'short' })} • ${b.size}${b.version ? ' • ' + b.version : ''}`"></p>
+                          <p class="flex items-center gap-1.5 min-w-0">
+                            <span class="font-semibold text-[12px] truncate" x-text="b.app"></span>
+                            <span x-show="b.version" class="font-mono-code text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 shrink-0 max-w-[45%] truncate" x-text="b.version"></span>
+                          </p>
+                          <p class="text-[10.5px] text-muted font-mono-code truncate" x-text="`${formatTs(b.created)} • ${b.size}`"></p>
                         </div>
                         <button @click="confirmRestoreBackup(b)" :disabled="backupsState.busyFile === b.file"
-                                class="glass-btn px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-sky-400 disabled:opacity-50 shrink-0" x-text="t('restore')"></button>
+                                class="glass-btn px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-amber-300 disabled:opacity-50 shrink-0" x-text="t('restore')"></button>
                         <button @click="confirmDeleteBackup(b)" aria-label="Delete"
                                 class="glass-btn w-8 h-8 rounded-lg flex items-center justify-center text-rose-400 shrink-0">
                           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 7h12M9 7V5h6v2m-7 0l1 12h6l1-12"/></svg>
@@ -1652,8 +1659,7 @@
                     </template>
                   </div>
                 </div>
-              </div>
-            </template>
+            </div>
           </div>
         </template>
 
@@ -2031,7 +2037,7 @@
          style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
       <div class="space-y-2">
         <div class="flex items-center gap-2.5">
-          <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border bg-sky-500/15 border-sky-400/35 text-sky-400">
+          <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border bg-amber-500/15 border-amber-400/35 text-amber-400">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"/>
             </svg>
@@ -2044,7 +2050,7 @@
       <div class="space-y-2 overflow-y-auto min-h-0">
         <template x-for="(b, i) in restorePicker.items" :key="b.file">
           <label class="glass-inset rounded-2xl px-3.5 py-3 flex items-center gap-3 cursor-pointer border transition"
-                 :class="restorePicker.selected === b.file ? 'border-sky-400/45 bg-sky-500/10' : 'border-transparent'">
+                 :class="restorePicker.selected === b.file ? 'border-amber-400/50 bg-amber-500/10' : 'border-transparent'">
             <input type="radio" class="sr-only" :value="b.file" x-model="restorePicker.selected" />
             <span class="min-w-0 flex-1">
               <span class="flex items-center gap-2">
@@ -2054,7 +2060,7 @@
               <span class="block text-[11px] text-muted mt-0.5" x-text="`${formatTs(b.created)} • ${b.size}`"></span>
             </span>
             <span class="w-5 h-5 rounded-full shrink-0 flex items-center justify-center border transition"
-                  :class="restorePicker.selected === b.file ? 'bg-sky-500 border-sky-400 text-white' : 'border-slate-500/70 text-transparent'">
+                  :class="restorePicker.selected === b.file ? 'bg-amber-500 border-amber-400 text-slate-900' : 'border-slate-500/70 text-transparent'">
               <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
               </svg>
@@ -2065,7 +2071,7 @@
 
       <div class="grid grid-cols-2 gap-2.5 pt-1 shrink-0">
         <button @click="restorePicker.open = false" class="glass-btn py-2.5 px-3 rounded-xl text-xs font-semibold" x-text="t('cancel')"></button>
-        <button @click="runRestorePicker()" class="glass-btn-primary py-2.5 px-3 rounded-xl text-xs font-semibold" x-text="t('restore')"></button>
+        <button @click="runRestorePicker()" class="glass-btn-update py-2.5 px-3 rounded-xl text-xs font-semibold" x-text="t('restore')"></button>
       </div>
     </div>
   </div>

@@ -463,7 +463,8 @@ async def update_app_stream(
         chunks: list[str] = []
 
         async def tee_log(text: str) -> None:
-            chunks.append(text)
+            if "__SELF_UPDATE_RELOAD__" not in text:  # tín hiệu nội bộ cho trình duyệt, không lưu vào nhật ký
+                chunks.append(text)
             await send_log(text)
 
         try:
