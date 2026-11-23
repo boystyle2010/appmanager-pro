@@ -836,12 +836,13 @@
                 <template x-for="ch in (updateModal.app?.channels || [])" :key="ch.tag">
                   <button type="button" @click="confirmChannelSwitch(ch)" :disabled="updateModal.updating"
                           class="rounded-xl px-2 py-2 border text-center transition disabled:opacity-50 min-w-0"
-                          :class="ch.tag === updateModal.app?.image_tag
+                          :class="(ch.current || ch.tag === updateModal.app?.image_tag)
                             ? (ch.kind === 'pre' ? 'bg-violet-500/15 border-violet-400/50' : 'bg-sky-500/15 border-sky-400/50')
                             : 'border-[var(--glass-border)] hover:bg-white/5'">
                     <span class="block text-[11px] font-bold uppercase tracking-wider truncate"
                           :class="ch.kind === 'pre' ? 'text-violet-300' : 'text-sky-300'" x-text="ch.channel"></span>
                     <span class="block text-[10.5px] font-mono-code text-muted truncate mt-0.5" x-text="ch.version || ch.tag"></span>
+                    <span x-show="!ch.current && ch.tag !== updateModal.app?.image_tag && ch.tag.match(/\d/)" class="block text-[9.5px] font-mono-code text-subtle truncate" x-text="`:${ch.tag}`"></span>
                   </button>
                 </template>
               </div>

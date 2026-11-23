@@ -297,7 +297,9 @@ def summarize_release_notes(text: str, max_blocks: int = 3) -> str:
     return "\n\n".join("\n".join(b).strip() for b in blocks)
 
 
-async def fetch_github_release(client: httpx.AsyncClient, slug: str) -> dict[str, str]:
+async def fetch_github_release(
+    client: httpx.AsyncClient, slug: str, prefer_version: str = "", prerelease: bool = False
+) -> dict[str, str]:
     headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": "AppManager-Pro/0.4.0",
@@ -315,6 +317,32 @@ async def fetch_github_release(client: httpx.AsyncClient, slug: str) -> dict[str
     }
 
     try:
+        picked = None
+        if prefer_version or prerelease:
+            # Đúng phiên bản (v0.148.6 / 0.148.6 / 3.0.0-beta.3) -> không có thì prerelease mới nhất
+            if prefer_version:
+                base_v = prefer_version.lstrip("v")
+                for cand in dict.fromkeys((prefer_version, f"v{base_v}", base_v)):
+                    r_tag = await client.get(f"https://api.github.com/repos/{slug}/releases/tags/{cand}", headers=headers)
+                    if r_tag.status_code == 200:
+                        picked = r_tag.json()
+                        break
+                    if r_tag.status_code == 403:
+                        break
+            if picked is None and prerelease:
+                r_list = await client.get(f"https://api.github.com/repos/{slug}/releases?per_page=20", headers=headers)
+                if r_list.status_code == 200 and isinstance(r_list.json(), list):
+                    rels = r_list.json()
+                    picked = next((x for x in rels if x.get("prerelease")), None) or (rels[0] if rels else None)
+            if picked:
+                body = strip_checksums(str(picked.get("body") or "").strip())
+                if body:
+                    out["release_tag"] = str(picked.get("tag_name") or "")
+                    out["release_url"] = str(picked.get("html_url") or out["release_url"])
+                    out["published_at"] = str(picked.get("published_at") or "")
+                    out["changelog"] = body
+                    return out
+
         resp = await client.get(
             f"https://api.github.com/repos/{slug}/releases/latest",
             headers=headers,
@@ -442,6 +470,7 @@ async def _discover_newer_pinned_tag(
     github_release_tag: str,
     token_cache: dict[str, str],
     scope_key: str,
+    guard: Optional[dict[str, Any]] = None,
 ) -> Optional[tuple[str, str]]:
     cur_nums = cur_parsed["nums"]
     cur_prefix = cur_parsed["prefix"]
@@ -503,10 +532,16 @@ async def _discover_newer_pinned_tag(
     except Exception as exc:  # giữ các tag đã đọc được; lỗi mạng giữa chừng không làm mất cả lần kiểm tra
         logger.warning("Tag listing for %s/%s stopped early: %s", registry, repo, exc)
 
+    pre_tags = (guard or {}).get("pre_tags") or set()
+    cap = (guard or {}).get("cap")
     for tname in dict.fromkeys(tag_names):
         tp = _parse_pinned_tag(tname)
         if tp and _same_line(cur_parsed, tp):
+            if not cur_parsed["is_pre"] and (tname in pre_tags or (cap is not None and tp["nums"] > cap)):
+                continue  # bản đang ở kênh thử nghiệm -> không đề xuất như bản cập nhật ổn định
             candidates.append(((tp["nums"], tp["build"]), tname))
+    if not cur_parsed["is_pre"] and (pre_tags or cap is not None):
+        candidates = [c for c in candidates if c[1] not in pre_tags and (cap is None or c[0][0] <= cap)]
 
     if not candidates:
         return None
@@ -674,7 +709,175 @@ async def _detect_channels(
     stables = [c for c in kept if c["kind"] == "stable"]
     if not pre and len(stables) <= 1:
         return []  # chỉ có một kênh -> không có gì để chuyển
-    return [{k: c[k] for k in ("tag", "channel", "kind", "version", "updated")} for c in stables + pre]
+    return [{**{k: c[k] for k in ("tag", "channel", "kind", "version", "updated")}, "current": c["tag"] == tag}
+            for c in stables + pre]
+
+
+# Tag phiên bản thử nghiệm: 3.0.0-beta.3, v1.2.0-rc1, 8.6.0RC7-apache, 2.0.0-beta.1-alpine...
+PRE_TAG_RE = re.compile(
+    r"^((?:[a-z]+-)?v?)(\d+(?:\.\d+)+)[-.]?((alpha|beta|rc|pre|preview|next)[.-]?(\d*))(-[a-z0-9._-]+)?$",
+    re.I,
+)
+_PRE_RANK = {"alpha": 0, "pre": 1, "preview": 1, "next": 1, "beta": 2, "rc": 3}
+
+
+def _parse_pre_tag(tag: str) -> Optional[dict[str, Any]]:
+    m = PRE_TAG_RE.match(tag.strip())
+    if not m:
+        return None
+    word = m.group(4).lower()
+    return {
+        "prefix": m.group(1), "ver_str": m.group(2), "nums": tuple(int(x) for x in m.group(2).split(".")),
+        "word": word, "rank": _PRE_RANK.get(word, 0), "n": int(m.group(5) or 0),
+        "variant": re.sub(r"\d+", "#", (m.group(6) or "").lower()),
+        "label": tag[len(m.group(1)):len(tag) - len(m.group(6) or "")],
+    }
+
+
+async def _list_repo_tags(
+    client: httpx.AsyncClient, registry: str, repo: str, token_cache: dict[str, str], scope_key: str,
+    hub_filters: list[str],
+) -> list[tuple[str, str]]:
+    """[(tên tag, digest)] — digest chỉ có với Docker Hub."""
+    names: list[tuple[str, str]] = []
+    try:
+        if registry == "registry-1.docker.io":
+            base = f"https://hub.docker.com/v2/repositories/{repo}/tags?page_size=100&ordering=last_updated"
+            for f in dict.fromkeys(hub_filters):
+                url = f"{base}&name={f}" if f else base
+                for _page in range(2):
+                    r = await client.get(url)
+                    if r.status_code != 200:
+                        break
+                    body = r.json()
+                    names += [(str(t.get("name") or ""), str(t.get("digest") or "")) for t in body.get("results") or []]
+                    url = body.get("next") or ""
+                    if not url:
+                        break
+        else:
+            t_url = f"https://{registry}/v2/{repo}/tags/list?n=1000"
+            for _page in range(10):
+                r = await _registry_request(client, t_url, "application/json", token_cache, scope_key)
+                if r.status_code != 200:
+                    break
+                names += [(n, "") for n in r.json().get("tags") or []]
+                m = re.search(r"<([^>]+)>\s*;\s*rel=\"?next\"?", r.headers.get("link") or "")
+                if not m:
+                    break
+                nxt = m.group(1)
+                t_url = nxt if nxt.startswith("http") else f"https://{registry}{nxt}"
+    except Exception as exc:
+        logger.warning("Tag listing for %s/%s failed: %s", registry, repo, exc)
+    seen: dict[str, str] = {}
+    for n, d in names:
+        if n and (n not in seen or (d and not seen[n])):
+            seen[n] = d
+    return list(seen.items())
+
+
+def _pre_channel_digests(tags: list[tuple[str, str]]) -> set[str]:
+    """Digest của các tag kênh thử nghiệm (beta, beta-full, next...) mà không trùng kênh ổn định (latest...)."""
+    pre, stable = set(), set()
+    for n, d in tags:
+        fmt = channel_format(n)
+        if d and fmt:
+            (stable if fmt[1] in STABLE_CHANNELS else pre).add(d)
+    return pre - stable
+
+
+async def _detect_pinned_channels(
+    client: httpx.AsyncClient, registry: str, repo: str, tag: str, token_cache: dict[str, str], scope_key: str,
+    guard: Optional[dict[str, Any]] = None,
+) -> list[dict[str, Any]]:
+    """
+    App ghim cứng phiên bản: kênh Stable = bản ổn định mới nhất cùng dòng (tiền tố, biến thể, major);
+    kênh thử nghiệm = tag beta/rc... mới nhất cùng biến thể, mới hơn bản đang dùng (cho phép major kế tiếp,
+    vì bản thử nghiệm thường là major mới). Không có bản thử nghiệm phù hợp -> [] (không hiện gì).
+    """
+    cur_pre = _parse_pre_tag(tag)
+    cur_st = None if cur_pre else _parse_pinned_tag(tag)
+    if not cur_pre and not cur_st:
+        return []
+    prefix = (cur_pre or cur_st)["prefix"]
+    nums = (cur_pre or cur_st)["nums"]
+    variant = cur_pre["variant"] if cur_pre else cur_st["variant"]
+    suffix_word = re.sub(r"[\d.]+$", "", variant.replace("#", "")) if variant else ""
+    filters = [suffix_word or f"{prefix}{nums[0]}.", "beta", "rc", "latest", f"{prefix}{nums[0] + 1}."]
+    tags = await _list_repo_tags(client, registry, repo, token_cache, scope_key, filters)
+    pre_digests = _pre_channel_digests(tags)
+    calendar = nums[0] >= 1900
+    # Trần của kênh ổn định: phiên bản mà tag "latest/stable" đang trỏ tới (cùng biến thể).
+    # Tag phiên bản cao hơn trần là bản thử nghiệm (đang hoặc đã từng ở kênh beta) -> không coi là ổn định.
+    stable_digests = {d for n, d in tags if d and channel_format(n) and channel_format(n)[1] in STABLE_CHANNELS}
+    cap = None
+    for n, d in tags:
+        sp = _parse_pinned_tag(n)
+        if d in stable_digests and sp and sp["prefix"] == prefix and sp["variant"] == variant and len(sp["nums"]) == len(nums):
+            cap = sp["nums"] if cap is None or sp["nums"] > cap else cap
+
+    best_stable: Optional[tuple[tuple, str]] = None
+    best_pre: Optional[tuple[tuple, str, dict]] = None
+    for n, dg in tags:
+        p = _parse_pre_tag(n)
+        if not p and dg and dg in pre_digests:
+            # Tag trông như bản ổn định nhưng chính là bản đang ở kênh beta (vd Scrypted v0.148.6-noble-full = beta)
+            s_ = _parse_pinned_tag(n)
+            if s_ and not s_["is_pre"]:
+                word = next((channel_format(x)[1] for x, d2 in tags if d2 == dg and channel_format(x)), "beta")
+                p = {"prefix": s_["prefix"], "ver_str": s_["ver_str"], "nums": s_["nums"], "word": word,
+                     "rank": _PRE_RANK.get(word, 2), "n": 0, "variant": s_["variant"], "label": f"{s_['prefix']}{s_['ver_str']}"}
+        if p:
+            if p["prefix"] != prefix or p["variant"] != variant or len(p["nums"]) != len(nums):
+                continue
+            if not calendar and p["nums"][0] not in (nums[0], nums[0] + 1):
+                continue
+            if cur_pre:
+                if (p["nums"], p["rank"], p["n"]) < (cur_pre["nums"], cur_pre["rank"], cur_pre["n"]):
+                    continue
+            elif p["nums"] <= nums:
+                continue  # 1.2.3-beta cũ hơn 1.2.3
+            key = (p["nums"], p["rank"], p["n"])
+            if best_pre is None or key > best_pre[0]:
+                best_pre = (key, n, p)
+            continue
+        s = _parse_pinned_tag(n)
+        if not s or s["is_pre"] or s["prefix"] != prefix or s["variant"] != variant:
+            continue
+        if len(s["nums"]) != len(nums) or (not calendar and s["nums"][0] != nums[0]):
+            continue
+        if cap is not None and s["nums"] > cap:
+            if guard is not None:
+                guard.setdefault("pre_tags", set()).add(n)
+            continue
+        key = (s["nums"], s["build"])
+        if best_stable is None or key > best_stable[0]:
+            best_stable = (key, n)
+
+    if cur_pre:
+        stable_tag = best_stable[1] if best_stable else ""
+        if not stable_tag:
+            return []
+        pre_tag = best_pre[1] if best_pre else tag
+        pre_info = best_pre[2] if best_pre else cur_pre
+        out = [{"tag": stable_tag, "channel": "stable", "kind": "stable",
+                "version": _parse_pinned_tag(stable_tag)["ver_str"], "current": False}]
+        out.append({"tag": pre_tag, "channel": pre_info["word"], "kind": "pre", "version": pre_info["label"],
+                    "current": pre_tag == tag})
+        return out
+    if guard is not None:
+        guard["cap"] = cap
+        if best_pre:
+            guard.setdefault("pre_tags", set()).add(best_pre[1])
+    if best_pre and best_stable and best_pre[0][0] <= best_stable[0][0]:
+        best_pre = None  # bản thử nghiệm không mới hơn bản ổn định mới nhất (vd 8.6.0RC7 khi đã có 8.6.0)
+    if not best_pre:
+        return []
+    stable_tag = best_stable[1] if best_stable and best_stable[0] > (cur_st["nums"], cur_st["build"]) else tag
+    return [
+        {"tag": stable_tag, "channel": "stable", "kind": "stable",
+         "version": _parse_pinned_tag(stable_tag)["ver_str"], "current": True},
+        {"tag": best_pre[1], "channel": best_pre[2]["word"], "kind": "pre", "version": best_pre[2]["label"], "current": False},
+    ]
 
 
 async def _hub_version_for_digest(client: httpx.AsyncClient, repo: str, digests: list[str]) -> str:
@@ -827,13 +1030,18 @@ async def check_single_app(
                     result["remote_version"] = resolved
 
     # Kênh phát hành (latest / beta...) cho app chạy theo tag kênh
-    if not pinned_info and channel_format(tag):
-        try:
-            result["channels"] = json.dumps(
-                await _detect_channels(client, registry, repo, tag, token_cache, scope_key)
-            )
-        except Exception as exc:
-            logger.warning("Channel detection for %s failed: %s", name, exc)
+    channels: list[dict[str, Any]] = []
+    pinned_guard: dict[str, Any] = {}
+    try:
+        if channel_format(tag):
+            channels = await _detect_channels(client, registry, repo, tag, token_cache, scope_key)
+        elif pinned_info or _parse_pre_tag(tag):
+            channels = await _detect_pinned_channels(client, registry, repo, tag, token_cache, scope_key, pinned_guard)
+    except Exception as exc:
+        logger.warning("Channel detection for %s failed: %s", name, exc)
+    result["channels"] = json.dumps(channels)
+    cur_channel = next((c for c in channels if c.get("current")), None)
+    on_pre = bool(cur_channel and cur_channel.get("kind") == "pre") or bool(_parse_pre_tag(tag))
 
     # Bước 2: Lấy Changelog từ GitHub (Releases -> CHANGELOG.md -> Commits)
     slug = extract_github_slug(source_url, image_ref, icon_url)
@@ -843,11 +1051,19 @@ async def check_single_app(
             fetch_changelog_always
             or has_digest_update
             or bool(pinned_info)
+            or on_pre
             or not result["changelog"]
             or bool(custom_repo)
+            or (prev_cache.get("image") or image_ref) != image_ref  # vừa đổi tag / kênh
         )
         if need_gh:
-            gh_info = await fetch_github_release(client, slug)
+            # Kênh thử nghiệm: ghi chú của đúng bản beta đang chạy (hoặc prerelease mới nhất)
+            want_ver = ""
+            if on_pre:
+                want_ver = (cur_channel or {}).get("version") or ""
+                if not want_ver and _parse_pre_tag(tag):
+                    want_ver = _parse_pre_tag(tag)["label"]
+            gh_info = await fetch_github_release(client, slug, prefer_version=want_ver, prerelease=on_pre)
             if gh_info["changelog"]:
                 result["release_tag"] = gh_info["release_tag"]
                 result["release_url"] = gh_info["release_url"]
@@ -871,7 +1087,14 @@ async def check_single_app(
                     result["release_tag"],
                     token_cache,
                     scope_key,
+                    pinned_guard,
                 )
+
+            if not newer_tag_match and on_pre and not channel_format(tag):
+                # Đang ghim bản thử nghiệm và đã có bản thử nghiệm mới hơn (vd 8.6.0RC7 -> 8.6.0RC8)
+                newer_pre = next((c for c in channels if c.get("kind") == "pre" and c.get("tag") != tag), None)
+                if newer_pre:
+                    newer_tag_match = (newer_pre["tag"], "")
 
             if newer_tag_match:
                 new_tag, new_digest = newer_tag_match

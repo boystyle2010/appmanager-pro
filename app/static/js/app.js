@@ -681,7 +681,7 @@
         channelBadge(app) {
           const chs = app.channels || [];
           if (chs.length < 2) return null;
-          const cur = chs.find(c => c.tag === app.image_tag);
+          const cur = chs.find(c => c.current || c.tag === app.image_tag);
           if (cur && cur.kind === 'pre') return { on: true, label: cur.channel, title: this.t('onPreChannel') };
           const pre = chs.find(c => c.kind === 'pre');
           if (!pre) return null;
@@ -690,7 +690,7 @@
 
         confirmChannelSwitch(ch) {
           const app = this.updateModal.app;
-          if (!app || ch.tag === app.image_tag || this.updateModal.updating) return;
+          if (!app || ch.current || ch.tag === app.image_tag || this.updateModal.updating) return;
           const toPre = ch.kind === 'pre';
           this.askConfirm({
             tone: toPre ? 'danger' : 'update',
