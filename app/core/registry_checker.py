@@ -14,7 +14,7 @@ from app.core.database import (
     get_update_cache_item,
     save_update_cache,
 )
-from app.core.docker_client import GENERIC_VERSIONS, list_all_apps, version_from_labels
+from app.core.docker_client import _UBUNTU_RELEASE_RE, GENERIC_VERSIONS, list_all_apps, version_from_labels
 
 MANIFEST_ACCEPT = ", ".join(
     [
@@ -342,7 +342,14 @@ async def fetch_github_release(
                     r_lat = await client.get(f"https://api.github.com/repos/{slug}/releases/latest", headers=headers)
                     base_rel = r_lat.json() if r_lat.status_code == 200 else None
                 base_tag = str((base_rel or {}).get("tag_name") or "")
-                for head in dict.fromkeys((prefer_version, f"v{prefer_version.lstrip('v')}", prefer_version.lstrip("v"))):
+                heads = list(dict.fromkeys((prefer_version, f"v{prefer_version.lstrip('v')}", prefer_version.lstrip("v"))))
+                n_version_heads = len(heads)
+                if prerelease and base_tag:
+                    # Bản beta build thẳng từ nhánh chính, không có tag riêng (vd Scrypted) -> so với nhánh mặc định
+                    r_repo = await client.get(f"https://api.github.com/repos/{slug}", headers=headers)
+                    if r_repo.status_code == 200:
+                        heads.append(str(r_repo.json().get("default_branch") or "main"))
+                for head in heads:
                     if not base_tag or head == base_tag:
                         break
                     r_cmp = await client.get(f"https://api.github.com/repos/{slug}/compare/{base_tag}...{head}", headers=headers)
@@ -351,11 +358,13 @@ async def fetch_github_release(
                     commits = (r_cmp.json() or {}).get("commits") or []
                     if not commits:
                         break
-                    lines = [f"### {head} — commits since {base_tag}"]
+                    on_branch = heads.index(head) >= n_version_heads
+                    lines = [f"### {prefer_version} — commits on `{head}` since {base_tag}" if on_branch
+                             else f"### {head} — commits since {base_tag}"]
                     for cm in reversed(commits[-40:]):
                         msg = str((cm.get("commit") or {}).get("message") or "").splitlines()[0].strip()
                         lines.append(f"- `{str(cm.get('sha') or '')[:7]}` {msg}")
-                    out["release_tag"] = head
+                    out["release_tag"] = prefer_version if on_branch else head
                     out["release_url"] = f"https://github.com/{slug}/compare/{base_tag}...{head}"
                     out["changelog"] = "\n".join(lines)
                     return out
@@ -1048,7 +1057,7 @@ async def check_single_app(
 
     # Phiên bản thật của image đang chạy khi tag là chữ chung (latest...) / nhãn chỉ là của hệ điều hành gốc
     if registry_ok_for_hub := (registry == "registry-1.docker.io"):
-        if current_version.lower() in GENERIC_VERSIONS and local_digests:
+        if (current_version.lower() in GENERIC_VERSIONS or _UBUNTU_RELEASE_RE.match(current_version)) and local_digests:
             resolved = await _hub_version_for_digest(client, repo, local_digests)
             if resolved:
                 current_version = resolved

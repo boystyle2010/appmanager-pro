@@ -311,6 +311,7 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
         if (
             version.lower() in GENERIC_VERSIONS
             and cached_ver.lower() not in GENERIC_VERSIONS
+            and not _UBUNTU_RELEASE_RE.match(cached_ver)  # giá trị cũ sai (nhãn Ubuntu) còn trong cache
             and local_digests
             and cached.get("local_digest") in local_digests
         ):

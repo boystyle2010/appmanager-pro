@@ -32,3 +32,5 @@
 - Channel badges (BETA / DEV / RC…, dashed when available, filled when in use) are shown in the status line of every app card, including apps with a pending update; fixed an empty badge on apps without channels
 - Pre-release changelog falls back to the commits between the last stable release and the pre-release tag when no GitHub release exists (e.g. Scrypted betas); Ubuntu base-image version labels (24.04…) are no longer shown as the app version
 - App cards: channel (BETA / DEV…) and AUTO badges sit aligned on the image line of the version box; the selected-channel note and the changelog header show the selected channel's name and version (LATEST, STABLE, BETA, DEV…), in blue for stable and violet for pre-release channels
+- Fixed a stale Ubuntu base-image version (24.04) kept in the update cache being shown again as the app version; the real version is resolved on the next check (e.g. Scrypted beta v0.148.6)
+- Pre-release changelog for projects that build betas from the main branch without tags (e.g. Scrypted): commits on the default branch since the last stable release
