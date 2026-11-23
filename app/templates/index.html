@@ -2029,16 +2029,16 @@
        @click.self="restorePicker.open = false" @keydown.escape.window="if (!confirmModal.open) restorePicker.open = false">
     <div class="glass-panel w-full max-w-sm rounded-t-[26px] sm:rounded-[26px] p-5 space-y-4 shadow-2xl max-h-[85dvh] flex flex-col"
          style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
-      <div class="flex items-start gap-3.5">
-        <div class="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border bg-sky-500/15 border-sky-400/35 text-sky-400">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"/>
-          </svg>
+      <div class="space-y-2">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border bg-sky-500/15 border-sky-400/35 text-sky-400">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"/>
+            </svg>
+          </div>
+          <h3 class="font-bold text-[15px] leading-tight truncate min-w-0" x-text="`${t('restore')}: ${restorePicker.app?.title || ''}`"></h3>
         </div>
-        <div class="min-w-0 flex-1">
-          <h3 class="font-bold text-[15px] leading-snug" x-text="`${t('restore')}: ${restorePicker.app?.title || ''}`"></h3>
-          <p class="text-xs text-muted mt-1.5 leading-relaxed" x-text="t('restoreAppMsg')"></p>
-        </div>
+        <p class="text-xs text-muted leading-relaxed" x-text="t('restoreAppMsg')"></p>
       </div>
 
       <div class="space-y-2 overflow-y-auto min-h-0">
