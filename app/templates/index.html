@@ -2049,10 +2049,9 @@
 
   <!-- MODAL: Chọn phiên bản để khôi phục -->
   <div x-show="restorePicker.open" x-cloak x-transition.opacity
-       class="fixed inset-0 z-[55] flex items-end sm:items-center justify-center sm:p-5 bg-black/70 backdrop-blur-md"
+       class="fixed inset-0 z-[55] flex items-center justify-center p-4 sm:p-5 bg-black/70 backdrop-blur-md"
        @click.self="restorePicker.open = false" @keydown.escape.window="if (!confirmModal.open) restorePicker.open = false">
-    <div class="glass-panel w-full max-w-sm rounded-t-[26px] sm:rounded-[26px] p-5 space-y-4 shadow-2xl max-h-[85dvh] flex flex-col"
-         style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
+    <div class="glass-panel w-full max-w-sm rounded-[26px] p-5 space-y-4 shadow-2xl max-h-[85dvh] flex flex-col">
       <div class="space-y-2">
         <div class="flex items-center gap-2.5">
           <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border bg-amber-500/15 border-amber-400/35 text-amber-400">
@@ -2096,11 +2095,10 @@
 
   <!-- MODAL: Tiến trình khôi phục -->
   <div x-show="restoreRun.open" x-cloak x-transition.opacity
-       class="fixed inset-0 z-[56] flex items-end sm:items-center justify-center sm:p-5 bg-black/70 backdrop-blur-md"
+       class="fixed inset-0 z-[56] flex items-center justify-center p-4 sm:p-5 bg-black/70 backdrop-blur-md"
        @click.self="if (!restoreRun.running) restoreRun.open = false"
        @keydown.escape.window="if (!restoreRun.running && !confirmModal.open) restoreRun.open = false">
-    <div class="glass-panel w-full max-w-sm rounded-t-[26px] sm:rounded-[26px] p-5 space-y-4 shadow-2xl max-h-[85dvh] flex flex-col"
-         style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
+    <div class="glass-panel w-full max-w-sm rounded-[26px] p-5 space-y-4 shadow-2xl max-h-[85dvh] flex flex-col">
       <div class="flex items-center gap-2.5">
         <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border"
              :class="{
