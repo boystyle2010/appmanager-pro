@@ -4,13 +4,18 @@ Sao lưu / khôi phục thư mục dữ liệu của app (vd: /DATA/AppData/<app
 - Bản sao lưu: <APP_DATA_DIR>/app-backups/<container>/<YYYYmmdd-HHMMSS>.tar.gz (+ file .json mô tả)
 - Bỏ qua nếu thư mục lớn hơn giới hạn (mặc định 2 GB) để không làm đầy SSD.
 - Chỉ giữ N bản mới nhất cho mỗi app.
-- Khôi phục: dừng container -> đổi tên thư mục hiện tại thành "<dir>.pre-restore" -> giải nén -> chạy lại container.
+- Bản sao lưu ghi kèm PHIÊN BẢN app lúc đó (image id + tên image + file compose + service).
+- Khôi phục: dừng container -> đổi tên thư mục hiện tại thành "<dir>.pre-restore" -> giải nén ->
+  nếu container đang chạy image khác và image cũ vẫn còn trên máy -> đưa lại đúng phiên bản cũ
+  (gắn lại tag, sửa image trong compose nếu cần, tạo lại container); nếu không thì chạy lại container.
+  Dữ liệu mà không kèm phiên bản thì vô ích khi bản mới đã đổi cấu trúc dữ liệu.
 """
 from __future__ import annotations
 
 import json
 import re
 import shutil
+import subprocess
 import tarfile
 import time
 from pathlib import Path
@@ -62,7 +67,18 @@ def dir_size(path: Path, stop_after: int | None = None) -> int:
     return total
 
 
-def create_backup(container_name: str, source_dir: str, version: str, max_mb: int, keep: int) -> dict[str, Any]:
+def create_backup(
+    container_name: str,
+    source_dir: str,
+    version: str,
+    max_mb: int,
+    keep: int,
+    *,
+    image_id: str = "",
+    image_ref: str = "",
+    compose_path: str = "",
+    service: str = "",
+) -> dict[str, Any]:
     if not source_dir:
         return {"ok": False, "skipped": True, "message": "No app data folder detected"}
     src = Path(source_dir)
@@ -90,7 +106,10 @@ def create_backup(container_name: str, source_dir: str, version: str, max_mb: in
         return {"ok": False, "message": f"Backup failed: {exc}"}
 
     (bdir / (name + ".json")).write_text(
-        json.dumps({"source": str(src), "version": version, "created": int(time.time()), "data_bytes": size}),
+        json.dumps({
+            "source": str(src), "version": version, "created": int(time.time()), "data_bytes": size,
+            "image_id": image_id, "image_ref": image_ref, "compose_path": compose_path, "service": service,
+        }),
         encoding="utf-8",
     )
     _apply_retention(bdir, keep)
@@ -148,7 +167,74 @@ def delete_backup(container_name: str, filename: str) -> None:
     Path(str(f) + ".json").unlink(missing_ok=True)
 
 
-def restore_backup(container_name: str, filename: str) -> dict[str, Any]:
+def _split_ref(ref: str) -> tuple[str, str]:
+    if not ref or "@" in ref:
+        return "", ""
+    last = ref.rsplit("/", 1)[-1]
+    if ":" in last:
+        repo, tag = ref.rsplit(":", 1)
+        return repo, tag
+    return ref, "latest"
+
+
+def _set_compose_image(compose_path: str, service: str, image_ref: str) -> bool:
+    """Đặt lại image của service trong compose (giữ comment & x-casaos). Trả về True nếu có đổi."""
+    from ruamel.yaml import YAML
+
+    path = Path(compose_path)
+    ryaml = YAML()
+    ryaml.preserve_quotes = True
+    text = path.read_text(encoding="utf-8")
+    data = ryaml.load(text) or {}
+    svc = (data.get("services") or {}).get(service)
+    if not isinstance(svc, dict) or str(svc.get("image", "")).strip() == image_ref or "$" in str(svc.get("image", "")):
+        return False
+    path.with_name(path.name + ".bak").write_text(text, encoding="utf-8")
+    svc["image"] = image_ref
+    with path.open("w", encoding="utf-8") as f:
+        ryaml.dump(data, f)
+    return True
+
+
+def _restore_version(client, meta: dict[str, Any], current_image_id: str) -> tuple[bool, str]:
+    """
+    Đưa container về đúng image lúc sao lưu. Trả về (đã_tạo_lại_container, thông_báo).
+    Không làm gì nếu container đang chạy đúng image đó, hoặc thiếu thông tin / image cũ đã bị xoá.
+    """
+    image_id = meta.get("image_id") or ""
+    image_ref = meta.get("image_ref") or ""
+    compose_path = meta.get("compose_path") or ""
+    service = meta.get("service") or ""
+    if not image_id or image_id == current_image_id:
+        return False, ""
+    if not compose_path or not Path(compose_path).is_file() or not service:
+        return False, "Data restored; the app version was not changed (compose file unknown)."
+    repo, tag = _split_ref(image_ref)
+    if not repo:
+        return False, "Data restored; the app version was not changed (image pinned by digest)."
+    try:
+        client.images.get(image_id).tag(repo, tag=tag)
+    except Exception:
+        return False, "Data restored, but the previous app version's image is no longer on this server."
+    changed = _set_compose_image(compose_path, service, image_ref)
+    proc = subprocess.run(
+        ["docker", "compose", "-f", compose_path, "up", "-d", "--force-recreate", "--no-deps", service],
+        cwd=str(Path(compose_path).parent), capture_output=True, text=True, timeout=600,
+    )
+    if proc.returncode != 0:
+        tail = (proc.stderr or proc.stdout or "").strip()[-400:]
+        raise RuntimeError(f"Data restored, but recreating the container failed: {tail}")
+    note = " (docker-compose.yml image reverted; previous file saved as .bak)" if changed else ""
+    return True, f"Previous version {meta.get('version') or image_ref} restored{note}."
+
+
+def restore_backup(
+    container_name: str, filename: str, *, start: bool = True, restore_version: bool = True
+) -> dict[str, Any]:
+    """
+    start=False: chỉ khôi phục dữ liệu, để container dừng (dùng khi rollback, bước sau tự tạo lại container).
+    restore_version=False: không đụng tới image/compose.
+    """
     f = _backup_file(container_name, filename)
     try:
         meta = json.loads(Path(str(f) + ".json").read_text(encoding="utf-8"))
@@ -161,8 +247,10 @@ def restore_backup(container_name: str, filename: str) -> dict[str, Any]:
     client = get_docker_client()
     container = None
     was_running = False
+    current_image_id = ""
     try:
         container = client.containers.get(container_name)
+        current_image_id = container.attrs.get("Image") or ""
         # "restarting" = app đang lỗi & khởi động lại liên tục (thường gặp sau cập nhật hỏng): vẫn phải
         # dừng trước khi ghi đè dữ liệu và chạy lại sau khi khôi phục.
         was_running = container.status in ("running", "restarting")
@@ -200,16 +288,30 @@ def restore_backup(container_name: str, filename: str) -> dict[str, Any]:
                 previous.rename(dest)
         except Exception:
             pass
-        if container is not None and was_running:
+        if container is not None and was_running and start:
             try:
                 container.start()
             except Exception:
                 pass
         return {"ok": False, "error": f"Restore failed: {exc}"}
 
-    if container is not None and was_running:
+    base_msg = f"Restored {filename}. Previous data kept at {previous.name}."
+    if not start:
+        return {"ok": True, "message": base_msg}
+    version_note = ""
+    if restore_version:
+        try:
+            recreated, version_note = _restore_version(client, meta, current_image_id)
+        except Exception as exc:
+            return {"ok": True, "warning": str(exc)}
+        if recreated:
+            return {"ok": True, "message": f"{base_msg} {version_note}"}
+    if container is not None:
+        # Sau khi khôi phục luôn chạy lại app (kể cả khi trước đó nó đã dừng vì lỗi)
         try:
             container.start()
         except Exception as exc:
             return {"ok": True, "warning": f"Data restored, but the container did not start: {exc}"}
-    return {"ok": True, "message": f"Restored {filename}. Previous data kept at {previous.name}"}
+    if version_note:
+        return {"ok": True, "warning": f"{base_msg} {version_note}"}
+    return {"ok": True, "message": base_msg}

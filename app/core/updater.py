@@ -158,8 +158,25 @@ async def _rollback_to_previous(
     backup_path: str,
     send_log: LogCallback,
     window: int,
+    data_backup: str = "",
 ) -> tuple[bool, str]:
     await send_log("\n==> New version is unhealthy. Rolling back to the previous version...\n")
+    # Bản mới có thể đã đổi cấu trúc dữ liệu -> bản cũ chạy với dữ liệu đó sẽ hỏng. Có bản sao lưu
+    # dữ liệu từ ngay trước khi cập nhật thì trả dữ liệu về luôn (giữ dữ liệu hiện tại ở *.pre-restore).
+    if data_backup:
+        from app.core.app_backup import restore_backup
+
+        await send_log(f"==> Restoring app data from {data_backup} ...\n")
+        try:
+            res = await asyncio.to_thread(
+                restore_backup, container_name, data_backup, start=False, restore_version=False
+            )
+        except Exception as exc:
+            res = {"ok": False, "error": str(exc)}
+        if res.get("ok"):
+            await send_log(f"==> {res.get('message')}\n")
+        else:
+            await send_log(f"==> [WARN] Data restore failed: {res.get('error')} — rolling back the version only.\n")
     if bumped and backup_path:
         await asyncio.to_thread(_restore_compose_backup, compose_path, backup_path)
         await send_log("==> Restored docker-compose.yml from backup.\n")
@@ -414,7 +431,8 @@ async def _update_app_stream_impl(
         except ValueError:
             max_mb, keep = 2048, 3
         bres = await asyncio.to_thread(
-            create_backup, container_name, app_info["appdata_path"], from_ver, max_mb, keep
+            create_backup, container_name, app_info["appdata_path"], from_ver, max_mb, keep,
+            image_id=old_image_id, image_ref=app_info["image"], compose_path=compose_path, service=service,
         )
         if bres.get("ok"):
             backup_name = bres["file"]
@@ -477,16 +495,11 @@ async def _update_app_stream_impl(
             compose_path=compose_path, compose_dir=compose_dir, service=service,
             container_name=container_name, image_ref=app_info["image"],
             old_image_id=old_image_id, bumped=bumped, backup_path=backup_path,
-            send_log=send_log, window=window,
+            send_log=send_log, window=window, data_backup=backup_name,
         )
         if rb_ok:
             rolled_back = True
             await send_log("\n↩️ Rolled back: the previous version is running again.\n")
-            if backup_name:
-                await send_log(
-                    f"==> A data backup from before this update is available ({backup_name}). "
-                    "Restore it from Settings → Storage → App data backups if the new version changed your data.\n"
-                )
             add_update_history(
                 container_name, title, from_ver, target_ver, mode, "rolled_back",
                 f"Update failed ({reason}); previous version restored",
