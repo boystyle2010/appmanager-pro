@@ -191,7 +191,7 @@ class SettingsPayload(BaseModel):
     auto_prune_time: str = "04:00"
     auto_prune_images: str = "dangling"
     auto_prune_cache: bool = True
-    backup_before_update: bool = False
+    backup_before_update: bool = True
     backup_max_mb: int = 2048
     backup_keep: int = 3
     github_token: Optional[str] = None
@@ -575,7 +575,11 @@ async def api_apply_compose(
     res = await save_and_apply_compose(container_name, payload.raw_yaml)
     audit(request, user, "compose_apply", container_name, res.get("error") or "", bool(res.get("ok")))
     if not res.get("ok"):
-        raise HTTPException(status_code=400, detail=res.get("error") or "Apply failed")
+        # Kèm nhật ký (log container hỏng, kết quả quay về compose cũ) để hiện trong trình sửa
+        return JSONResponse(
+            status_code=400,
+            content={"detail": res.get("error") or "Apply failed", "logs": res.get("logs") or ""},
+        )
     return res
 
 

@@ -78,6 +78,7 @@ def create_backup(
     image_ref: str = "",
     compose_path: str = "",
     service: str = "",
+    compose_text: str | None = None,
 ) -> dict[str, Any]:
     if not source_dir:
         return {"ok": False, "skipped": True, "message": "No app data folder detected"}
@@ -109,6 +110,7 @@ def create_backup(
         json.dumps({
             "source": str(src), "version": version, "created": int(time.time()), "data_bytes": size,
             "image_id": image_id, "image_ref": image_ref, "compose_path": compose_path, "service": service,
+            "compose_text": compose_text,
         }),
         encoding="utf-8",
     )
@@ -198,25 +200,45 @@ def _set_compose_image(compose_path: str, service: str, image_ref: str) -> bool:
 
 def _restore_version(client, meta: dict[str, Any], current_image_id: str) -> tuple[bool, str]:
     """
-    Đưa container về đúng image lúc sao lưu. Trả về (đã_tạo_lại_container, thông_báo).
-    Không làm gì nếu container đang chạy đúng image đó, hoặc thiếu thông tin / image cũ đã bị xoá.
+    Đưa app về đúng trạng thái lúc sao lưu: docker-compose.yml + image. Trả về (đã_tạo_lại_container, thông_báo).
+    Không làm gì nếu container đang chạy đúng image đó và compose không khác.
     """
     image_id = meta.get("image_id") or ""
     image_ref = meta.get("image_ref") or ""
     compose_path = meta.get("compose_path") or ""
+    compose_text = meta.get("compose_text")
     service = meta.get("service") or ""
-    if not image_id or image_id == current_image_id:
-        return False, ""
     if not compose_path or not Path(compose_path).is_file() or not service:
-        return False, "Data restored; the app version was not changed (compose file unknown)."
-    repo, tag = _split_ref(image_ref)
-    if not repo:
-        return False, "Data restored; the app version was not changed (image pinned by digest)."
-    try:
-        client.images.get(image_id).tag(repo, tag=tag)
-    except Exception:
-        return False, "Data restored, but the previous app version's image is no longer on this server."
-    changed = _set_compose_image(compose_path, service, image_ref)
+        if image_id and image_id != current_image_id:
+            return False, "Data restored; the app version was not changed (compose file unknown)."
+        return False, ""
+
+    current_text = Path(compose_path).read_text(encoding="utf-8")
+    compose_differs = compose_text is not None and compose_text != current_text
+    image_differs = bool(image_id) and image_id != current_image_id
+    if not compose_differs and not image_differs:
+        return False, ""
+
+    notes: list[str] = []
+    if image_differs:
+        repo, tag = _split_ref(image_ref)
+        try:
+            if not repo:
+                raise ValueError("pinned by digest")
+            client.images.get(image_id).tag(repo, tag=tag)
+            notes.append(f"previous version {meta.get('version') or image_ref} restored")
+        except Exception:
+            if not compose_differs:
+                return False, "Data restored, but the previous app version's image is no longer on this server."
+            notes.append("previous image is no longer on this server")
+    if compose_differs:
+        path = Path(compose_path)
+        path.with_name(path.name + ".bak").write_text(current_text, encoding="utf-8")
+        path.write_text(compose_text, encoding="utf-8")
+        notes.append("docker-compose.yml restored (current file saved as .bak)")
+    elif image_differs and _set_compose_image(compose_path, service, image_ref):
+        notes.append("compose image reverted (previous file saved as .bak)")
+
     proc = subprocess.run(
         ["docker", "compose", "-f", compose_path, "up", "-d", "--force-recreate", "--no-deps", service],
         cwd=str(Path(compose_path).parent), capture_output=True, text=True, timeout=600,
@@ -224,8 +246,8 @@ def _restore_version(client, meta: dict[str, Any], current_image_id: str) -> tup
     if proc.returncode != 0:
         tail = (proc.stderr or proc.stdout or "").strip()[-400:]
         raise RuntimeError(f"Data restored, but recreating the container failed: {tail}")
-    note = " (docker-compose.yml image reverted; previous file saved as .bak)" if changed else ""
-    return True, f"Previous version {meta.get('version') or image_ref} restored{note}."
+    msg = "; ".join(notes)
+    return True, (msg[:1].upper() + msg[1:] + ".") if msg else ""
 
 
 def restore_backup(

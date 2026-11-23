@@ -6,6 +6,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
+from app.core.compose_snapshot import snapshot_running_apps
 from app.core.database import add_resource_samples, add_update_history, get_all_update_cache, get_public_settings, set_setting
 from app.core.docker_client import list_all_apps
 from app.core.registry_checker import check_all_updates
@@ -167,6 +168,15 @@ def configure_jobs() -> None:
         collect_self_update_result,  # hàm thường -> APScheduler chạy trong thread pool
         trigger=IntervalTrigger(minutes=1),
         id="self_update_result",
+        replace_existing=True,
+    )
+
+    # Ghi nhớ compose đang chạy tốt của từng app (để quay về đúng bản này nếu lần sửa/cập nhật sau bị hỏng)
+    scheduler.add_job(
+        snapshot_running_apps,
+        trigger=IntervalTrigger(minutes=30),
+        id="compose_snapshot",
+        next_run_time=datetime.now(timezone.utc) + timedelta(minutes=3),
         replace_existing=True,
     )
 

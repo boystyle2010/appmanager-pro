@@ -46,7 +46,7 @@
         editModal: {
           open: false, loading: false, saving: false, tab: 'ui',
           app: null, composePath: '', rawYaml: '', ui: null, otherComposeFiles: [],
-          backups: [], feedback: '', feedbackOk: true,
+          backups: [], feedback: '', feedbackOk: true, feedbackLogs: '',
           sec: { container: true, ports: true, volumes: false, env: false, casaos: false }
         },
         uninstallModal: {
@@ -62,7 +62,7 @@
           auto_update_time: '03:30', prune_old_images: true, auto_rollback: true, health_wait_seconds: 25,
           auto_prune_enabled: false, auto_prune_freq: 'weekly', auto_prune_weekday: 6, auto_prune_time: '04:00',
           auto_prune_images: 'dangling', auto_prune_cache: true, auto_prune_next_run: '', auto_prune_last: '',
-          backup_before_update: false, backup_max_mb: 2048, backup_keep: 3,
+          backup_before_update: true, backup_max_mb: 2048, backup_keep: 3,
           github_token: '', has_github_token: false
         },
         storageState: { loading: false, pruning: false, data: null, lastFreed: '' },
@@ -773,7 +773,7 @@
           this.editModal = {
             open: true, loading: true, saving: false, tab: 'ui',
             app, composePath: '', rawYaml: '', ui: null, otherComposeFiles: [], lastService: '', yamlTouched: false,
-            backups: [], feedback: '', feedbackOk: true,
+            backups: [], feedback: '', feedbackOk: true, feedbackLogs: '',
             sec: { container: true, ports: true, volumes: false, env: false, casaos: false }
           };
           await this._loadCompose(app.name);
@@ -916,7 +916,13 @@
               `/api/apps/${encodeURIComponent(m.app.name)}/compose/apply`,
               { raw_yaml: m.rawYaml }
             );
-            if (!res.ok) throw new Error(data.detail || 'Apply failed');
+            m.feedbackLogs = '';
+            if (!res.ok) {
+              m.feedbackLogs = data.logs || '';
+              if (data.backups) m.backups = data.backups;
+              if (data.logs) this.loadApps();  // compose cũ đã được trả lại -> làm mới trạng thái app
+              throw new Error(data.detail || 'Apply failed');
+            }
             if (data.backups) m.backups = data.backups;
             m.feedbackOk = true;
             m.feedback = this.lang === 'vi' ? 'Đã lưu & áp dụng cấu hình ✓' : 'Configuration saved & applied ✓';

@@ -16,7 +16,7 @@ DEFAULT_SETTINGS = {
     "github_token": "",
     "auto_rollback": "true",
     "health_wait_seconds": "25",
-    "backup_before_update": "false",
+    "backup_before_update": "true",
     "backup_max_mb": "2048",
     "backup_keep": "3",
 }
@@ -199,7 +199,7 @@ def get_public_settings() -> dict[str, Any]:
         "auto_prune_images": get_setting("auto_prune_images", "dangling"),
         "auto_prune_cache": get_setting("auto_prune_cache", "true").lower() == "true",
         "auto_prune_last": get_setting("auto_prune_last", ""),
-        "backup_before_update": get_setting("backup_before_update", "false").lower() == "true",
+        "backup_before_update": get_setting("backup_before_update", "true").lower() == "true",
         "backup_max_mb": int(get_setting("backup_max_mb", "2048") or 2048),
         "backup_keep": int(get_setting("backup_keep", "3") or 3),
         "has_github_token": bool(get_setting("github_token", "").strip()),

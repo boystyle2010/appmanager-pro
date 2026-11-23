@@ -12,7 +12,8 @@ Các bước:
   2. docker compose up -d --force-recreate --no-deps <service>  (luôn container mới -> đếm restart chính xác)
   3. Chờ container mới chạy ổn: đang chạy, không restart, healthcheck không "unhealthy",
      và trang /login trả lời trong chính container.
-  4. Hỏng -> lưu log container hỏng -> trả compose cũ + gắn lại tag cho image cũ -> tạo lại -> kiểm tra lại.
+  4. Hỏng -> lưu log container hỏng -> dừng bản hỏng, trả database + compose cũ, gắn lại tag image cũ
+     -> tạo lại -> kiểm tra lại.
 """
 from __future__ import annotations
 
@@ -139,6 +140,27 @@ def restore_compose(job: dict[str, Any]) -> None:
         log(f"[ERROR] Cannot restore docker-compose.yml: {exc}")
 
 
+def restore_db(client, job: dict[str, Any]) -> None:
+    """Dừng bản hỏng rồi trả database về bản sao lưu ngay trước khi cập nhật (kèm xoá -wal/-shm cũ)."""
+    bak = DATA_DIR / (job.get("db_backup") or "")
+    db = DATA_DIR / (job.get("db_name") or "")
+    if not job.get("db_backup") or not bak.is_file() or not job.get("db_name"):
+        return
+    try:
+        client.containers.get(job["container"]).stop(timeout=20)
+    except Exception:
+        pass
+    try:
+        for suffix in ("-wal", "-shm"):
+            Path(str(db) + suffix).unlink(missing_ok=True)
+        tmp = db.with_name(db.name + ".restore")
+        tmp.write_bytes(bak.read_bytes())
+        tmp.replace(db)
+        log("==> AppManager database restored to the copy taken before the update")
+    except Exception as exc:
+        log(f"[ERROR] Cannot restore the database: {exc}")
+
+
 def main() -> int:
     import docker  # có sẵn trong image
 
@@ -183,9 +205,10 @@ def main() -> int:
         write_result(job, "success", "Updated" if job.get("mode") == "update" else "Recreated")
         return 0
 
-    # ---- Rollback ----
+    # ---- Rollback: compose + image + database của AppManager ----
     diagnostics(client, name)
     log("==> Rolling back to the previous version...")
+    restore_db(client, job)
     restore_compose(job)
     repo, tag = split_ref(job.get("image_ref") or "")
     if repo and job.get("old_image_id"):

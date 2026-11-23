@@ -8,14 +8,21 @@ from typing import Any, Awaitable, Callable, Optional
 
 from ruamel.yaml import YAML
 
-from app.core.database import DATA_DIR
+from app.core.database import DATA_DIR, get_setting
 from app.core.docker_client import (
     APPDATA_DIR,
     CASAOS_APPS_DIR,
     get_app_by_name,
     get_docker_client,
 )
-from app.core.updater import _trigger_self_update_helper
+from app.core.compose_snapshot import rollback_compose_text, save_good
+from app.core.updater import (
+    _container_attrs_sync,
+    _diagnostics_sync,
+    _probe_container_sync,
+    _trigger_self_update_helper,
+    _wait_healthy,
+)
 
 BACKUPS_ROOT = DATA_DIR / "backups"
 SECRET_KEY_WORDS = ("PASS", "SECRET", "TOKEN", "API_KEY", "APIKEY", "AUTH_KEY", "PRIVATE_KEY")
@@ -621,7 +628,35 @@ async def get_compose_state(container_name: str, service: Optional[str] = None) 
     }
 
 
+def _container_name_after_edit(raw_yaml: str, app_info: dict[str, Any]) -> str:
+    """Tên container sau khi áp dụng compose mới (người dùng có thể đổi container_name)."""
+    try:
+        data = _make_yaml().load(raw_yaml) or {}
+        svc = (data.get("services") or {}).get(app_info.get("service") or "") or {}
+        name = str(svc.get("container_name") or "").strip()
+        if name:
+            return name
+    except Exception:
+        pass
+    return app_info["name"]
+
+
+async def _compose_up(compose_path: str, compose_dir: str, extra: Optional[list[str]] = None) -> tuple[int, str]:
+    proc = await asyncio.create_subprocess_exec(
+        "docker", "compose", "-f", compose_path, "up", "-d", "--remove-orphans", *(extra or []),
+        cwd=compose_dir,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+    )
+    out, _ = await proc.communicate()
+    return proc.returncode or 0, out.decode("utf-8", errors="replace").strip()
+
+
 async def save_and_apply_compose(container_name: str, raw_yaml: str) -> dict[str, Any]:
+    """
+    Lưu & áp dụng compose, rồi KIỂM TRA app có chạy ổn không. Hỏng (up lỗi, thoát, restart liên tục,
+    unhealthy) -> trả docker-compose.yml về bản chạy tốt trước đó và tạo lại app.
+    """
     app_info = await asyncio.to_thread(get_app_by_name, container_name)
     if not app_info:
         return {"ok": False, "error": "Container not found"}
@@ -638,6 +673,8 @@ async def save_and_apply_compose(container_name: str, raw_yaml: str) -> dict[str
         return {"ok": False, "error": valid_msg}
 
     original_text = path.read_text(encoding="utf-8")
+    attrs = await asyncio.to_thread(_container_attrs_sync, container_name)
+    rollback_text, _note = rollback_compose_text(container_name, compose_path, original_text, attrs)
     backup_file = _create_backup(container_name, original_text)
     path.write_text(raw_yaml, encoding="utf-8")
 
@@ -647,53 +684,77 @@ async def save_and_apply_compose(container_name: str, raw_yaml: str) -> dict[str
                 lambda: _trigger_self_update_helper(
                     compose_path, mode="recreate", title=app_info.get("title") or "AppManager Pro",
                     from_version=app_info.get("version") or "", to_version="compose edit",
-                    compose_original=original_text,
+                    compose_original=rollback_text,
                 )
             )
             return {
                 "ok": True,
                 "self_update": True,
                 "backup": backup_file,
-                "logs": f"Saved backup {backup_file}. Recreating AppManager Pro via helper...",
+                "logs": f"Saved backup {backup_file}. Recreating AppManager Pro via helper "
+                        "(it is checked and rolled back automatically if it does not start)...",
             }
         except Exception as exc:
             path.write_text(original_text, encoding="utf-8")
             return {"ok": False, "error": f"Self-recreate failed: {exc}"}
 
-    proc = await asyncio.create_subprocess_exec(
-        "docker", "compose", "-f", compose_path, "up", "-d", "--remove-orphans",
-        cwd=compose_dir,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT,
-    )
-    out, _ = await proc.communicate()
-    logs = out.decode("utf-8", errors="replace").strip()
+    lines: list[str] = []
 
-    if proc.returncode != 0:
-        # Trả file về bản cũ rồi chạy lại để app không bị dừng giữa chừng
-        path.write_text(original_text, encoding="utf-8")
-        rb = await asyncio.create_subprocess_exec(
-            "docker", "compose", "-f", compose_path, "up", "-d", "--remove-orphans",
-            cwd=compose_dir,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        rb_out, _ = await rb.communicate()
-        rb_logs = rb_out.decode("utf-8", errors="replace").strip()
-        restored = rb.returncode == 0
+    async def collect(text: str) -> None:
+        lines.append(text.rstrip("\n"))
+
+    try:
+        baseline = await asyncio.to_thread(_probe_container_sync, container_name)
+    except Exception:
+        baseline = None
+    try:
+        window = max(10, min(120, int(get_setting("health_wait_seconds", "25"))))
+    except Exception:
+        window = 25
+
+    rc, up_logs = await _compose_up(compose_path, compose_dir)
+    lines.append(up_logs)
+    new_name = _container_name_after_edit(raw_yaml, app_info)
+    if rc == 0:
+        lines.append(f"==> Checking the app for {window}s...")
+        healthy, reason = await _wait_healthy(new_name, collect, window, baseline)
+    else:
+        healthy, reason = False, f"docker compose up failed (exit {rc})"
+    lines.append(f"==> {reason}")
+
+    if healthy:
+        await asyncio.to_thread(save_good, new_name, compose_path, raw_yaml)
         return {
-            "ok": False,
-            "error": "docker compose up failed — previous compose restored and the app was started again."
-            if restored
-            else "docker compose up failed — previous compose restored, but restarting the app also failed. Check the logs.",
-            "logs": logs + ("\n\n--- Restore ---\n" + rb_logs if rb_logs else ""),
+            "ok": True,
             "backup": backup_file,
+            "logs": "\n".join(x for x in lines if x) or "Container recreated successfully.",
+            "backups": list_backups(container_name),
         }
 
+    # ---- Hỏng: lưu chẩn đoán, trả compose về bản chạy tốt, tạo lại app ----
+    if rc == 0:
+        try:
+            lines.append(await asyncio.to_thread(_diagnostics_sync, new_name))
+        except Exception:
+            pass
+    path.write_text(rollback_text, encoding="utf-8")
+    lines.append("==> The app did not start correctly with the new compose. Restoring the previous docker-compose.yml...")
+    rb_rc, rb_logs = await _compose_up(compose_path, compose_dir, ["--force-recreate"])
+    lines.append(rb_logs)
+    if rb_rc == 0:
+        rb_ok, rb_reason = await _wait_healthy(container_name, collect, window)
+    else:
+        rb_ok, rb_reason = False, f"docker compose up failed (exit {rb_rc})"
+    lines.append(f"==> Previous compose: {rb_reason}")
     return {
-        "ok": True,
+        "ok": False,
+        "error": (f"The app did not start with the new compose ({reason}). The previous docker-compose.yml "
+                  "was restored and the app is running again.")
+        if rb_ok
+        else (f"The app did not start with the new compose ({reason}). The previous docker-compose.yml was "
+              f"restored, but the app still does not start ({rb_reason}). Check the logs."),
+        "logs": "\n".join(x for x in lines if x),
         "backup": backup_file,
-        "logs": logs or "Container recreated successfully.",
         "backups": list_backups(container_name),
     }
 

@@ -14,6 +14,7 @@ from app.core.database import (
     get_last_update_history_id,
     get_setting,
 )
+from app.core.compose_snapshot import rollback_compose_text, save_good
 from app.core.docker_client import get_app_by_name, get_docker_client, list_all_apps
 from app.core.registry_checker import check_one_app_by_name
 
@@ -157,12 +158,12 @@ async def _rollback_to_previous(
     container_name: str,
     image_ref: str,
     old_image_id: str,
-    bumped: bool,
-    backup_path: str,
+    rollback_compose: str,
     send_log: LogCallback,
     window: int,
     data_backup: str = "",
 ) -> tuple[bool, str]:
+    """Quay về TOÀN BỘ trạng thái trước cập nhật: dữ liệu (nếu có sao lưu) + docker-compose.yml + image cũ."""
     await send_log("\n==> New version is unhealthy. Rolling back to the previous version...\n")
     # Bản mới có thể đã đổi cấu trúc dữ liệu -> bản cũ chạy với dữ liệu đó sẽ hỏng. Có bản sao lưu
     # dữ liệu từ ngay trước khi cập nhật thì trả dữ liệu về luôn (giữ dữ liệu hiện tại ở *.pre-restore).
@@ -180,19 +181,26 @@ async def _rollback_to_previous(
             await send_log(f"==> {res.get('message')}\n")
         else:
             await send_log(f"==> [WARN] Data restore failed: {res.get('error')} — rolling back the version only.\n")
-    if bumped and backup_path:
-        await asyncio.to_thread(_restore_compose_backup, compose_path, backup_path)
-        await send_log("==> Restored docker-compose.yml from backup.\n")
-    elif old_image_id:
+    compose_changed = False
+    try:
+        if Path(compose_path).read_text(encoding="utf-8") != rollback_compose:
+            await asyncio.to_thread(_write_text, compose_path, rollback_compose)
+            compose_changed = True
+            await send_log("==> docker-compose.yml restored to the previous working version.\n")
+    except Exception as exc:
+        await send_log(f"[ERROR] Cannot restore docker-compose.yml: {exc}\n")
+    if old_image_id:
         try:
             err = await asyncio.to_thread(_retag_image_sync, old_image_id, image_ref)
         except Exception as exc:
             err = str(exc)
         if err:
-            await send_log(f"[ERROR] Cannot restore previous image: {err}\n")
-            return False, err
-        await send_log(f"==> Previous image {old_image_id[:19]} re-tagged as {image_ref}\n")
-    else:
+            await send_log(f"[WARN] Cannot re-tag previous image: {err}\n")
+            if not compose_changed:
+                return False, f"Cannot restore previous image: {err}"
+        else:
+            await send_log(f"==> Previous image {old_image_id[:19]} re-tagged as {image_ref}\n")
+    elif not compose_changed:
         return False, "Previous image is unknown"
 
     cmd = ["docker", "compose", "-f", compose_path, "up", "-d", "--force-recreate", "--no-deps"]
@@ -278,6 +286,21 @@ def _trigger_self_update_helper(
         "prune_old_image": get_setting("prune_old_images", "true").lower() == "true",
         "started": int(time.time()),
     }
+    # Sao lưu database (cài đặt, tài khoản, lịch sử) — bản mới có thể đổi cấu trúc; rollback sẽ trả lại.
+    import sqlite3
+
+    from app.core.database import DB_PATH
+
+    db_bak = DATA_DIR / "self-update-db.bak"
+    src = sqlite3.connect(str(DB_PATH))
+    dst = sqlite3.connect(str(db_bak))
+    try:
+        src.backup(dst)
+    finally:
+        dst.close()
+        src.close()
+    job["db_backup"] = db_bak.name
+    job["db_name"] = DB_PATH.name
     SELF_JOB_FILE.write_text(json.dumps(job), encoding="utf-8")
     try:
         client.containers.run(
@@ -388,6 +411,17 @@ def _bump_compose_image_tag(
     return True, new_img, str(backup_path), ""
 
 
+def _write_text(path: str, text: str) -> None:
+    Path(path).write_text(text, encoding="utf-8")
+
+
+def _container_attrs_sync(name: str) -> dict[str, Any]:
+    try:
+        return get_docker_client().containers.get(name).attrs or {}
+    except Exception:
+        return {}
+
+
 def _restore_compose_backup(compose_path: str, backup_path: str) -> None:
     if backup_path and Path(backup_path).exists():
         Path(compose_path).write_text(
@@ -468,6 +502,14 @@ async def _update_app_stream_impl(
     compose_dir = str(Path(compose_path).parent)
     service = app_info.get("service") or ""
 
+    # Bản compose để quay về nếu hỏng: file hiện tại, hoặc bản chạy tốt gần nhất nếu file đã bị sửa
+    # sau lúc tạo container (chỗ sửa đó chưa từng chạy -> có thể chính nó gây lỗi).
+    pre_compose = Path(compose_path).read_text(encoding="utf-8")
+    attrs = await asyncio.to_thread(_container_attrs_sync, container_name)
+    rollback_compose, drift_note = rollback_compose_text(container_name, compose_path, pre_compose, attrs)
+    if drift_note:
+        await send_log(f"==> [NOTE] {drift_note}.\n")
+
     # Nếu app đang ghim cứng tag -> sao lưu .bak và nâng tag trong docker-compose.yml
     bumped = False
     backup_path = ""
@@ -495,8 +537,7 @@ async def _update_app_stream_impl(
             await asyncio.to_thread(
                 lambda: _trigger_self_update_helper(
                     compose_path, mode="update", title=title, from_version=from_ver, to_version=target_ver,
-                    compose_original=(Path(backup_path).read_text(encoding="utf-8") if bumped and backup_path else None),
-                    history_mode=mode,
+                    compose_original=rollback_compose, history_mode=mode,
                 )
             )
             await send_log(
@@ -506,9 +547,7 @@ async def _update_app_stream_impl(
             await send_log("__SELF_UPDATE_RELOAD__\n")
             return {"ok": True, "self_update": True, "to_version": target_ver}
         except Exception as exc:
-            if bumped and backup_path:
-                await asyncio.to_thread(_restore_compose_backup, compose_path, backup_path)
-                await send_log("==> Rolled back docker-compose.yml from backup.\n")
+            await asyncio.to_thread(_write_text, compose_path, pre_compose)
             await send_log(f"[ERROR] Self-update failed: {exc}\n")
             add_update_history(
                 container_name, title, from_ver, target_ver, mode, "failed", str(exc)
@@ -520,7 +559,7 @@ async def _update_app_stream_impl(
 
     # Sao lưu dữ liệu app trước khi cập nhật (tuỳ chọn trong Settings)
     backup_name = ""
-    if get_setting("backup_before_update", "false").lower() == "true" and app_info.get("appdata_path"):
+    if get_setting("backup_before_update", "true").lower() == "true" and app_info.get("appdata_path"):
         from app.core.app_backup import create_backup
 
         await send_log(f"==> Backing up app data: {app_info['appdata_path']} ...\n")
@@ -532,12 +571,16 @@ async def _update_app_stream_impl(
         bres = await asyncio.to_thread(
             create_backup, container_name, app_info["appdata_path"], from_ver, max_mb, keep,
             image_id=old_image_id, image_ref=app_info["image"], compose_path=compose_path, service=service,
+            compose_text=rollback_compose,
         )
         if bres.get("ok"):
             backup_name = bres["file"]
             await send_log(f"==> {bres['message']} ({bres.get('size', '')})\n\n")
         else:
-            await send_log(f"==> [WARN] {bres.get('message')} — continuing without data backup.\n\n")
+            await send_log(
+                f"==> [WARN] {bres.get('message')} — continuing without data backup "
+                "(a failed update still restores docker-compose.yml and the previous image).\n\n"
+            )
 
     # Ghi nhận trạng thái container trước khi cập nhật (để kiểm tra sức khoẻ chính xác)
     try:
@@ -552,9 +595,9 @@ async def _update_app_stream_impl(
     await send_log(f"$ {' '.join(pull_cmd)}\n")
     rc = await _run_cmd_stream(pull_cmd, compose_dir, send_log)
     if rc != 0:
-        if bumped and backup_path:
-            await asyncio.to_thread(_restore_compose_backup, compose_path, backup_path)
-            await send_log("==> Rolled back docker-compose.yml from backup.\n")
+        if bumped:
+            await asyncio.to_thread(_write_text, compose_path, pre_compose)
+            await send_log("==> docker-compose.yml restored (nothing else was changed).\n")
         await send_log(f"\n[ERROR] docker compose pull failed (exit {rc}).\n")
         add_update_history(
             container_name, title, from_ver, target_ver, mode, "failed", f"Pull exit {rc}"
@@ -567,24 +610,19 @@ async def _update_app_stream_impl(
         up_cmd.append(service)
     await send_log(f"\n$ {' '.join(up_cmd)}\n")
     rc2 = await _run_cmd_stream(up_cmd, compose_dir, send_log)
-    if rc2 != 0:
-        if bumped and backup_path:
-            await asyncio.to_thread(_restore_compose_backup, compose_path, backup_path)
-            await send_log("==> Rolled back docker-compose.yml from backup.\n")
-        await send_log(f"\n[ERROR] docker compose up failed (exit {rc2}).\n")
-        add_update_history(
-            container_name, title, from_ver, target_ver, mode, "failed", f"Up exit {rc2}"
-        )
-        return {"ok": False, "error": f"Recreate failed (exit {rc2})"}
 
-    # Bước 3: Kiểm tra sức khoẻ container mới; hỏng thì tự quay về bản cũ
+    # Bước 3: Kiểm tra sức khoẻ container mới; hỏng (kể cả "up" lỗi) thì tự quay về bản cũ
     try:
         window = max(10, min(120, int(get_setting("health_wait_seconds", "25"))))
     except Exception:
         window = 25
-    await send_log(f"\n==> Checking the new container for {window}s...\n")
-    healthy, reason = await _wait_healthy(container_name, send_log, window, baseline)
-    await send_log(f"==> {reason}\n")
+    if rc2 != 0:
+        healthy, reason = False, f"docker compose up failed (exit {rc2})"
+        await send_log(f"\n[ERROR] {reason}\n")
+    else:
+        await send_log(f"\n==> Checking the new container for {window}s...\n")
+        healthy, reason = await _wait_healthy(container_name, send_log, window, baseline)
+        await send_log(f"==> {reason}\n")
     if not healthy:
         await _send_diagnostics(container_name, send_log)
 
@@ -593,7 +631,7 @@ async def _update_app_stream_impl(
         rb_ok, rb_reason = await _rollback_to_previous(
             compose_path=compose_path, compose_dir=compose_dir, service=service,
             container_name=container_name, image_ref=app_info["image"],
-            old_image_id=old_image_id, bumped=bumped, backup_path=backup_path,
+            old_image_id=old_image_id, rollback_compose=rollback_compose,
             send_log=send_log, window=window, data_backup=backup_name,
         )
         if rb_ok:
@@ -612,6 +650,9 @@ async def _update_app_stream_impl(
     new_ver = refreshed["version"] if refreshed else target_ver
     new_image_id = refreshed["image_id"] if refreshed else ""
     new_status = refreshed["status"] if refreshed else "unknown"
+
+    if healthy:
+        await asyncio.to_thread(save_good, container_name, compose_path)
 
     # Chỉ xoá image cũ khi bản mới đã chạy ổn (để còn đường quay về)
     if healthy and get_setting("prune_old_images", "true").lower() == "true":

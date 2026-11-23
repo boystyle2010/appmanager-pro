@@ -8,3 +8,7 @@
 - The compose editor keeps extra settings of long-syntax ports and volumes (e.g. `bind.create_host_path`, `mode`) instead of dropping them, and no longer adds empty `icon`/`port_map` values
 - The compose editor warns when the app has another compose file with different content (e.g. a CasaOS copy and one in /DATA/AppData), which can bring back an old configuration
 - AppManager Pro now checks itself after a self-update or an edit of its own compose file: if the new version does not start (web UI not answering, crash loop, unhealthy), it automatically goes back to the previous image and compose file; the result and full log appear in Settings → History
+- A failed update now restores everything for every app: the app data backed up just before the update, the docker-compose.yml that last ran correctly (also when the file had been edited but never applied), and the previous image; "docker compose up" errors are rolled back too
+- Save & Apply in the compose editor checks that the app really starts; if not, the previous docker-compose.yml is restored automatically and the log is shown in the editor
+- AppManager Pro backs up its own database before a self-update and restores it if the new version is rolled back
+- "Back up app data before updating" is now on by default for new installs
