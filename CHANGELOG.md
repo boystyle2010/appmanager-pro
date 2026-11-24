@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.12.0
+
+*Released: 2026-11-24*
+
+### 📦 Component & Version Matrix
+
+- **App Release:** Bumped from `v0.11.0` ➡️ `v0.12.0`
+- **Supported Architectures:** `linux/amd64` (x86_64) & `linux/arm64` (ARM64) *(Multi-arch GHCR Image)*
+- **Python Base Image:** `python 3.15.2`
+- **Docker CLI:** `docker 29.10.0`
+- **Core Python Stack:** `FastAPI 0.165.0` • `Uvicorn 0.54.0` • `Docker SDK 7.2.0` • `ruamel.yaml 0.19.1` • `Argon2 25.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.28.1` • `APScheduler 3.11.3` • `segno 1.6.6`
+- **Frontend Libraries:** `Alpine.js 3.17.5` • `Tailwind CSS 4.3.5` • `marked 18.2.1` • `DOMPurify 3.5.0`
+
+### 🚀 What's Changed
+
+- Release channels: channels without an image for the server's CPU architecture are hidden (e.g. beszel:dev is amd64-only); a pre-release channel without a version number shows its build date and its changelog lists the commits on the main branch since the last stable release instead of the stable release notes
+- Images are also published to Docker Hub (boystyle2010/appmanager-pro) with the same tags; the Docker Hub page description is synced from the README
+- Copyright line (© boystyle2010 · version · MIT License · GitHub) at the bottom of the dashboard and on the sign-in page; README rewritten for the new features
+- Settings → About (ⓘ tab): version and update status, image in use, links to source code, releases, Docker Hub, GHCR and issues, MIT license and credits
+- Licensing: THIRD_PARTY_NOTICES.md and the full license texts of bundled components (Alpine.js, Tailwind CSS, marked, DOMPurify, Plus Jakarta Sans & JetBrains Mono fonts, Docker CLI & Compose) are added to the repository and copied into the image at /app/licenses; Settings → About links to them
+
 ## 0.11.0
 
 *Released: 2026-11-23*
