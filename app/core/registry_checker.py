@@ -956,6 +956,11 @@ async def suggest_image_tags(image_ref: str, limit: int = 3) -> dict[str, Any]:
             variant = ""  # vd "ubuntu-{}": biến thể nằm phía trước, không suy ra được
     else:
         prefixes, variant, n_parts, pattern = {"", "v"}, "", None, "{}"
+        # Tag theo nhánh không có số phiên bản (scrutiny "master-omnibus", "develop-alpine"): biến thể là phần sau
+        # tên nhánh -> gợi ý v0.10.0-omnibus... cùng biến thể
+        m_branch = re.match(r"^[A-Za-z]+(-[A-Za-z][A-Za-z0-9._-]*)$", tag)
+        if m_branch:
+            variant = re.sub(r"\d+", "#", m_branch.group(1).lower())
     word = re.sub(r"[#.]+", "", variant.strip("-")) if variant else ""
     token_cache: dict[str, str] = {}
     scope_key = f"{registry}/{repo}"

@@ -23,7 +23,7 @@ Hướng dẫn cho Claude khi làm việc trên repo này (Claude Code / phiên 
 
 ## Quy tắc quan trọng
 - **Không sửa tay phiên bản** trong `Dockerfile`, `requirements.txt`, `scripts/fetch_vendor.py`, link CDN dự phòng, `APP_VERSION`, `CHANGELOG.md` — bot (`scripts/auto_update.py`) quản lý và tự commit. Luôn `git pull` trước khi sửa.
-- Changelog **chỉ** ghi thay đổi thành phần nền. Ghi chú tự viết cho bản kế tiếp → thêm dòng `- ...` vào `RELEASE_NOTES_NEXT.md` (không tự tạo release).
+- Changelog **chỉ** ghi thay đổi thành phần nền. Ghi chú tự viết cho bản kế tiếp → thêm dòng `- ...` **bằng tiếng Anh** vào `RELEASE_NOTES_NEXT.md` (không tự tạo release). Changelog / release notes luôn viết tiếng Anh.
 - Starlette 1.0: dùng `templates.TemplateResponse(request, "x.html", {...})`.
 - Mọi POST/PUT/PATCH/DELETE `/api/*` và WebSocket phải qua kiểm tra Origin (`origin_allowed`). Ghi audit log (`audit(...)`) cho hành động quan trọng.
 - Tailwind v4: dùng `shadow-xs` (thay `shadow-sm` cũ), `backdrop-blur-xs`, `bg-linear-to-*`.

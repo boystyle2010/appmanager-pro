@@ -1,4 +1,3 @@
-# Ghi chú cho bản phát hành kế tiếp — mỗi dòng bắt đầu bằng "- "
-- File compose trùng: biểu tượng trên thẻ chỉ mất khi đã Gộp (Merge); Bỏ qua (Skip) chỉ ẩn cảnh báo vàng bên trong, biểu tượng chuyển sang màu xám và cảnh báo hiện lại nếu một file thay đổi.
-- Đã Bỏ qua cảnh báo compose trùng vẫn Gộp được: Edit Config hiện một dòng xám kèm nút Gộp (Merge).
-- Biểu tượng compose trùng màu xám (đã Bỏ qua): bấm vào mở popup cảnh báo ban đầu với nút Gộp / Huỷ.
+# Notes for the next release — one line per change starting with "- ", written in English
+- Duplicate compose files: the card badge disappears only after Merge. Skip hides the warning and turns the badge grey; tapping the grey badge opens the original warning with Merge / Cancel. The warning returns if one of the files changes.
+- Choose version: apps whose tag is a branch without a version number (e.g. scrutiny `master-omnibus`) now list the versioned tags of the same variant (`v0.10.0-omnibus`...).

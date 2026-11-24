@@ -2357,10 +2357,10 @@
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
           </svg>
         </div>
-        <h3 class="font-bold text-[15px] leading-tight min-w-0" x-text="t('composeDuplicateTitle')"></h3>
+        <h3 class="font-bold text-[15px] leading-tight truncate min-w-0" x-text="dupPopup.app?.title"></h3>
       </div>
       <div class="overflow-y-auto min-h-0 space-y-3 text-[11.5px]">
-        <p class="text-[13px] font-semibold truncate" x-text="dupPopup.app?.title"></p>
+        <p class="text-[13px] font-semibold text-amber-300 leading-snug" x-text="t('composeDuplicateTitle')"></p>
         <div x-show="dupPopup.loading" class="text-xs text-muted" x-text="t('loadingDetails')"></div>
         <div x-show="!dupPopup.loading" class="rounded-2xl border border-amber-400/40 bg-amber-500/10 p-3 space-y-1.5 text-amber-200">
           <p class="font-mono-code text-[10.5px] break-all"><span class="text-emerald-300 font-sans font-semibold" x-text="t('dupRunningFile') + ': '"></span><span x-text="dupPopup.composePath"></span></p>

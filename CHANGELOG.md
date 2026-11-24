@@ -22,8 +22,8 @@
 
 ### 🚀 What's Changed
 
-- Chọn phiên bản: mọi app (kể cả AppManager) có thể chuyển lên hoặc xuống một phiên bản ổn định gần đây trên registry; xem changelog trước, rồi cập nhật qua quy trình thường (sao lưu, kiểm tra sức khoẻ, tự rollback). Mở từ cửa sổ Cập nhật hoặc menu ⋯.
-- Sau khi Gộp/Bỏ qua file compose trùng, biểu tượng trên thẻ app biến mất ngay (không cần tải lại trang).
+- Choose version: every app (AppManager included) can switch up or down to a recent stable version from the registry; the changelog is shown first, then the normal update flow runs (backup, health check, automatic rollback). Open it from the Update window or the ⋯ menu.
+- The duplicate-compose badge on the app card now updates right after Merge/Skip (no page reload needed).
 
 ## 0.12.1
 
