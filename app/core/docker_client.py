@@ -298,11 +298,13 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
         config_files = labels.get("com.docker.compose.project.config_files") or ""
         service = labels.get("com.docker.compose.service") or ""
 
+        # Chỉ container do Docker Compose tạo mới được ghép với app CasaOS. Container docker run trùng tên với một app
+        # CasaOS cũ (file còn sót trong /var/lib/casaos/apps) KHÔNG được coi là app compose đó (sẽ chạy nhầm file cũ).
         meta: Optional[dict[str, Any]] = (
             casaos_meta_map.get(working_dir)
             or casaos_meta_map.get(project)
             or casaos_meta_map.get(c.name.lower())
-        )
+        ) if project else None
 
         is_self = (
             c.id.startswith(own_hostname)

@@ -236,6 +236,7 @@ def create_backup(
     compose_path: str = "",
     service: str = "",
     compose_text: str | None = None,
+    run_snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     # Luôn tạo bản sao lưu: tối thiểu là PHIÊN BẢN (image + digest) + docker-compose.yml để khôi phục được,
     # kể cả app không có thư mục cấu hình trong /DATA/AppData (vd cloudflared chỉ có biến môi trường).
@@ -304,6 +305,8 @@ def create_backup(
             "skipped": skipped[:200], "skipped_count": len(skipped),
             "image_id": image_id, "image_ref": image_ref, "image_digest": image_digest,
             "compose_path": compose_path, "service": service, "compose_text": compose_text,
+            # container docker run: cấu hình đầy đủ lúc sao lưu (để tạo lại đúng container, kể cả khi đã bị xoá)
+            "run_snapshot": run_snapshot,
         }),
         encoding="utf-8",
     )
@@ -311,7 +314,7 @@ def create_backup(
     return {
         "ok": True, "file": name, "size": format_bytes(target.stat().st_size),
         "message": (f"Backup saved: {name} ({len(files)} settings file(s), {format_bytes(size)})" if files
-                    else f"Backup saved: {name} (image + docker-compose.yml only; {note})"),
+                    else f"Backup saved: {name} (image + {'container settings' if run_snapshot else 'docker-compose.yml'} only; {note})"),
         "roots": roots, "skipped_mounts": skipped_mounts, "skipped": skipped,
     }
 
@@ -446,6 +449,8 @@ def _restore_version(client, meta: dict[str, Any], current_image_id: str, log: l
     compose_path = meta.get("compose_path") or ""
     compose_text = meta.get("compose_text")
     service = meta.get("service") or ""
+    if meta.get("run_snapshot") and not compose_path:
+        return _restore_run_version(client, meta, current_image_id, log)
     if not compose_path or not Path(compose_path).is_file() or not service:
         if image_id and image_id != current_image_id:
             return False, "Image was not changed: docker-compose.yml of the app is unknown."
@@ -496,6 +501,39 @@ def _restore_version(client, meta: dict[str, Any], current_image_id: str, log: l
         raise RuntimeError(f"Recreating the container failed (exit {proc.returncode}).")
     msg = "; ".join(notes)
     return True, (msg[:1].upper() + msg[1:] + ".") if msg else ""
+
+
+def _restore_run_version(client, meta: dict[str, Any], current_image_id: str, log: list[str]) -> tuple[bool, str]:
+    """Container docker run: đưa image + cấu hình container về đúng lúc sao lưu (tạo lại từ bản cấu hình đã lưu)."""
+    from app.core.run_manager import recreate_from_snapshot_sync
+
+    snap = meta["run_snapshot"]
+    name = (snap.get("attrs", {}).get("Name") or "").lstrip("/")
+    image_id = meta.get("image_id") or ""
+    image_ref = meta.get("image_ref") or (snap.get("attrs", {}).get("Config") or {}).get("Image") or ""
+    version = meta.get("version") or image_ref
+    try:
+        exists = True
+        client.containers.get(name)
+    except Exception:
+        exists = False
+    if exists and image_id and image_id == current_image_id and not meta.get("force_recreate"):
+        log.append("Image already matches the backup; container settings kept.")
+        return False, ""
+    source_id = image_id if (image_id and _image_exists(client, image_id)) else ""
+    if image_id and not source_id:
+        log.append(f"Image {image_id[:19]} ({version}) is not on this host.")
+        source_id = _pull_previous_image(client, meta, log)
+    if not source_id:
+        return False, f"Image {version} is not available (removed from host and not pullable from the registry)."
+    repo, tag = _split_ref(image_ref)
+    if repo:
+        client.images.get(source_id).tag(repo, tag=tag)
+        log.append(f"Tagged {source_id[:19]} as {repo}:{tag}")
+    ok, msg = recreate_from_snapshot_sync(name, snap, image_ref or source_id, log)
+    if not ok:
+        raise RuntimeError(msg)
+    return True, f"Image {version} and container settings restored."
 
 
 def _safe_members(tar: tarfile.TarFile, root: Path) -> list[tarfile.TarInfo]:

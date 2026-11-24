@@ -805,6 +805,27 @@ async def api_compose_convert_preview(container_name: str, _: str = Depends(requ
         raise HTTPException(status_code=404, detail=f"Cannot read the container: {str(exc)[:200]}")
 
 
+@app.get("/api/apps/{container_name}/run-command")
+async def api_run_command(container_name: str, _: str = Depends(require_user)):
+    """Lệnh `docker run` tương đương với cấu hình hiện tại của container (chỉ xem / chép)."""
+    from app.core.docker_client import get_docker_client
+    from app.core.run_manager import docker_run_command
+
+    def build() -> str:
+        client = get_docker_client()
+        c = client.containers.get(container_name)
+        try:
+            img_cfg = client.images.get(c.attrs.get("Image")).attrs.get("Config") or {}
+        except Exception:
+            img_cfg = {}
+        return docker_run_command(c.attrs, img_cfg)
+
+    try:
+        return {"command": await asyncio.to_thread(build)}
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail=f"Cannot read the container: {str(exc)[:200]}")
+
+
 @app.post("/api/apps/{container_name}/compose-convert")
 async def api_compose_convert(
     container_name: str, payload: ComposeConvertPayload, request: Request, user: str = Depends(require_user)

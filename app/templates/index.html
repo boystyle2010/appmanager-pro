@@ -725,6 +725,20 @@
           <svg class="w-3.5 h-3.5 text-subtle" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
         </button>
 
+        <button x-show="actionSheet.app?.manage === 'run'"
+                @click="const a = actionSheet.app; closeActionSheet(); openRunCommand(a)" class="ios-row">
+          <span class="flex items-center gap-3 min-w-0">
+            <svg class="w-4 h-4 text-teal-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z"/>
+            </svg>
+            <span class="min-w-0 text-left">
+              <span class="block" x-text="t('runCommand')"></span>
+              <span class="block text-[10.5px] font-normal text-muted" x-text="t('runCommandDesc')"></span>
+            </span>
+          </span>
+          <svg class="w-3.5 h-3.5 text-subtle" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+        </button>
+
         <button x-show="actionSheet.app?.manage === 'run' && !actionSheet.app?.is_self"
                 @click="const a = actionSheet.app; closeActionSheet(); openComposeHint({ ...a, compose_issue: 'not_compose' })" class="ios-row">
           <span class="flex items-center gap-3 min-w-0">
@@ -2398,6 +2412,39 @@
     </div>
   </div>
 
+  <!-- POPUP: lệnh docker run tương đương -->
+  <div x-show="runCmd.open" x-cloak x-transition.opacity
+       class="fixed inset-0 z-[57] flex items-center justify-center p-4 sm:p-5 bg-black/70 backdrop-blur-md"
+       @click.self="runCmd.open = false" @keydown.escape.window="if (!confirmModal.open) runCmd.open = false">
+    <div class="glass-panel w-full max-w-md rounded-[26px] p-5 space-y-4 shadow-2xl max-h-[88dvh] flex flex-col">
+      <div class="flex items-center gap-3 shrink-0">
+        <template x-if="runCmd.app && runCmd.app.icon">
+          <div class="w-11 h-11 rounded-2xl shrink-0 overflow-hidden flex items-center justify-center shadow-md glass-icon-box p-1.5">
+            <img :src="runCmd.app.icon" class="w-full h-full object-contain rounded-xl" />
+          </div>
+        </template>
+        <template x-if="runCmd.app && !runCmd.app.icon">
+          <div class="w-11 h-11 rounded-2xl shrink-0 flex items-center justify-center text-white font-bold text-sm uppercase"
+               :class="avatarGradient(runCmd.app.title)" x-text="runCmd.app.title.slice(0, 2)"></div>
+        </template>
+        <div class="min-w-0">
+          <h3 class="font-bold text-[15px] leading-tight truncate" x-text="runCmd.app?.title"></h3>
+          <p class="text-[11px] text-muted font-mono-code truncate mt-0.5" x-text="shortImage(runCmd.app?.image)"></p>
+        </div>
+      </div>
+      <div class="overflow-y-auto min-h-0 space-y-2.5 text-[11.5px]">
+        <div class="flex items-end justify-between gap-2">
+          <p class="text-muted leading-relaxed" x-text="t('runCommandHelp')"></p>
+          <button type="button" @click="copyText(runCmd.text)" :disabled="!runCmd.text" class="glass-btn px-2.5 py-1 rounded-lg text-[10.5px] font-semibold shrink-0 disabled:opacity-50" x-text="t('copy')"></button>
+        </div>
+        <div x-show="runCmd.loading" class="text-xs text-muted" x-text="t('loadingDetails')"></div>
+        <pre x-show="runCmd.text" class="glass-terminal font-mono-code rounded-xl p-3 text-[10.5px] text-emerald-300 whitespace-pre-wrap break-all" x-text="runCmd.text"></pre>
+        <div x-show="runCmd.error" class="rounded-xl px-3 py-2 bg-rose-500/12 border border-rose-500/30 text-[11px] text-rose-300" x-text="runCmd.error"></div>
+      </div>
+      <button @click="runCmd.open = false" class="glass-btn w-full py-2.5 rounded-xl text-xs font-semibold shrink-0" x-text="t('close')"></button>
+    </div>
+  </div>
+
   <!-- POPUP: vì sao app không dùng được compose + khắc phục / chuyển sang compose -->
   <div x-show="composeHint.open" x-cloak x-transition.opacity
        class="fixed inset-0 z-[57] flex items-center justify-center p-4 sm:p-5 bg-black/70 backdrop-blur-md"
@@ -2723,7 +2770,7 @@
           </div>
           <h3 class="font-bold text-[15px] leading-tight truncate min-w-0" x-text="`${t('restore')}: ${restorePicker.app?.title || ''}`"></h3>
         </div>
-        <p class="text-xs text-muted leading-relaxed" x-text="t('restoreAppMsg')"></p>
+        <p class="text-xs text-muted leading-relaxed" x-text="t(restorePicker.app?.manage === 'run' ? 'restoreAppMsgRun' : 'restoreAppMsg')"></p>
       </div>
 
       <div class="space-y-2 overflow-y-auto min-h-0">
@@ -2784,7 +2831,7 @@
 
       <div x-show="restoreRun.running" class="space-y-2">
         <div class="h-1.5 rounded-full bg-white/10 overflow-hidden"><div class="h-full w-1/3 rounded-full bg-amber-400 restore-indeterminate"></div></div>
-        <p class="text-xs text-muted leading-relaxed" x-text="t('restoreRunning')"></p>
+        <p class="text-xs text-muted leading-relaxed" x-text="t(restoreRun.run ? 'restoreRunningRun' : 'restoreRunning')"></p>
       </div>
 
       <p x-show="!restoreRun.running" class="text-xs leading-relaxed"

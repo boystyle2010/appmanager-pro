@@ -9,3 +9,6 @@
 - docker run containers are now managed directly (badge `RUN`): Update, Update All, auto-update, Choose version and release channels recreate the container with the same settings (ports, volumes incl. anonymous ones, environment, networks with static IP and aliases, devices, capabilities, healthcheck…). The old container is kept stopped until the new one runs correctly and is started again on failure; containers sharing its network are reconnected. Converting to compose stays optional.
 - Containers managed by another tool (Swarm, Kubernetes, Unraid, Synology, Portainer agent) are shown as read-only (start / stop only).
 - Fix: after switching version or channel, the update window no longer shows the loading text and the switch button again.
+- docker run containers: backups before update now include the container settings; Restore brings back the image, the container settings and the config files (the old image is pulled again by digest if it was removed) and can recreate a deleted container. When the previous version cannot start after a failed update, its config files are restored from the backup automatically.
+- New "docker run command" view for docker run containers (equivalent command to view / copy).
+- Fix: a docker run container with the same name as an old CasaOS app (leftover file in /var/lib/casaos/apps) was taken for that compose app.

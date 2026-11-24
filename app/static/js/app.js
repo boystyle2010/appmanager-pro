@@ -80,6 +80,7 @@
         versionPicker: { open: false, loading: false, error: '', items: [], selected: '' },
         dataSetup: { open: false, step: 'intro', status: null, manualPath: '', busy: false, error: '', candidates: [], selected: [], elapsed: 0, source: '' },
         composeHint: { open: false, app: null, loading: false, busy: false, preview: null, folder: '', yaml: '', log: '', error: '', done: false },
+        runCmd: { open: false, app: null, text: '', loading: false, error: '' },
         dupPopup: { open: false, loading: false, busy: false, app: null, composePath: '', files: [] },
         updateAllExcluded: [],
         updateAllPicker: { open: false, selected: [], saving: false },
@@ -367,7 +368,7 @@
 
         async init() {
           this.$watch(() => [this.confirmModal, this.actionSheet, this.logModal, this.batchModal, this.deployModal, this.updateModal,
-                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker, this.restoreRun, this.updateAllPicker, this.versionPicker, this.dupPopup, this.dataSetup, this.composeHint].some(m => m && m.open), (open) => {
+                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker, this.restoreRun, this.updateAllPicker, this.versionPicker, this.dupPopup, this.dataSetup, this.composeHint, this.runCmd].some(m => m && m.open), (open) => {
             const b = document.body, h = document.documentElement;
             if (open) {
               this._lockY = window.scrollY || 0;
@@ -974,6 +975,18 @@
         },
 
         // ---------------- Edit App (Visual UI <-> YAML) ----------------
+        async openRunCommand(app) {
+          const r = this.runCmd;
+          Object.assign(r, { open: true, app, text: '', loading: true, error: '' });
+          try {
+            const res = await fetch(`/api/apps/${encodeURIComponent(app.name)}/run-command`);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            r.text = data.command;
+          } catch (err) { r.error = err.message; }
+          finally { r.loading = false; }
+        },
+
         // ---------------- App không dùng được compose: lý do + khắc phục / chuyển sang compose ----------------
         async openComposeHint(app) {
           const h = this.composeHint;
@@ -1681,7 +1694,7 @@
         async restoreBackup(b) {
           const app = this.apps.find(a => a.name === b.app);
           if (this.restoreRun.timer) clearInterval(this.restoreRun.timer);
-          this.restoreRun = { open: true, running: true, title: app?.title || b.app, version: b.version || '', status: '', message: '', log: [], elapsed: 0, timer: null };
+          this.restoreRun = { open: true, running: true, title: app?.title || b.app, version: b.version || '', run: app?.manage === 'run', status: '', message: '', log: [], elapsed: 0, timer: null };
           this.restoreRun.timer = setInterval(() => { this.restoreRun.elapsed += 1; }, 1000);
           this.backupsState.busyFile = b.file;
           try {

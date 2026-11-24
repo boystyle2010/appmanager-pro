@@ -197,6 +197,20 @@ def load_snapshot(name: str) -> Optional[dict[str, Any]]:
         return None
 
 
+def snapshot_for_backup(name: str) -> Optional[dict[str, Any]]:
+    """Cấu hình container + cấu hình image hiện tại (đính kèm bản sao lưu)."""
+    try:
+        client = _client()
+        c = client.containers.get(name)
+        try:
+            img_cfg = client.images.get(c.attrs.get("Image")).attrs.get("Config") or {}
+        except Exception:
+            img_cfg = {}
+        return {"saved": int(time.time()), "attrs": c.attrs, "image_config": img_cfg}
+    except Exception:
+        return None
+
+
 # ---------------------------------------------------------------- tạo lại container
 def _client():
     from app.core.docker_client import get_docker_client
@@ -384,3 +398,88 @@ def image_ref_with_tag(image_ref: str, tag: str) -> str:
     last = base.rsplit("/", 1)[-1]
     repo = base.rsplit(":", 1)[0] if ":" in last else base
     return f"{repo}:{tag}"
+
+
+def _wait_running_sync(name: str, window: int = 20) -> tuple[bool, str]:
+    client = _client()
+    deadline = time.time() + window
+    last = "unknown"
+    while time.time() < deadline:
+        time.sleep(2)
+        try:
+            c = client.containers.get(name)
+            c.reload()
+        except Exception as exc:
+            last = f"not found ({exc})"
+            continue
+        st = c.attrs.get("State") or {}
+        health = (st.get("Health") or {}).get("Status") or ""
+        last = f"status={st.get('Status')} health={health or '-'}"
+        if st.get("Restarting") or (c.attrs.get("RestartCount") or 0) > 0:
+            return False, f"Container keeps restarting ({last})"
+        if st.get("Status") in ("exited", "dead"):
+            return False, f"Container exited with code {st.get('ExitCode')}"
+        if health == "unhealthy":
+            return False, "Healthcheck reports unhealthy"
+        if health == "healthy":
+            return True, "Healthcheck is healthy"
+    return last.startswith("status=running"), f"Status after {window}s: {last}"
+
+
+def recreate_from_snapshot_sync(name: str, snapshot: dict[str, Any], image_ref: str, log: list[str]) -> tuple[bool, str]:
+    """
+    Khôi phục: tạo lại container `name` từ bản cấu hình đã lưu (lúc sao lưu) với image `image_ref`, rồi chạy.
+    Container hiện tại (nếu còn) được giữ tạm dưới tên <name>-amp-old cho tới khi container mới chạy ổn.
+    """
+    client = _client()
+    attrs = snapshot.get("attrs") or {}
+    built = build_create_config(attrs, snapshot.get("image_config") or {}, image_ref)
+    old = None
+    backup_name = f"{name}{OLD_SUFFIX}"
+    try:
+        client.containers.get(backup_name).remove(force=True)
+    except Exception:
+        pass
+    try:
+        old = client.containers.get(name)
+    except Exception:
+        log.append(f"Container {name} does not exist any more; creating it from the saved settings")
+    if old is not None:
+        try:
+            old.stop(timeout=20)
+        except Exception:
+            pass
+        old.rename(backup_name)
+    new_id = ""
+    try:
+        new_id = _create_sync(name, built)
+        client.api.start(new_id)
+        ok, why = _wait_running_sync(name, 20)
+    except Exception as exc:
+        ok, why = False, f"Cannot create/start the container: {str(exc)[:300]}"
+    log.append(f"New container: {why}")
+    if ok:
+        if old is not None:
+            try:
+                old.remove(v=False)
+            except Exception:
+                pass
+        try:
+            save_snapshot(name, client.containers.get(name).attrs, snapshot.get("image_config") or {})
+        except Exception:
+            pass
+        log.append("Container recreated from the saved settings")
+        return True, why
+    if new_id:
+        try:
+            client.api.remove_container(new_id, force=True)
+        except Exception:
+            pass
+    if old is not None:
+        try:
+            old.rename(name)
+            old.start()
+            log.append("Previous container started again")
+        except Exception as exc:
+            log.append(f"[ERROR] Cannot restore the previous container: {exc}")
+    return False, f"Restored container did not start: {why}"

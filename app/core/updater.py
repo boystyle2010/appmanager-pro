@@ -768,10 +768,52 @@ async def _update_run_app(app_info: dict, send_log: LogCallback, mode: str, forc
         window = max(10, min(120, int(get_setting("health_wait_seconds", "25"))))
     except Exception:
         window = 25
+    # Sao lưu trước khi cập nhật: image + cấu hình container (để tạo lại đúng) + file cài đặt của app
+    backup_name = ""
+    if get_setting("backup_before_update", "true").lower() == "true":
+        from app.core.app_backup import create_backup
+        from app.core.run_manager import snapshot_for_backup
+
+        try:
+            max_mb = int(get_setting("backup_max_mb", "2048") or 2048)
+            keep = int(get_setting("backup_keep", "3") or 3)
+            file_max_mb = int(get_setting("backup_file_max_mb", "50") or 50)
+        except ValueError:
+            max_mb, keep, file_max_mb = 2048, 3, 50
+        await send_log(f"==> Backing up image + container settings and config files ({app_info.get('appdata_path') or 'no config folder'})...\n")
+        snap = await asyncio.to_thread(snapshot_for_backup, name)
+        bres = await asyncio.to_thread(
+            create_backup, name, app_info.get("appdata_path") or "", from_ver, max_mb, keep,
+            mounts=((snap or {}).get("attrs") or {}).get("Mounts") or [], file_max_mb=file_max_mb,
+            image_id=app_info.get("image_id") or "", image_digest=(app_info.get("local_digests") or [""])[0],
+            image_ref=app_info["image"], run_snapshot=snap,
+        )
+        if bres.get("ok"):
+            backup_name = bres["file"]
+            await send_log(f"==> {bres['message']} — archive {bres.get('size', '')}\n\n")
+        else:
+            await send_log(f"==> [WARN] {bres.get('message')} — continuing without backup\n\n")
+
     res = await recreate_stream(
         name, image_ref, send_log, window=window, force=bool(force_tag) or mode == "manual",
         auto_rollback=get_setting("auto_rollback", "true").lower() == "true",
     )
+    # Bước 2 của rollback: container cũ vẫn không chạy (thường do bản mới đã đổi file cài đặt) -> trả file từ bản sao lưu
+    if (not res.get("ok") and not res.get("rolled_back") and backup_name
+            and get_setting("auto_rollback", "true").lower() == "true" and "nothing was changed" not in (res.get("reason") or "")):
+        from app.core.app_backup import restore_backup
+
+        await send_log(f"==> The previous container does not start with the current config files; restoring {backup_name}...\n")
+        rr = await asyncio.to_thread(restore_backup, name, backup_name)
+        for line in rr.get("log") or []:
+            await send_log(f"    {line}\n")
+        try:
+            st = await asyncio.to_thread(_probe_container_sync, name)
+            running = st.get("status") == "running" and not st.get("restarting")
+        except Exception:
+            running = False
+        if rr.get("ok") and running:
+            res = {**res, "rolled_back": True, "reason": f"{res.get('reason')}; config files restored from {backup_name}"}
     await send_log("==> Refreshing update status...\n")
     await check_one_app_by_name(name)
     if res.get("ok"):
