@@ -20,7 +20,7 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
 
 LIBS = {
-    "marked.min.js": "https://cdn.jsdelivr.net/npm/marked@18.2.1/lib/marked.umd.js",
+    "marked.min.js": "https://cdn.jsdelivr.net/npm/marked@18.3.0/lib/marked.umd.js",
     "purify.min.js": "https://cdn.jsdelivr.net/npm/dompurify@3.5.0/dist/purify.min.js",
     "alpine.min.js": "https://cdn.jsdelivr.net/npm/alpinejs@3.17.5/dist/cdn.min.js",
 }
