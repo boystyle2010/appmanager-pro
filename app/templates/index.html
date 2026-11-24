@@ -177,12 +177,13 @@
             <span class="whitespace-nowrap" x-text="`${t('updateAll')} (${updateAllTargets.length}${updateAllTargets.length !== updatableApps.length ? '/' + updatableApps.length : ''})`"></span>
           </button>
           <button @click="openUpdateAllPicker()" :title="t('customizeUpdateAll')" :aria-label="t('customizeUpdateAll')"
-                  class="glass-btn h-9 w-10 rounded-xl inline-flex items-center justify-center relative"
-                  :class="updateAllTargets.length !== updatableApps.length ? 'text-amber-300' : 'text-muted'">
+                  class="h-9 w-10 rounded-xl inline-flex items-center justify-center border transition"
+                  :class="updateAllTargets.length !== updatableApps.length
+                    ? 'bg-amber-500/15 border-amber-400/50 text-amber-300'
+                    : 'glass-btn text-muted'">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75"/>
             </svg>
-            <span x-show="updateAllTargets.length !== updatableApps.length" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-[var(--bg-base)]"></span>
           </button>
           <button @click="dismissUpdateBanner()" :title="t('dismissBanner')" aria-label="Dismiss"
                   class="hidden sm:flex glass-btn w-8 h-8 rounded-full items-center justify-center text-muted hover:text-[var(--text-primary)] shrink-0 ml-1">
