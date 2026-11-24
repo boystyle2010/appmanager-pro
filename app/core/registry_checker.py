@@ -923,6 +923,12 @@ async def _detect_pinned_channels(
     ]
 
 
+def pinned_version_label(tag: str) -> str:
+    """Phiên bản đọc được từ tag ("v1.2.3-alpine" -> "1.2.3"); tag kênh (latest...) thì trả về ""."""
+    p = _parse_pinned_tag(tag or "")
+    return (p or {}).get("ver_str") or ""
+
+
 async def suggest_image_tags(image_ref: str, limit: int = 3) -> dict[str, Any]:
     """
     Gợi ý tag cho ô Image & Tag: tag kênh ổn định (latest...) + `limit` phiên bản ổn định mới nhất

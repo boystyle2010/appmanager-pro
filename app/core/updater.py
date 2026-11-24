@@ -529,8 +529,14 @@ async def _update_app_stream_impl(
         # Chuyển kênh phát hành (vd latest -> beta): đổi tag trong compose rồi cập nhật như bình thường
         target_tag = force_tag
         ch = next((c for c in (app_info.get("channels") or []) if c.get("tag") == force_tag), {})
-        target_ver = ch.get("version") or force_tag
-        await send_log(f"==> Switching release channel: {app_info.get('image_tag') or '?'} -> {force_tag}\n")
+        if ch:
+            target_ver = ch.get("version") or force_tag
+            await send_log(f"==> Switching release channel: {app_info.get('image_tag') or '?'} -> {force_tag}\n")
+        else:
+            from app.core.registry_checker import pinned_version_label
+
+            target_ver = pinned_version_label(force_tag) or force_tag
+            await send_log(f"==> Switching image version: {app_info.get('image_tag') or '?'} -> {force_tag}\n")
     old_image_id = app_info.get("image_id") or ""
     compose_dir = str(Path(compose_path).parent)
     service = app_info.get("service") or ""

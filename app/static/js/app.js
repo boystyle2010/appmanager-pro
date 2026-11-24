@@ -77,6 +77,7 @@
         auditItems: [],
         backupsState: { loading: false, items: [], busyFile: '' },
         restorePicker: { open: false, app: null, items: [], selected: '' },
+        versionPicker: { open: false, loading: false, error: '', items: [], selected: '' },
         updateAllExcluded: [],
         updateAllPicker: { open: false, selected: [], saving: false },
         tagMenu: { open: false, loading: false, items: [], error: '', image: '' },
@@ -363,7 +364,7 @@
 
         async init() {
           this.$watch(() => [this.confirmModal, this.actionSheet, this.logModal, this.batchModal, this.deployModal, this.updateModal,
-                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker, this.restoreRun, this.updateAllPicker].some(m => m && m.open), (open) => {
+                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker, this.restoreRun, this.updateAllPicker, this.versionPicker].some(m => m && m.open), (open) => {
             const b = document.body, h = document.documentElement;
             if (open) {
               this._lockY = window.scrollY || 0;
@@ -813,6 +814,59 @@
             m.changelogHtml = cleaned ? this._renderMarkdown(cleaned) : '';
           } catch (err) { this.showToast(err.message); }
           finally { m.loading = false; }
+        },
+
+        // ---------------- Chọn phiên bản (lên / xuống bất kỳ phiên bản gần đây) ----------------
+        _verNums(v) {
+          const m = String(v || '').match(/(\d+(?:\.\d+)*)/);
+          return m ? m[1].split('.').map(Number) : null;
+        },
+        // <0: a cũ hơn b, >0: mới hơn, 0: bằng; null nếu không so được
+        compareVersions(a, b) {
+          const x = this._verNums(a), y = this._verNums(b);
+          if (!x || !y) return null;
+          for (let i = 0; i < Math.max(x.length, y.length); i++) {
+            const d = (x[i] || 0) - (y[i] || 0);
+            if (d) return d;
+          }
+          return 0;
+        },
+        isOlderVersion(item) {
+          if (!item || item.kind === 'channel' || item.current) return false;
+          const c = this.compareVersions(item.version || item.tag, this.updateModal.app?.version);
+          return c !== null && c < 0;
+        },
+
+        async openVersionPicker() {
+          const app = this.updateModal.app;
+          if (!app || this.updateModal.updating) return;
+          const p = this.versionPicker;
+          p.open = true; p.loading = true; p.error = ''; p.items = []; p.selected = '';
+          try {
+            const res = await fetch(`/api/apps/${encodeURIComponent(app.name)}/versions`);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            p.items = data.tags || [];
+            const firstOther = p.items.find(x => !x.current && x.kind === 'version');
+            p.selected = this.updateModal.preview?.tag || firstOther?.tag || '';
+          } catch (err) { p.error = err.message; }
+          finally { p.loading = false; }
+        },
+
+        // Từ menu ⋯: mở cửa sổ cập nhật rồi mở luôn bảng chọn phiên bản
+        async openVersionPickerFor(app) {
+          await this.openUpdateModal(app);
+          this.openVersionPicker();
+        },
+
+        pickVersion() {
+          const p = this.versionPicker;
+          const item = p.items.find(x => x.tag === p.selected);
+          p.open = false;
+          if (!item) return;
+          if (item.current) { if (this.updateModal.preview) this.cancelChannelPreview(); return; }
+          this.previewChannel({ tag: item.tag, channel: item.version || item.tag, kind: 'version',
+                                version: item.version || '', older: this.isOlderVersion(item) });
         },
 
         async cancelChannelPreview() {

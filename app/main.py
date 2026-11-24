@@ -81,6 +81,7 @@ from app.core.registry_checker import (
     extract_github_slug,
     fetch_github_release,
     suggest_image_tags,
+    pinned_version_label,
     check_one_app_by_name,
     is_check_running,
 )
@@ -500,8 +501,10 @@ async def api_channel_preview(container_name: str, tag: str, _: str = Depends(re
     if not app_info:
         raise HTTPException(status_code=404, detail="App not found")
     ch = next((c for c in (app_info.get("channels") or []) if c.get("tag") == tag), None)
+    if not ch and await _version_tag_allowed(container_name, app_info, tag):
+        ch = {"tag": tag, "channel": "version", "kind": "version", "version": pinned_version_label(tag)}
     if not ch:
-        raise HTTPException(status_code=400, detail="This tag is not an available release channel for this app.")
+        raise HTTPException(status_code=400, detail="This tag is not an available version for this app.")
     pref = get_app_pref(container_name)
     slug = extract_github_slug(
         (pref.get("custom_repo") or "").strip() or app_info.get("source_url") or "", app_info["image"], app_info.get("icon") or ""
@@ -516,6 +519,52 @@ async def api_channel_preview(container_name: str, tag: str, _: str = Depends(re
         )
     out.update({k: gh.get(k, "") for k in ("changelog", "release_tag", "release_url", "error")})
     return out
+
+
+# Danh sách phiên bản gần nhất mỗi app (để kiểm tra tag người dùng chọn mà không hỏi registry lại mỗi lần)
+_VERSION_CACHE: dict[str, tuple[float, str, set[str]]] = {}
+_VERSION_TTL = 3600
+
+
+async def _list_app_versions(container_name: str, app_info: dict) -> dict:
+    image = (app_info.get("image") or "").strip()
+    if not image or "$" in image or "@" in image.split("/")[-1]:
+        raise HTTPException(status_code=400, detail="The image of this app has no tag that can be changed.")
+    data = await suggest_image_tags(image, limit=15)
+    _VERSION_CACHE[container_name] = (time.time(), image, {t["tag"] for t in data.get("tags") or []})
+    return data
+
+
+async def _version_tag_allowed(container_name: str, app_info: dict, tag: str) -> bool:
+    """Tag phải nằm trong danh sách phiên bản do server tự lấy từ registry (không nhận tag tuỳ ý)."""
+    if not tag or len(tag) > 128:
+        return False
+    cached = _VERSION_CACHE.get(container_name)
+    if not cached or time.time() - cached[0] > _VERSION_TTL or cached[1] != (app_info.get("image") or ""):
+        try:
+            await _list_app_versions(container_name, app_info)
+        except Exception:
+            return False
+        cached = _VERSION_CACHE.get(container_name)
+    return bool(cached) and tag in cached[2]
+
+
+@app.get("/api/apps/{container_name}/versions")
+async def api_app_versions(container_name: str, _: str = Depends(require_user)):
+    """Các phiên bản ổn định gần nhất (cùng biến thể) để người dùng chọn chuyển lên/xuống."""
+    app_info = await asyncio.to_thread(get_app_by_name, container_name)
+    if not app_info:
+        raise HTTPException(status_code=404, detail="App not found")
+    try:
+        data = await _list_app_versions(container_name, app_info)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Cannot read tags from the registry: {str(exc)[:120]}")
+    for t in data.get("tags") or []:
+        t["version"] = pinned_version_label(t["tag"]) if t.get("kind") != "channel" else ""
+    data["app_version"] = app_info.get("version") or ""
+    return data
 
 
 @app.get("/api/image-tags")
@@ -961,8 +1010,8 @@ async def ws_update_app(websocket: WebSocket, container_name: str):
     if force_tag:
         info = await asyncio.to_thread(get_app_by_name, container_name)
         allowed = {c.get("tag") for c in ((info or {}).get("channels") or [])}
-        if force_tag not in allowed:
-            await send_log("[ERROR] This tag is not an available release channel for this app.\n")
+        if force_tag not in allowed and not (info and await _version_tag_allowed(container_name, info, force_tag)):
+            await send_log("[ERROR] This tag is not an available version for this app.\n")
             await websocket.close()
             return
     audit(websocket, ws_user, "channel_switch" if force_tag else "update", container_name, force_tag)

@@ -685,6 +685,20 @@
         </button>
 
         <button :disabled="!actionSheet.app?.can_update"
+                @click="const a = actionSheet.app; closeActionSheet(); openVersionPickerFor(a)" class="ios-row disabled:opacity-45">
+          <span class="flex items-center gap-3 min-w-0">
+            <svg class="w-4 h-4 text-amber-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/>
+            </svg>
+            <span class="min-w-0 text-left">
+              <span class="block" x-text="t('chooseVersion')"></span>
+              <span x-show="!actionSheet.app?.can_update" class="block text-[10.5px] font-normal text-muted" x-text="t('noComposeWarning')"></span>
+            </span>
+          </span>
+          <svg class="w-3.5 h-3.5 text-subtle" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+        </button>
+
+        <button :disabled="!actionSheet.app?.can_update"
                 @click="const a = actionSheet.app; closeActionSheet(); openEditModal(a)" class="ios-row disabled:opacity-45">
           <span class="flex items-center gap-3 min-w-0">
             <svg class="w-4 h-4 text-indigo-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -828,7 +842,9 @@
               <span class="text-subtle text-xs">→</span>
               <span class="font-mono-code text-[11px] px-2 py-0.5 rounded-lg border font-semibold"
                     :class="updateModal.preview
-                      ? (updateModal.preview.kind === 'pre' ? 'bg-violet-500/20 text-violet-200 border-violet-400/45' : 'bg-sky-500/15 text-sky-300 border-sky-400/40')
+                      ? (updateModal.preview.kind === 'pre' ? 'bg-violet-500/20 text-violet-200 border-violet-400/45'
+                        : updateModal.preview.kind === 'version' ? 'bg-amber-500/20 text-amber-300 border-amber-400/40'
+                        : 'bg-sky-500/15 text-sky-300 border-sky-400/40')
                       : (updateModal.app?.raw_has_update
                         ? 'bg-amber-500/20 text-amber-300 border-amber-400/40'
                         : 'bg-emerald-500/15 text-emerald-400 border-emerald-400/30')"
@@ -850,7 +866,11 @@
 
         <template x-if="!updateModal.loading && !updateModal.updating && !updateModal.updateLogs">
           <div class="flex flex-col gap-3.5 flex-1 min-h-0">
-            <div x-show="updateModal.preview" class="rounded-2xl px-3.5 py-2.5 text-[11.5px] leading-snug border shrink-0"
+            <div x-show="updateModal.preview?.kind === 'version'" class="rounded-2xl px-3.5 py-2.5 text-[11.5px] leading-snug border shrink-0 bg-amber-500/10 border-amber-400/35 text-amber-200 space-y-1">
+              <p x-text="t('versionPreviewNote').replace('{tag}', updateModal.preview?.tag || '')"></p>
+              <p x-show="updateModal.preview?.older" class="font-semibold text-amber-300" x-text="t('downgradeWarning')"></p>
+            </div>
+            <div x-show="updateModal.preview && updateModal.preview.kind !== 'version'" class="rounded-2xl px-3.5 py-2.5 text-[11.5px] leading-snug border shrink-0"
                  :class="updateModal.preview?.kind === 'pre' ? 'bg-violet-500/12 border-violet-400/35 text-violet-200' : 'bg-sky-500/10 border-sky-400/35 text-sky-200'"
                  x-text="t('channelPreviewNote').replaceAll('{ch}', (updateModal.preview?.channel || '').toUpperCase()).replace('{tag}', updateModal.preview?.tag || '').replace('{ver}', channelVersion(updateModal.preview))"></div>
 
@@ -889,6 +909,20 @@
               <p class="text-[10.5px] text-muted leading-snug" x-text="t('releaseChannelDesc')"></p>
             </div>
 
+            <div x-show="updateModal.app?.can_update" class="glass-inset rounded-2xl p-3.5 shrink-0 flex items-center justify-between gap-3">
+              <div class="min-w-0">
+                <p class="text-xs font-semibold" x-text="t('chooseVersion')"></p>
+                <p class="text-[11px] text-muted" x-text="t('chooseVersionDesc')"></p>
+              </div>
+              <button type="button" @click="openVersionPicker()" :disabled="updateModal.updating"
+                      class="glass-btn px-3 py-2 rounded-xl text-[11.5px] font-semibold text-amber-300 shrink-0 inline-flex items-center gap-1.5 disabled:opacity-50">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/>
+                </svg>
+                <span class="font-mono-code" x-text="updateModal.preview?.kind === 'version' ? updateModal.preview.tag : (updateModal.app?.image_tag || t('chooseVersionBtn'))"></span>
+              </button>
+            </div>
+
             <div class="glass-inset rounded-2xl p-3.5 shrink-0 flex items-center justify-between gap-3">
               <div class="min-w-0">
                 <p class="text-xs font-semibold" x-text="t('autoUpdateApp')"></p>
@@ -904,7 +938,7 @@
               <div class="flex items-center justify-between gap-2 flex-wrap">
                 <div class="flex items-center gap-2">
                   <span class="text-xs font-bold uppercase tracking-wider text-sky-400">Changelog</span>
-                  <span x-show="changelogChannel()" class="inline-flex items-center h-[20px] px-2 rounded-md text-[10px] leading-none font-bold uppercase tracking-wider border"
+                  <span x-show="changelogChannel() && changelogChannel().kind !== 'version'" class="inline-flex items-center h-[20px] px-2 rounded-md text-[10px] leading-none font-bold uppercase tracking-wider border"
                         :class="changelogChannel()?.kind === 'pre' ? 'bg-violet-500/20 text-violet-200 border-violet-400/45' : 'bg-sky-500/15 text-sky-300 border-sky-400/35'"
                         x-text="changelogChannel()?.channel"></span>
                   <span x-show="updateModal.releaseTag"
@@ -948,11 +982,13 @@
                 class="glass-btn py-3 px-3.5 rounded-2xl text-xs font-semibold shrink-0 text-muted" x-text="t('cancel')"></button>
         <button x-show="!updateModal.updating && updateModal.preview" @click="startAppUpdate(updateModal.preview.tag)"
                 class="flex-1 py-3 px-4 rounded-2xl text-xs sm:text-sm font-semibold inline-flex items-center justify-center gap-2"
-                :class="updateModal.preview?.kind === 'pre' ? 'text-white bg-linear-to-r from-violet-500 to-fuchsia-600 shadow-lg shadow-violet-900/30' : 'glass-btn-primary'">
+                :class="updateModal.preview?.kind === 'pre' ? 'text-white bg-linear-to-r from-violet-500 to-fuchsia-600 shadow-lg shadow-violet-900/30' : updateModal.preview?.kind === 'version' ? 'glass-btn-update' : 'glass-btn-primary'">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
           </svg>
-          <span x-text="t('switchAndUpdate').replace('{ch}', (updateModal.preview?.channel || '').toUpperCase())"></span>
+          <span x-text="updateModal.preview?.kind === 'version'
+            ? t('switchVersionAndUpdate').replace('{ver}', updateModal.preview?.tag || '')
+            : t('switchAndUpdate').replace('{ch}', (updateModal.preview?.channel || '').toUpperCase())"></span>
         </button>
 
         <button x-show="!updateModal.updating && !updateModal.preview && updateModal.app?.raw_has_update && updateModal.app?.skip_token"
@@ -2304,6 +2340,60 @@
       <div class="grid grid-cols-2 gap-2.5 pt-1 shrink-0">
         <button @click="updateAllPicker.open = false" class="glass-btn py-2.5 px-3 rounded-xl text-xs font-semibold" x-text="t('cancel')"></button>
         <button @click="saveUpdateAllPicker()" :disabled="updateAllPicker.saving" class="glass-btn-update py-2.5 px-3 rounded-xl text-xs font-semibold disabled:opacity-50" x-text="t('save')"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Chọn phiên bản image (lên hoặc xuống) -->
+  <div x-show="versionPicker.open" x-cloak x-transition.opacity
+       class="fixed inset-0 z-[57] flex items-center justify-center p-4 sm:p-5 bg-black/70 backdrop-blur-md"
+       @click.self="versionPicker.open = false" @keydown.escape.window="if (!confirmModal.open) versionPicker.open = false">
+    <div class="glass-panel w-full max-w-sm rounded-[26px] p-5 space-y-4 shadow-2xl max-h-[85dvh] flex flex-col">
+      <div class="space-y-2 shrink-0">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border bg-amber-500/15 border-amber-400/35 text-amber-400">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/>
+            </svg>
+          </div>
+          <h3 class="font-bold text-[15px] leading-tight truncate min-w-0" x-text="`${t('chooseVersion')}: ${updateModal.app?.title || ''}`"></h3>
+        </div>
+        <p class="text-xs text-muted leading-relaxed" x-text="t('versionPickerMsg')"></p>
+      </div>
+
+      <div x-show="versionPicker.loading" class="py-8 flex items-center justify-center gap-2 text-xs text-muted">
+        <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"/><path class="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"/></svg>
+        <span x-text="t('loadingVersions')"></span>
+      </div>
+      <div x-show="!versionPicker.loading && versionPicker.error" class="rounded-xl px-3 py-2 bg-rose-500/12 border border-rose-500/30 text-[11px] text-rose-300" x-text="versionPicker.error"></div>
+      <div x-show="!versionPicker.loading && !versionPicker.error && !versionPicker.items.length" class="text-xs text-muted text-center py-6" x-text="t('noTagsFound')"></div>
+
+      <div x-show="!versionPicker.loading && versionPicker.items.length" class="space-y-2 overflow-y-auto min-h-0">
+        <template x-for="(v, i) in versionPicker.items" :key="v.tag">
+          <label class="glass-inset rounded-2xl px-3.5 py-2.5 flex items-center gap-3 cursor-pointer border transition"
+                 :class="versionPicker.selected === v.tag ? 'border-amber-400/50 bg-amber-500/10' : 'border-transparent'">
+            <input type="radio" class="sr-only" :value="v.tag" x-model="versionPicker.selected" />
+            <span class="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
+              <span class="font-mono-code text-[13px] font-semibold truncate max-w-full" x-text="v.tag"></span>
+              <span x-show="v.current" class="text-[9.5px] px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-400/30 font-semibold" x-text="t('currentChannel')"></span>
+              <span x-show="v.kind === 'channel'" class="text-[9.5px] px-1.5 py-0.5 rounded bg-white/10 text-muted border border-[var(--glass-border)] font-semibold" x-text="t('tagRolling')"></span>
+              <span x-show="v.kind === 'version' && v.tag === versionPicker.items.find(x => x.kind === 'version')?.tag" class="text-[9.5px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-400/25 font-semibold" x-text="t('tagNewest')"></span>
+              <span x-show="isOlderVersion(v)" class="text-[9.5px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-400/30 font-semibold" x-text="t('olderBadge')"></span>
+            </span>
+            <span class="w-5 h-5 rounded-full shrink-0 flex items-center justify-center border transition"
+                  :class="versionPicker.selected === v.tag ? 'bg-amber-500 border-amber-400 text-slate-900' : 'border-slate-500/70 text-transparent'">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+              </svg>
+            </span>
+          </label>
+        </template>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2.5 pt-1 shrink-0">
+        <button @click="versionPicker.open = false" class="glass-btn py-2.5 px-3 rounded-xl text-xs font-semibold" x-text="t('cancel')"></button>
+        <button @click="pickVersion()" :disabled="versionPicker.loading || !versionPicker.selected"
+                class="glass-btn-update py-2.5 px-3 rounded-xl text-xs font-semibold disabled:opacity-50" x-text="t('viewChangelog')"></button>
       </div>
     </div>
   </div>
