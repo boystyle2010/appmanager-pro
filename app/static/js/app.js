@@ -78,6 +78,7 @@
         backupsState: { loading: false, items: [], busyFile: '' },
         restorePicker: { open: false, app: null, items: [], selected: '' },
         versionPicker: { open: false, loading: false, error: '', items: [], selected: '' },
+        dupPopup: { open: false, loading: false, busy: false, app: null, composePath: '', files: [] },
         updateAllExcluded: [],
         updateAllPicker: { open: false, selected: [], saving: false },
         tagMenu: { open: false, loading: false, items: [], error: '', image: '' },
@@ -364,7 +365,7 @@
 
         async init() {
           this.$watch(() => [this.confirmModal, this.actionSheet, this.logModal, this.batchModal, this.deployModal, this.updateModal,
-                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker, this.restoreRun, this.updateAllPicker, this.versionPicker].some(m => m && m.open), (open) => {
+                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker, this.restoreRun, this.updateAllPicker, this.versionPicker, this.dupPopup].some(m => m && m.open), (open) => {
             const b = document.body, h = document.documentElement;
             if (open) {
               this._lockY = window.scrollY || 0;
@@ -969,11 +970,42 @@
         },
 
         // ---------------- Edit App (Visual UI <-> YAML) ----------------
+        // Biểu tượng xám (đã Bỏ qua): popup với cảnh báo ban đầu + Gộp / Huỷ
+        async openDupPopup(app) {
+          const p = this.dupPopup;
+          Object.assign(p, { open: true, loading: true, busy: false, app, composePath: app.compose_path || '', files: [] });
+          try {
+            const res = await fetch(`/api/apps/${encodeURIComponent(app.name)}/compose`);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            p.composePath = data.compose_path || p.composePath;
+            p.files = [...(data.other_compose_files || []), ...(data.skipped_compose_files || [])];
+            if (!p.files.length) { p.open = false; app.dup_compose = 0; this.loadApps(); }
+          } catch (err) { p.open = false; this.showToast(err.message); }
+          finally { p.loading = false; }
+        },
+
+        async mergeFromPopup() {
+          const p = this.dupPopup;
+          if (!p.app) return;
+          p.busy = true;
+          try {
+            const { res, data } = await this._postJson(`/api/apps/${encodeURIComponent(p.app.name)}/compose/duplicates`, { action: 'merge' });
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            this.showToast(data.message || 'OK');
+            const card = this.apps.find(a => a.name === p.app.name);
+            if (card) card.dup_compose = 0;
+            p.open = false;
+            this.loadApps();
+          } catch (err) { this.showToast(err.message); }
+          finally { p.busy = false; }
+        },
+
         confirmMergeDuplicates() {
           const m = this.editModal;
           this.askConfirm({
             tone: 'danger', title: this.t('dupMergeTitle'),
-            message: `${m.composePath} → ${(m.otherComposeFiles.length ? m.otherComposeFiles : m.skippedComposeFiles).join(', ')}. ${this.t('dupMergeMsg')}`,
+            message: `${m.composePath} → ${m.otherComposeFiles.join(', ')}. ${this.t('dupMergeMsg')}`,
             confirmLabel: this.t('dupMerge'), onConfirm: () => this.resolveDuplicates('merge')
           });
         },

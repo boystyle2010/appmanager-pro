@@ -357,7 +357,7 @@
                 <div class="flex items-center justify-between gap-2 min-w-0">
                   <p class="font-mono-code text-[10.5px] text-subtle truncate min-w-0" :title="app.image" x-text="shortImage(app.image)"></p>
                   <div x-show="channelBadge(app) || app.auto_update || app.dup_compose" class="flex items-center gap-1 shrink-0">
-                    <button x-show="app.dup_compose" type="button" @click.stop="openEditModal(app)"
+                    <button x-show="app.dup_compose" type="button" @click.stop="app.dup_skipped ? openDupPopup(app) : openEditModal(app)"
                             :title="t(app.dup_skipped ? 'dupComposeSkippedBadge' : 'dupComposeBadge')" :aria-label="t(app.dup_skipped ? 'dupComposeSkippedBadge' : 'dupComposeBadge')"
                             class="inline-flex items-center justify-center gap-0.5 h-[18px] px-1.5 rounded-md text-[9px] leading-none font-bold border"
                             :class="app.dup_skipped ? 'bg-white/5 text-muted border-[var(--glass-border)]' : 'bg-amber-500/15 text-amber-300 border-amber-400/45'">
@@ -1057,23 +1057,6 @@
                   class="glass-btn-danger py-2 rounded-xl text-[11px] font-semibold disabled:opacity-50"
                   x-text="editModal.dupBusy ? '…' : t('dupMerge')"></button>
         </div>
-      </div>
-
-      <!-- Đã bỏ qua cảnh báo nhưng vẫn còn file compose khác nội dung: vẫn cho Gộp bất cứ lúc nào -->
-      <div x-show="!editModal.otherComposeFiles.length && editModal.skippedComposeFiles.length" x-cloak
-           class="mt-3 glass-inset rounded-2xl px-3 py-2.5 flex items-center gap-2.5 text-[11px] border border-[var(--glass-border)]">
-        <svg class="w-4 h-4 shrink-0 text-muted" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75"/>
-        </svg>
-        <span class="flex-1 min-w-0 text-muted leading-snug">
-          <span class="block" x-text="t('dupSkippedNote').replace('{n}', editModal.skippedComposeFiles.length + 1)"></span>
-          <template x-for="f in editModal.skippedComposeFiles" :key="f">
-            <span class="block font-mono-code text-[10px] text-subtle break-all mt-0.5" x-text="f"></span>
-          </template>
-        </span>
-        <button type="button" @click="confirmMergeDuplicates()" :disabled="!!editModal.dupBusy"
-                class="glass-btn px-3 py-1.5 rounded-lg text-[11px] font-semibold text-amber-300 shrink-0 disabled:opacity-50"
-                x-text="editModal.dupBusy ? '…' : t('dupMerge')"></button>
       </div>
 
       <div class="glass-dock p-1 rounded-2xl grid grid-cols-3 gap-1 mt-3 mb-3 shrink-0">
@@ -2359,6 +2342,40 @@
       <div class="grid grid-cols-2 gap-2.5 pt-1 shrink-0">
         <button @click="updateAllPicker.open = false" class="glass-btn py-2.5 px-3 rounded-xl text-xs font-semibold" x-text="t('cancel')"></button>
         <button @click="saveUpdateAllPicker()" :disabled="updateAllPicker.saving" class="glass-btn-update py-2.5 px-3 rounded-xl text-xs font-semibold disabled:opacity-50" x-text="t('save')"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- POPUP: file compose trùng đã bị Bỏ qua (biểu tượng xám) — xem lại cảnh báo và Gộp -->
+  <div x-show="dupPopup.open" x-cloak x-transition.opacity
+       class="fixed inset-0 z-[57] flex items-center justify-center p-4 sm:p-5 bg-black/70 backdrop-blur-md"
+       @click.self="if (!dupPopup.busy) dupPopup.open = false" @keydown.escape.window="if (!dupPopup.busy) dupPopup.open = false">
+    <div class="glass-panel w-full max-w-sm rounded-[26px] p-5 space-y-4 shadow-2xl max-h-[85dvh] flex flex-col">
+      <div class="flex items-center gap-2.5 shrink-0">
+        <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border bg-amber-500/15 border-amber-400/35 text-amber-400">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+          </svg>
+        </div>
+        <h3 class="font-bold text-[15px] leading-tight min-w-0" x-text="t('composeDuplicateTitle')"></h3>
+      </div>
+      <div class="overflow-y-auto min-h-0 space-y-3 text-[11.5px]">
+        <p class="text-[13px] font-semibold truncate" x-text="dupPopup.app?.title"></p>
+        <div x-show="dupPopup.loading" class="text-xs text-muted" x-text="t('loadingDetails')"></div>
+        <div x-show="!dupPopup.loading" class="rounded-2xl border border-amber-400/40 bg-amber-500/10 p-3 space-y-1.5 text-amber-200">
+          <p class="font-mono-code text-[10.5px] break-all"><span class="text-emerald-300 font-sans font-semibold" x-text="t('dupRunningFile') + ': '"></span><span x-text="dupPopup.composePath"></span></p>
+          <template x-for="f in dupPopup.files" :key="f">
+            <p class="font-mono-code text-[10.5px] break-all" x-text="f"></p>
+          </template>
+        </div>
+        <p class="text-muted leading-relaxed" x-text="t('composeDuplicateMsg')"></p>
+        <p class="text-muted leading-relaxed" x-text="t('dupMergeMsg')"></p>
+      </div>
+      <div class="grid grid-cols-2 gap-2.5 pt-1 shrink-0">
+        <button @click="dupPopup.open = false" :disabled="dupPopup.busy" class="glass-btn py-2.5 px-3 rounded-xl text-xs font-semibold disabled:opacity-50" x-text="t('cancel')"></button>
+        <button @click="mergeFromPopup()" :disabled="dupPopup.busy || dupPopup.loading || !dupPopup.files.length"
+                class="glass-btn-danger py-2.5 px-3 rounded-xl text-xs font-semibold disabled:opacity-50"
+                x-text="dupPopup.busy ? '…' : t('dupMerge')"></button>
       </div>
     </div>
   </div>
