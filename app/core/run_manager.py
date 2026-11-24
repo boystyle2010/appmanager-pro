@@ -108,6 +108,7 @@ def build_create_config(attrs: dict[str, Any], old_image_cfg: dict[str, Any], im
         if m.get("Type") == "volume" and m.get("Name") and m.get("Destination") not in bound:
             binds.append(f"{m['Name']}:{m['Destination']}" + ("" if m.get("RW", True) else ":ro"))
     host["Binds"] = binds or None
+    host["Links"] = _fix_links(host.get("Links"))
     body["HostConfig"] = host
 
     # Mạng chính đi kèm lúc tạo; mạng phụ nối sau (Docker chỉ nhận 1 endpoint khi tạo với API cũ)
@@ -132,7 +133,7 @@ def _endpoint(ep: dict[str, Any], cid: str) -> dict[str, Any]:
     if aliases:
         out["Aliases"] = aliases
     if ep.get("Links"):
-        out["Links"] = ep["Links"]
+        out["Links"] = _fix_links(ep["Links"])
     if ep.get("DriverOpts"):
         out["DriverOpts"] = ep["DriverOpts"]
     if ep.get("MacAddress") and ep.get("IPAMConfig"):
@@ -237,26 +238,57 @@ def _create_sync(name: str, built: dict[str, Any]) -> str:
     return cid
 
 
+AUTH_HINT = ("[HINT] The registry refused access: this image needs a login. Run `docker login <registry>` on the "
+             "host and mount its credentials into AppManager (e.g. /root/.docker/config.json:/root/.docker/config.json:ro).\n")
+
+
+def needs_login(output: str) -> bool:
+    low = output.lower()
+    return any(k in low for k in ("unauthorized", "authentication required", "denied: requested access",
+                                  "pull access denied", "no basic auth credentials", "403 forbidden"))
+
+
 async def _stream(cmd: list[str], send_log: LogCallback) -> int:
     await send_log("$ " + " ".join(cmd) + "\n")
     proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
     assert proc.stdout is not None
+    out = []
     while True:
         line = await proc.stdout.readline()
         if not line:
             break
-        await send_log(line.decode("utf-8", errors="replace"))
-    return await proc.wait()
+        text = line.decode("utf-8", errors="replace")
+        out.append(text)
+        await send_log(text)
+    rc = await proc.wait()
+    if rc != 0 and needs_login("".join(out)):
+        await send_log(AUTH_HINT)
+    return rc
 
 
-def _dependents_sync(name: str, cid: str) -> list[tuple[str, str]]:
-    """Container dùng chung mạng với container này (--network container:<tên|id>): [(tên, kiểu quản lý)]."""
+def _dependents_sync(name: str, cid: str) -> list[tuple[str, str, str]]:
+    """
+    Container phụ thuộc vào container này: dùng chung mạng (--network container:<tên|id>) hoặc --link tới nó.
+    Trả về [(tên, kiểu quản lý, "network" | "link")].
+    """
     out = []
     for c in _client().containers.list(all=True):
-        mode = ((c.attrs.get("HostConfig") or {}).get("NetworkMode") or "")
-        if mode in (f"container:{cid}", f"container:{name}") and c.name != name:
-            out.append((c.name, manage_kind((c.attrs.get("Config") or {}).get("Labels") or {})))
+        if c.name == name:
+            continue
+        host = c.attrs.get("HostConfig") or {}
+        kind = manage_kind((c.attrs.get("Config") or {}).get("Labels") or {})
+        if (host.get("NetworkMode") or "") in (f"container:{cid}", f"container:{name}"):
+            out.append((c.name, kind, "network"))
+        elif any(str(l).split(":", 1)[0] == f"/{name}" for l in (host.get("Links") or [])):
+            out.append((c.name, kind, "link"))
     return out
+
+
+def _fix_links(links: Optional[list]) -> Optional[list]:
+    """Docker đổi link theo khi đổi tên container (/<tên>-amp-old:...) -> trả về tên thật."""
+    if not links:
+        return links
+    return [str(l).replace(OLD_SUFFIX + ":", ":", 1) if str(l).split(":", 1)[0].endswith(OLD_SUFFIX) else l for l in links]
 
 
 async def recreate_stream(
@@ -375,17 +407,19 @@ async def recreate_stream(
             await asyncio.to_thread(save_snapshot, name, new_c.attrs, new_image.attrs.get("Config") or {})
         except Exception:
             pass
-        # Container dùng chung mạng (--network container:<tên>) vẫn trỏ vào container CŨ -> tạo lại để nối vào container mới
-        for dep, kind in dependents:
+        # Container dùng chung mạng (--network container:<tên>) hoặc --link tới container này vẫn trỏ vào container CŨ
+        # -> tạo lại để nối vào container mới
+        for dep, kind, how in dependents:
+            what = "shares this container's network" if how == "network" else "is linked to this container (--link)"
             if kind != "run":
-                await send_log(f"[WARN] {dep} shares this container's network but is managed by {kind}; recreate it so it "
-                               "joins the new container\n")
+                await send_log(f"[WARN] {dep} {what} but is managed by {kind}; recreate it so it uses the new container\n")
                 continue
-            await send_log(f"==> {dep} shares this container's network; recreating it to join the new container\n")
+            await send_log(f"==> {dep} {what}; recreating it to use the new container\n")
             try:
                 dep_img = (await asyncio.to_thread(client.containers.get, dep)).attrs["Config"]["Image"]
                 d = await recreate_stream(dep, dep_img, send_log, window=min(window, 15), pull=False, force=True,
-                                          auto_rollback=auto_rollback, network_mode=f"container:{name}")
+                                          auto_rollback=auto_rollback,
+                                          network_mode=f"container:{name}" if how == "network" else "")
                 await send_log(f"==> {dep}: {'ok' if d.get('ok') else d.get('reason')}\n")
             except Exception as exc:
                 await send_log(f"[WARN] Could not recreate {dep}: {exc}\n")

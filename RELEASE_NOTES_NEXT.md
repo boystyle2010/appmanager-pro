@@ -17,3 +17,6 @@
 - Containers started with --rm are read-only (Docker deletes them when stopped, so no safe rollback); digest-pinned images keep their digest when updated; restoring a backup also reverts container settings changed since the backup.
 - Fixes: self-update results appear in History as soon as it is opened (recorded once even when read from several places); the update window header shows the new version right after an update; editing a container while it is being updated is refused instead of clashing.
 - Recovery after an interrupted update (power loss, Docker or AppManager restart): containers left under a temporary name are restored on startup; an interrupted self-update is resumed by the helper (it restarts with Docker) and AppManager is brought back running.
+- Containers using --link to an updated container are recreated so the link points to the new container.
+- Private registries: when a pull is refused for lack of login, the update log explains how to give AppManager the host's docker credentials (nothing is changed).
+- Much faster app list on servers with many containers (137 containers: 17 s -> under 1 s).

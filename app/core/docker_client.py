@@ -195,10 +195,10 @@ def _parse_uptime(started_at: str, status: str) -> str:
         return ""
 
 
-def _extract_local_digests(container) -> list[str]:
+def _extract_local_digests(container, image=None) -> list[str]:
     digests: list[str] = []
     try:
-        repo_digests = container.image.attrs.get("RepoDigests") or []
+        repo_digests = (image or container.image).attrs.get("RepoDigests") or []
         for rd in repo_digests:
             if "@sha256:" in rd:
                 digests.append("sha256:" + rd.split("@sha256:", 1)[1])
@@ -274,6 +274,7 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
     containers = client.containers.list(all=True)
     items: list[dict[str, Any]] = []
     portainer_root = portainer_compose_root(containers)
+    image_cache: dict[str, Any] = {}
 
     for c in containers:
         attrs = c.attrs or {}
@@ -285,14 +286,20 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
         image_tags: list[str] = []
         image_labels: dict[str, str] = {}
         image_id = ""
-        try:
-            image_tags = c.image.tags or []
-            image_labels = (c.image.attrs.get("Config") or {}).get("Labels") or {}
-            image_id = c.image.id or ""
-        except Exception:
-            pass
+        # Mỗi lần đọc c.image là một lần gọi API -> đọc mỗi image MỘT lần cho cả danh sách (nhiều container dùng chung)
+        img_obj = image_cache.get(attrs.get("Image") or "")
+        if img_obj is None and attrs.get("Image"):
+            try:
+                img_obj = client.images.get(attrs["Image"])
+            except Exception:
+                img_obj = False
+            image_cache[attrs["Image"]] = img_obj
+        if img_obj:
+            image_tags = img_obj.tags or []
+            image_labels = (img_obj.attrs.get("Config") or {}).get("Labels") or {}
+            image_id = img_obj.id or ""
 
-        image_ref = config.get("Image") or (image_tags[0] if image_tags else c.image.short_id)
+        image_ref = config.get("Image") or (image_tags[0] if image_tags else (img_obj.short_id if img_obj else ""))
         project = (labels.get("com.docker.compose.project") or "").lower()
         working_dir = labels.get("com.docker.compose.project.working_dir") or ""
         config_files = labels.get("com.docker.compose.project.config_files") or ""
@@ -385,7 +392,7 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
             or ""
         )
 
-        local_digests = _extract_local_digests(c)
+        local_digests = _extract_local_digests(c, img_obj) if img_obj else []
         version = detect_real_version(image_tags, labels, image_labels)
         if is_self and version in ("latest", ""):
             version = f"v{APP_VERSION}"

@@ -27,6 +27,8 @@ EventCallback = Callable[[dict[str, Any]], Awaitable[None]]
 async def _run_cmd_stream(
     cmd: list[str], cwd: str, send_log: LogCallback
 ) -> int:
+    from app.core.run_manager import AUTH_HINT, needs_login
+
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         cwd=cwd,
@@ -34,12 +36,18 @@ async def _run_cmd_stream(
         stderr=asyncio.subprocess.STDOUT,
     )
     assert proc.stdout is not None
+    out: list[str] = []
     while True:
         line = await proc.stdout.readline()
         if not line:
             break
-        await send_log(line.decode("utf-8", errors="replace"))
-    return await proc.wait()
+        text = line.decode("utf-8", errors="replace")
+        out.append(text)
+        await send_log(text)
+    rc = await proc.wait()
+    if rc != 0 and needs_login("".join(out)):
+        await send_log(AUTH_HINT)
+    return rc
 
 
 def _prune_old_image_sync(old_image_id: str, new_image_id: str) -> str:
