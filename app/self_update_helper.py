@@ -161,6 +161,59 @@ def restore_db(client, job: dict[str, Any]) -> None:
         log(f"[ERROR] Cannot restore the database: {exc}")
 
 
+def edit_compose(job: dict[str, Any], service: str) -> None:
+    """Thêm volume (cùng đường dẫn host:container) và biến môi trường vào service của AppManager."""
+    from ruamel.yaml import YAML  # có sẵn trong image
+
+    path = Path(job["compose_path"])
+    text = path.read_text(encoding="utf-8")
+    if job.get("compose_original") is None:
+        job["compose_original"] = text  # để rollback trả lại đúng file trước khi sửa
+    y = YAML()
+    y.preserve_quotes = True
+    y.indent(mapping=2, sequence=4, offset=2)
+    y.width = 4096  # không tự xuống dòng chuỗi dài
+    data = y.load(text)
+    svcs = data.get("services") or {}
+    svc = svcs.get(service) if service in svcs else next(
+        (v for v in svcs.values() if isinstance(v, dict) and (v.get("container_name") == job.get("container"))), None)
+    if svc is None and len(svcs) == 1:
+        svc = next(iter(svcs.values()))
+    if not isinstance(svc, dict):
+        raise RuntimeError("Cannot find the AppManager service in docker-compose.yml")
+    vols = svc.get("volumes")
+    if vols is None:
+        svc["volumes"] = vols = []
+    existing = set()
+    for v in vols:
+        if isinstance(v, str):
+            existing.add(v.split(":")[0])
+        elif isinstance(v, dict):
+            existing.add(str(v.get("source") or ""))
+    for p in job.get("add_volumes") or []:
+        if p not in existing:
+            vols.append(f"{p}:{p}")
+            log(f"==> Added volume {p}:{p}")
+    for key, val in (job.get("set_env") or {}).items():
+        env = svc.get("environment")
+        if env is None:
+            svc["environment"] = env = []
+        if isinstance(env, list):
+            idx = next((i for i, e in enumerate(env) if isinstance(e, str) and e.split("=", 1)[0] == key), None)
+            if idx is None:
+                env.append(f"{key}={val}")
+            else:
+                env[idx] = f"{key}={val}"
+        elif isinstance(env, dict):
+            env[key] = val
+        log(f"==> Set environment {key}={val}")
+    import io
+
+    buf = io.StringIO()
+    y.dump(data, buf)
+    path.write_text(buf.getvalue(), encoding="utf-8")
+
+
 def main() -> int:
     import docker  # có sẵn trong image
 
@@ -178,6 +231,15 @@ def main() -> int:
     window = int(job.get("window") or 120)
     svc_args = [service] if service else []
     time.sleep(2)  # để AppManager kịp trả lời trình duyệt
+
+    if job.get("add_volumes") or job.get("set_env"):
+        try:
+            edit_compose(job, service)
+        except Exception as exc:
+            log(f"[ERROR] Cannot edit docker-compose.yml: {exc}")
+            restore_compose(job)
+            write_result(job, "failed", f"Cannot edit docker-compose.yml: {exc}")
+            return 1
 
     if job.get("mode") == "update":
         if run(["docker", "compose", "-f", compose, "pull", *svc_args], cwd) != 0:

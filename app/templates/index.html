@@ -1612,6 +1612,13 @@
         <!-- TAB 2: DOCKER STORAGE & PRUNE SSD -->
         <template x-if="settingsModal.tab === 'storage'">
           <div class="space-y-3.5">
+            <div class="glass-inset rounded-2xl p-3.5 flex items-center justify-between gap-3">
+              <div class="min-w-0">
+                <p class="text-xs font-semibold" x-text="t('dataSetupTitle')"></p>
+                <p class="text-[11px] text-muted truncate" x-text="(dataSetup.status?.mounted || []).join(', ') || t('dataNoneMounted')"></p>
+              </div>
+              <button type="button" @click="openDataSetup()" class="glass-btn px-3 py-2 rounded-xl text-[11.5px] font-semibold text-sky-400 shrink-0" x-text="t('dataSetupBtn')"></button>
+            </div>
             <div x-show="storageState.loading && !storageState.data" class="py-10 text-center text-xs text-muted" x-text="t('scanningStorage')"></div>
 
             <template x-if="storageState.data">
@@ -2342,6 +2349,123 @@
       <div class="grid grid-cols-2 gap-2.5 pt-1 shrink-0">
         <button @click="updateAllPicker.open = false" class="glass-btn py-2.5 px-3 rounded-xl text-xs font-semibold" x-text="t('cancel')"></button>
         <button @click="saveUpdateAllPicker()" :disabled="updateAllPicker.saving" class="glass-btn-update py-2.5 px-3 rounded-xl text-xs font-semibold disabled:opacity-50" x-text="t('save')"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Thiết lập thư mục Data App (người dùng mới chưa mount thư mục Data) -->
+  <div x-show="dataSetup.open" x-cloak x-transition.opacity
+       class="fixed inset-0 z-[57] flex items-center justify-center p-4 sm:p-5 bg-black/70 backdrop-blur-md">
+    <div class="glass-panel w-full max-w-md rounded-[26px] p-5 space-y-4 shadow-2xl max-h-[88dvh] flex flex-col">
+      <div class="flex items-center gap-2.5 shrink-0">
+        <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border bg-sky-500/15 border-sky-400/35 text-sky-400">
+          <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>
+        </div>
+        <div class="min-w-0">
+          <h3 class="font-bold text-[15px] leading-tight" x-text="t('dataSetupTitle')"></h3>
+          <p class="text-[11px] text-muted" x-show="dataSetup.status?.missing_count"
+             x-text="t('dataMissingCount').replace('{n}', dataSetup.status?.missing_count || 0).replace('{total}', dataSetup.status?.total_apps || 0)"></p>
+        </div>
+      </div>
+
+      <div class="overflow-y-auto min-h-0 space-y-3 text-[11.5px]">
+        <!-- Bước 1: giới thiệu + chọn cách -->
+        <template x-if="dataSetup.step === 'intro'">
+          <div class="space-y-3">
+            <p class="text-muted leading-relaxed" x-text="t('dataSetupMsg')"></p>
+            <div x-show="(dataSetup.status?.missing_apps || []).length" class="flex flex-wrap gap-1.5">
+              <template x-for="n in (dataSetup.status?.missing_apps || []).slice(0, 10)" :key="n">
+                <span class="font-mono-code text-[10.5px] px-2 py-0.5 rounded-md bg-white/5 border border-[var(--glass-border)] text-muted" x-text="n"></span>
+              </template>
+              <span x-show="(dataSetup.status?.missing_apps || []).length > 10" class="text-[10.5px] text-subtle self-center" x-text="`+${(dataSetup.status?.missing_apps || []).length - 10}`"></span>
+            </div>
+            <div x-show="(dataSetup.status?.mounted || []).length" class="text-[10.5px] text-subtle">
+              <span x-text="t('dataMountedNow') + ': '"></span><span class="font-mono-code" x-text="(dataSetup.status?.mounted || []).join(', ')"></span>
+            </div>
+            <div class="grid grid-cols-2 gap-2.5">
+              <button type="button" @click="dataSetup.step = 'manual'; dataSetup.error = ''"
+                      class="glass-inset rounded-2xl p-3.5 text-left border border-[var(--glass-border)] hover:border-sky-400/50 transition space-y-1.5">
+                <svg class="w-5 h-5 text-sky-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>
+                <span class="block text-xs font-semibold" x-text="t('dataManual')"></span>
+                <span class="block text-[10.5px] text-muted leading-snug" x-text="t('dataManualDesc')"></span>
+              </button>
+              <button type="button" @click="startDataScan()"
+                      class="glass-inset rounded-2xl p-3.5 text-left border border-[var(--glass-border)] hover:border-amber-400/50 transition space-y-1.5">
+                <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+                <span class="block text-xs font-semibold" x-text="t('dataAutoScan')"></span>
+                <span class="block text-[10.5px] text-muted leading-snug" x-text="t('dataAutoScanDesc')"></span>
+              </button>
+            </div>
+            <p class="rounded-xl px-3 py-2 bg-amber-500/10 border border-amber-400/30 text-amber-200 text-[10.5px] leading-snug" x-text="t('dataScanWarning')"></p>
+          </div>
+        </template>
+
+        <!-- Bước 2a: nhập tay -->
+        <template x-if="dataSetup.step === 'manual'">
+          <div class="space-y-2.5">
+            <p class="text-muted leading-relaxed" x-text="t('dataManualHelp')"></p>
+            <input type="text" x-model="dataSetup.manualPath" @keydown.enter="checkManualPath()" placeholder="/DATA/AppData"
+                   autocapitalize="off" autocorrect="off" spellcheck="false"
+                   class="glass-input w-full rounded-xl px-3 py-2.5 text-xs font-mono-code" />
+          </div>
+        </template>
+
+        <!-- Bước 2b: đang quét -->
+        <template x-if="dataSetup.step === 'scan'">
+          <div class="py-6 flex flex-col items-center gap-3 text-center">
+            <svg class="w-7 h-7 animate-spin text-amber-400" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"/><path class="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"/></svg>
+            <p class="text-xs font-semibold" x-text="t('dataScanning')"></p>
+            <p class="text-[11px] text-muted font-mono-code" x-text="`${dataSetup.elapsed}s`"></p>
+            <p class="text-[10.5px] text-subtle leading-snug max-w-[280px]" x-text="t('dataScanWarning')"></p>
+          </div>
+        </template>
+
+        <!-- Bước 3: kết quả -->
+        <template x-if="dataSetup.step === 'results'">
+          <div class="space-y-2.5">
+            <p class="text-muted leading-relaxed" x-text="dataSetup.candidates.length ? t('dataResultsMsg') : t('dataNoResults')"></p>
+            <template x-for="c in dataSetup.candidates" :key="c.path">
+              <button type="button" @click="toggleDataPath(c)" :disabled="c.mounted"
+                      class="w-full glass-inset rounded-2xl px-3.5 py-2.5 flex items-center gap-3 text-left border transition disabled:opacity-60"
+                      :class="dataSetup.selected.includes(c.path) ? 'border-sky-400/50 bg-sky-500/10' : 'border-transparent'">
+                <span class="min-w-0 flex-1">
+                  <span class="flex items-center gap-2 flex-wrap">
+                    <span class="font-mono-code text-[12.5px] font-semibold break-all" x-text="c.path"></span>
+                    <span x-show="c.mounted" class="text-[9.5px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-400/25 font-semibold" x-text="t('dataAlreadyMounted')"></span>
+                  </span>
+                  <span class="block text-[10.5px] text-muted mt-0.5" x-text="t('dataComposeCount').replace('{n}', c.count || 0) + (c.running ? ' • ' + t('dataRunningCount').replace('{n}', c.running) : '')"></span>
+                  <span x-show="(c.apps || []).length" class="block text-[10px] text-subtle font-mono-code truncate mt-0.5" x-text="(c.apps || []).join(', ')"></span>
+                </span>
+                <span x-show="!c.mounted" class="w-5 h-5 rounded-md shrink-0 flex items-center justify-center border transition"
+                      :class="dataSetup.selected.includes(c.path) ? 'bg-sky-500 border-sky-400 text-white' : 'border-slate-500/70 text-transparent'">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                </span>
+              </button>
+            </template>
+            <div x-show="dataSetup.status && !dataSetup.status.can_apply && dataSetup.selected.length" class="space-y-1.5">
+              <p class="text-amber-200 text-[10.5px] leading-snug" x-text="t('dataNoCompose')"></p>
+              <pre class="glass-terminal font-mono-code rounded-xl p-3 text-[10.5px] text-emerald-300 whitespace-pre-wrap break-all" x-text="'    volumes:\n' + dataComposeSnippet()"></pre>
+            </div>
+          </div>
+        </template>
+
+        <div x-show="dataSetup.error" class="rounded-xl px-3 py-2 bg-rose-500/12 border border-rose-500/30 text-[11px] text-rose-300 break-words" x-text="dataSetup.error"></div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2.5 pt-1 shrink-0">
+        <button x-show="dataSetup.step === 'intro'" @click="dismissDataSetup()" class="glass-btn py-2.5 px-3 rounded-xl text-xs font-semibold col-span-2" x-text="t('dataLater')"></button>
+        <template x-if="dataSetup.step !== 'intro'">
+          <button @click="dataSetup.step = 'intro'; dataSetup.error = ''" :disabled="dataSetup.busy && dataSetup.step !== 'scan'"
+                  class="glass-btn py-2.5 px-3 rounded-xl text-xs font-semibold disabled:opacity-50" x-text="t('back')"></button>
+        </template>
+        <button x-show="dataSetup.step === 'manual'" @click="checkManualPath()" :disabled="dataSetup.busy || !dataSetup.manualPath.trim()"
+                class="glass-btn-primary py-2.5 px-3 rounded-xl text-xs font-semibold disabled:opacity-50"
+                x-text="dataSetup.busy ? '…' : t('dataCheck')"></button>
+        <button x-show="dataSetup.step === 'scan'" disabled class="glass-btn py-2.5 px-3 rounded-xl text-xs font-semibold opacity-50" x-text="t('dataScanningShort')"></button>
+        <button x-show="dataSetup.step === 'results'" @click="confirmApplyDataPaths()"
+                :disabled="dataSetup.busy || !dataSetup.selected.length || (dataSetup.status && !dataSetup.status.can_apply)"
+                class="glass-btn-update py-2.5 px-3 rounded-xl text-xs font-semibold disabled:opacity-50"
+                x-text="dataSetup.busy ? '…' : t('dataApplyBtn')"></button>
       </div>
     </div>
   </div>

@@ -70,6 +70,8 @@ from app.core.database import (
     save_app_pref,
     set_setting,
 )
+from app.core.database import get_setting
+from app.core import data_setup
 from app.core.docker_client import (
     APP_VERSION,
     container_action,
@@ -714,6 +716,77 @@ async def api_update_all_excluded(payload: UpdateAllExcludedPayload, request: Re
     set_setting("update_all_excluded", json.dumps(names))
     audit(request, user, "update_all_excluded", ",".join(names)[:300])
     return {"ok": True, "excluded": names}
+
+
+# ---------------- Thiết lập thư mục Data App (người dùng mới chưa mount thư mục Data) ----------------
+class DataPathPayload(BaseModel):
+    path: str
+
+
+class DataApplyPayload(BaseModel):
+    paths: list[str]
+
+
+class DataDismissPayload(BaseModel):
+    dismissed: bool = True
+
+
+@app.get("/api/setup/data-status")
+async def api_data_status(_: str = Depends(require_user)):
+    st = await asyncio.to_thread(data_setup.data_status)
+    st["dismissed"] = get_setting(data_setup.dismissed_key(), "") == "1"
+    st["prompt"] = bool(st.get("needs_setup")) and not st["dismissed"] and data_setup.env_flag()
+    return st
+
+
+@app.post("/api/setup/data-dismiss")
+async def api_data_dismiss(payload: DataDismissPayload, _: str = Depends(require_user)):
+    set_setting(data_setup.dismissed_key(), "1" if payload.dismissed else "")
+    return {"ok": True}
+
+
+@app.post("/api/setup/data-scan")
+async def api_data_scan(request: Request, user: str = Depends(require_user)):
+    """mode=quick: chỉ đọc nhãn Docker (tức thì). mode=deep: quét ổ đĩa host bằng container phụ (chạy nền)."""
+    mode = request.query_params.get("mode") or "deep"
+    if mode == "quick":
+        try:
+            return {"running": False, "candidates": await asyncio.to_thread(data_setup.quick_candidates), "error": ""}
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)[:200])
+    audit(request, user, "data_scan", "", "deep")
+    return await asyncio.to_thread(data_setup.start_deep_scan)
+
+
+@app.get("/api/setup/data-scan")
+async def api_data_scan_state(_: str = Depends(require_user)):
+    return data_setup.scan_state()
+
+
+@app.post("/api/setup/data-check")
+async def api_data_check(payload: DataPathPayload, _: str = Depends(require_user)):
+    try:
+        res = await asyncio.to_thread(data_setup.check_path, payload.path)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Cannot check the folder: {str(exc)[:200]}")
+    if not res.get("ok"):
+        raise HTTPException(status_code=400, detail=res.get("error") or "Invalid folder")
+    return res
+
+
+@app.post("/api/setup/data-apply")
+async def api_data_apply(payload: DataApplyPayload, request: Request, user: str = Depends(require_user)):
+    try:
+        res = await asyncio.to_thread(data_setup.apply_paths, payload.paths)
+    except ValueError as exc:
+        audit(request, user, "data_mount_add", ",".join(payload.paths)[:300], str(exc), False)
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        audit(request, user, "data_mount_add", ",".join(payload.paths)[:300], str(exc), False)
+        raise HTTPException(status_code=500, detail=f"Cannot update AppManager: {str(exc)[:200]}")
+    audit(request, user, "data_mount_add", ",".join(res["added"])[:300])
+    set_setting(data_setup.dismissed_key(), "")
+    return {**res, "self_update": True}
 
 
 class DuplicateComposePayload(BaseModel):

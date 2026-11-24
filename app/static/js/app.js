@@ -78,6 +78,7 @@
         backupsState: { loading: false, items: [], busyFile: '' },
         restorePicker: { open: false, app: null, items: [], selected: '' },
         versionPicker: { open: false, loading: false, error: '', items: [], selected: '' },
+        dataSetup: { open: false, step: 'intro', status: null, manualPath: '', busy: false, error: '', candidates: [], selected: [], elapsed: 0, source: '' },
         dupPopup: { open: false, loading: false, busy: false, app: null, composePath: '', files: [] },
         updateAllExcluded: [],
         updateAllPicker: { open: false, selected: [], saving: false },
@@ -365,7 +366,7 @@
 
         async init() {
           this.$watch(() => [this.confirmModal, this.actionSheet, this.logModal, this.batchModal, this.deployModal, this.updateModal,
-                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker, this.restoreRun, this.updateAllPicker, this.versionPicker, this.dupPopup].some(m => m && m.open), (open) => {
+                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker, this.restoreRun, this.updateAllPicker, this.versionPicker, this.dupPopup, this.dataSetup].some(m => m && m.open), (open) => {
             const b = document.body, h = document.documentElement;
             if (open) {
               this._lockY = window.scrollY || 0;
@@ -378,6 +379,7 @@
             }
           });
           await this.loadApps();
+          this.checkDataSetup();
           const stale = !this.lastChecked || (Date.now() - new Date(this.lastChecked).getTime()) > 3600000;
           if (stale && !this.checkingUpdates) this.checkUpdates(true);
         },
@@ -970,6 +972,110 @@
         },
 
         // ---------------- Edit App (Visual UI <-> YAML) ----------------
+        // ---------------- Thiết lập thư mục Data App (người dùng mới) ----------------
+        async checkDataSetup() {
+          try {
+            const res = await fetch('/api/setup/data-status');
+            if (!res.ok) return;
+            const st = await res.json();
+            this.dataSetup.status = st;
+            if (st.prompt) this.openDataSetup(st);
+          } catch (_) {}
+        },
+
+        async openDataSetup(st = null) {
+          const d = this.dataSetup;
+          Object.assign(d, { open: true, step: 'intro', error: '', candidates: [], selected: [], busy: false, elapsed: 0, source: '' });
+          if (!st) {
+            try { const res = await fetch('/api/setup/data-status'); if (res.ok) d.status = await res.json(); } catch (_) {}
+          } else d.status = st;
+          if (!d.manualPath) d.manualPath = (d.status?.mounted || []).length ? '' : '/DATA/AppData';
+        },
+
+        async dismissDataSetup() {
+          this.dataSetup.open = false;
+          this._scanPoll && clearTimeout(this._scanPoll);
+          try { await this._postJson('/api/setup/data-dismiss', { dismissed: true }); } catch (_) {}
+        },
+
+        async checkManualPath() {
+          const d = this.dataSetup;
+          d.busy = true; d.error = '';
+          try {
+            const { res, data } = await this._postJson('/api/setup/data-check', { path: d.manualPath });
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            d.candidates = [{ path: data.path, count: data.count, apps: data.apps || [], mounted: data.mounted, running: 0 }];
+            d.selected = data.mounted ? [] : [data.path];
+            d.source = 'manual'; d.step = 'results';
+          } catch (err) { d.error = err.message; }
+          finally { d.busy = false; }
+        },
+
+        async startDataScan() {
+          const d = this.dataSetup;
+          d.step = 'scan'; d.error = ''; d.elapsed = 0; d.busy = true;
+          try {
+            const { res, data } = await this._postJson('/api/setup/data-scan?mode=deep', {});
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            this._pollDataScan();
+          } catch (err) { d.error = err.message; d.busy = false; }
+        },
+
+        async _pollDataScan() {
+          const d = this.dataSetup;
+          if (!d.open || d.step !== 'scan') return;
+          try {
+            const res = await fetch('/api/setup/data-scan');
+            const st = await res.json();
+            d.elapsed = st.elapsed || 0;
+            if (!st.running) {
+              d.busy = false;
+              if (st.error && !(st.candidates || []).length) {
+                // Quét sâu lỗi -> vẫn dùng kết quả nhanh từ nhãn Docker
+                const q = await this._postJson('/api/setup/data-scan?mode=quick', {});
+                d.candidates = q.data.candidates || [];
+                d.error = st.error;
+              } else d.candidates = st.candidates || [];
+              d.selected = d.candidates.filter(c => !c.mounted && (c.running || 0) > 0).map(c => c.path);
+              d.source = 'scan'; d.step = 'results';
+              return;
+            }
+          } catch (_) {}
+          this._scanPoll = setTimeout(() => this._pollDataScan(), 2000);
+        },
+
+        toggleDataPath(c) {
+          if (c.mounted) return;
+          const sel = this.dataSetup.selected;
+          const i = sel.indexOf(c.path);
+          if (i >= 0) sel.splice(i, 1); else sel.push(c.path);
+        },
+
+        dataComposeSnippet() {
+          return this.dataSetup.selected.map(p => `      - ${p}:${p}`).join('\n');
+        },
+
+        confirmApplyDataPaths() {
+          const d = this.dataSetup;
+          if (!d.selected.length) return;
+          this.askConfirm({
+            tone: 'update', title: this.t('dataApplyTitle'),
+            message: `${d.selected.join(', ')} — ${this.t('dataApplyMsg')}`,
+            confirmLabel: this.t('dataApplyBtn'), onConfirm: () => this.applyDataPaths()
+          });
+        },
+
+        async applyDataPaths() {
+          const d = this.dataSetup;
+          d.busy = true; d.error = '';
+          try {
+            const { res, data } = await this._postJson('/api/setup/data-apply', { paths: d.selected });
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            d.open = false;
+            this._waitAndReload();
+          } catch (err) { d.error = err.message; d.busy = false; }
+        },
+
         // Biểu tượng xám (đã Bỏ qua): popup với cảnh báo ban đầu + Gộp / Huỷ
         async openDupPopup(app) {
           const p = this.dupPopup;

@@ -255,6 +255,7 @@ def _trigger_self_update_helper(
     to_version: str = "",
     compose_original: Optional[str] = None,
     history_mode: str = "manual",
+    extra_job: Optional[dict] = None,
 ) -> None:
     """
     Chạy container phụ (bằng image hiện tại — bản đang chạy ổn) để cập nhật / tạo lại AppManager Pro,
@@ -300,6 +301,7 @@ def _trigger_self_update_helper(
         "window": window,
         "prune_old_image": get_setting("prune_old_images", "true").lower() == "true",
         "started": int(time.time()),
+        **(extra_job or {}),
     }
     # Sao lưu database (cài đặt, tài khoản, lịch sử) — bản mới có thể đổi cấu trúc; rollback sẽ trả lại.
     import sqlite3
