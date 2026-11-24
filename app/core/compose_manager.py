@@ -628,6 +628,15 @@ def visible_duplicate_files(container_name: str, compose_path: str, names: list[
     return others
 
 
+def duplicate_compose_state(container_name: str, compose_path: str, names: list[str]) -> tuple[int, bool]:
+    """(số file compose khác nội dung, người dùng đã bấm Skip cho đúng trạng thái hiện tại chưa).
+    Biểu tượng trên thẻ app chỉ mất khi không còn file nào khác nội dung (đã Merge); Skip chỉ ẩn cảnh báo bên trong."""
+    others = find_other_compose_files(compose_path, names)
+    if not others:
+        return 0, False
+    return len(others), get_setting(_dup_skip_key(container_name), "") == _dup_fingerprint(compose_path, others)
+
+
 def _merge_compose_text(active_text: str, other_text: str) -> str:
     """
     Gộp: giữ NGUYÊN cấu hình đang chạy (services, volumes, env...) của file đang chạy; chỉ lấy thêm từ file kia

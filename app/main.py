@@ -43,6 +43,7 @@ from app.core.compose_manager import (
     merge_ui_into_yaml,
     parse_yaml_to_ui,
     resolve_duplicate_compose,
+    duplicate_compose_state,
     visible_duplicate_files,
     rollback_compose,
     sanitize_app_id,
@@ -440,21 +441,21 @@ async def api_list_apps(_: str = Depends(require_user)):
             a["backups"] = per_app.get(a["name"], [])
             a["latest_backup"] = a["backups"][0] if a["backups"] else None
         # App còn file compose khác nội dung (chưa bấm Skip) -> biểu tượng trên thẻ app
-        def _dups() -> dict[str, int]:
-            out: dict[str, int] = {}
+        def _dups() -> dict[str, tuple[int, bool]]:
+            out: dict[str, tuple[int, bool]] = {}
             for a in data.get("apps") or []:
                 cp = a.get("compose_path") or ""
                 if not cp:
                     continue
                 try:
                     names = [a.get("project") or "", a["name"], Path(cp).parent.name]
-                    out[a["name"]] = len(visible_duplicate_files(a["name"], cp, names))
+                    out[a["name"]] = duplicate_compose_state(a["name"], cp, names)
                 except Exception:
                     pass
             return out
         dups = await asyncio.to_thread(_dups)
         for a in data.get("apps") or []:
-            a["dup_compose"] = dups.get(a["name"], 0)
+            a["dup_compose"], a["dup_skipped"] = dups.get(a["name"], (0, False))
         data["update_all_excluded"] = get_update_all_excluded()
         return JSONResponse(content=data)
     except Exception as e:
