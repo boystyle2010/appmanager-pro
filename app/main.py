@@ -71,7 +71,7 @@ from app.core.database import (
     set_setting,
 )
 from app.core.database import get_setting
-from app.core import data_setup
+from app.core import compose_convert, data_setup
 from app.core.docker_client import (
     APP_VERSION,
     container_action,
@@ -787,6 +787,43 @@ async def api_data_apply(payload: DataApplyPayload, request: Request, user: str 
     audit(request, user, "data_mount_add", ",".join(res["added"])[:300])
     set_setting(data_setup.dismissed_key(), "")
     return {**res, "self_update": True}
+
+
+# ---------------- Chuyển container docker run -> Docker Compose ----------------
+class ComposeConvertPayload(BaseModel):
+    folder: str
+    yaml: str
+
+
+@app.get("/api/apps/{container_name}/compose-convert")
+async def api_compose_convert_preview(container_name: str, _: str = Depends(require_user)):
+    try:
+        return await asyncio.to_thread(compose_convert.generate_compose, container_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail=f"Cannot read the container: {str(exc)[:200]}")
+
+
+@app.post("/api/apps/{container_name}/compose-convert")
+async def api_compose_convert(
+    container_name: str, payload: ComposeConvertPayload, request: Request, user: str = Depends(require_user)
+):
+    info = await asyncio.to_thread(get_app_by_name, container_name)
+    if not info:
+        raise HTTPException(status_code=404, detail="App not found")
+    if info.get("is_self"):
+        raise HTTPException(status_code=400, detail="AppManager itself cannot be converted here")
+    if len(payload.yaml) > 200_000:
+        raise HTTPException(status_code=400, detail="docker-compose.yml is too large")
+    chunks: list[str] = []
+
+    async def collect(text: str) -> None:
+        chunks.append(text)
+
+    res = await compose_convert.convert_stream(container_name, payload.folder.strip(), payload.yaml, collect)
+    audit(request, user, "compose_convert", container_name, res.get("error") or res.get("compose_path") or "", bool(res.get("ok")))
+    return {**res, "log": "".join(chunks)[-20000:]}
 
 
 class DuplicateComposePayload(BaseModel):

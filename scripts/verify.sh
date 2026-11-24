@@ -36,8 +36,11 @@ if [ "$SMOKE" = "smoke" ]; then
     --entrypoint python "$TAG" /smoke_test.py
 fi
 
-# 3) Build thử bản arm64 (bắt lỗi thư viện thiếu bản dựng sẵn cho ARM) — cần QEMU/buildx
+# 3) Build thử bản arm64 + armv7 (bắt lỗi thư viện thiếu bản dựng sẵn cho ARM) — cần QEMU/buildx
 if [ "${VERIFY_ARM64:-}" = "1" ]; then
   docker buildx build "${CACHE_ARGS[@]}" --platform linux/arm64 -t "$TAG-arm64" . >/dev/null
   echo "arm64 image built"
+  # armv7 (32-bit): vài thư viện phải biên dịch từ mã nguồn -> bắt lỗi thiếu bản dựng sẵn
+  docker buildx build "${CACHE_ARGS[@]}" --platform linux/arm/v7 -t "$TAG-armv7" . >/dev/null
+  echo "armv7 image built"
 fi

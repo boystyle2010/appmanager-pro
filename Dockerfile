@@ -1,4 +1,4 @@
-# Lấy Docker CLI & Compose v2 binary chính chủ (tương thích hoàn hảo amd64 & arm64)
+# Lấy Docker CLI & Compose v2 binary chính chủ (amd64, arm64, armv7)
 FROM docker:29.10.0-cli AS docker-cli
 
 # Biên dịch Tailwind CSS v4 một lần trên máy build (CSS dùng chung cho mọi kiến trúc)
@@ -34,10 +34,21 @@ RUN apt-get update && apt-get upgrade -y \
 COPY requirements.txt .
 # Nâng setuptools (bản đi kèm image dính CVE-2025-47273), cài thư viện, rồi GỠ pip: app không cần pip khi chạy,
 # và pip tự đóng gói kèm pkg_resources của setuptools 70.3.0 (pip/_vendor/vendor.txt) -> Trivy báo lỗ hổng.
-RUN pip install --no-cache-dir --upgrade pip setuptools \
+# armv7 (32-bit): một số thư viện không có bản dựng sẵn -> cài tạm trình biên dịch (gỡ ngay trong cùng lớp) và dùng
+# uvicorn bản cơ bản + websockets (bỏ uvloop/httptools vốn phải biên dịch rất lâu; uvicorn tự dùng asyncio/h11).
+ARG TARGETARCH
+RUN set -e; \
+    if [ "$TARGETARCH" = "arm" ]; then \
+        apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev libffi-dev; \
+        sed -i 's/^uvicorn\[standard\]==/uvicorn==/' requirements.txt && echo "websockets" >> requirements.txt; \
+    fi; \
+    pip install --no-cache-dir --upgrade pip setuptools \
     && pip install --no-cache-dir -r requirements.txt \
     && python -m pip uninstall -y pip \
-    && rm -rf /root/.cache
+    && rm -rf /root/.cache; \
+    if [ "$TARGETARCH" = "arm" ]; then \
+        apt-get purge -y --auto-remove gcc libc6-dev libffi-dev && rm -rf /var/lib/apt/lists/*; \
+    fi
 
 COPY app/ ./app/
 COPY --from=css /out/tailwind.css ./app/static/css/tailwind.css

@@ -207,6 +207,62 @@ def _extract_local_digests(container) -> list[str]:
     return digests
 
 
+# ---------------- Portainer stacks ----------------
+# Portainer lưu stack trong volume dữ liệu của nó (/data/compose/<id>/docker-compose.yml, đường dẫn BÊN TRONG
+# container Portainer). Đổi sang đường dẫn trên host; AppManager đọc được khi thư mục đó được mount cùng đường dẫn.
+PORTAINER_PREFIX = "/data/compose/"
+# file compose (đường dẫn host) -> tên project thật: thư mục <id> khác tên stack nên luôn phải truyền -p
+COMPOSE_PROJECTS: dict[str, str] = {}
+
+
+def portainer_compose_root(containers) -> str:
+    for c in containers:
+        try:
+            img = ((c.attrs.get("Config") or {}).get("Image") or "").lower()
+            if "portainer/portainer" not in img and "portainer-ce" not in img and "portainer-ee" not in img:
+                continue
+            for m in c.attrs.get("Mounts") or []:
+                if m.get("Destination") == "/data" and m.get("Source"):
+                    return m["Source"].rstrip("/") + "/compose"
+        except Exception:
+            continue
+    return ""
+
+
+def translate_portainer_path(path: str, root: str) -> str:
+    if root and path and (path + "/").startswith(PORTAINER_PREFIX):
+        return root + "/" + path[len(PORTAINER_PREFIX):].strip("/")
+    return path
+
+
+def compose_cmd(compose_path: str) -> list[str]:
+    """Lệnh docker compose cho một file; stack Portainer cần đúng tên project (-p) và file biến stack.env."""
+    cmd = ["docker", "compose"]
+    project = COMPOSE_PROJECTS.get(str(compose_path))
+    if project:
+        cmd += ["-p", project]
+        env_file = Path(compose_path).parent / "stack.env"
+        if env_file.is_file():
+            cmd += ["--env-file", str(env_file)]
+    return cmd + ["-f", str(compose_path)]
+
+
+def compose_hint(working_dir: str, config_files: str, portainer_root: str) -> dict[str, str]:
+    """Vì sao không dùng được compose của container + thư mục nên mount (để hiện trên thẻ app)."""
+    if not working_dir and not config_files:
+        return {"compose_issue": "not_compose", "compose_expected": "", "compose_mount": ""}
+    expected = (config_files.split(",")[0].strip() if config_files else "") or working_dir
+    if (expected + "/").startswith(PORTAINER_PREFIX):
+        if not portainer_root:
+            return {"compose_issue": "portainer", "compose_expected": expected, "compose_mount": ""}
+        expected = translate_portainer_path(expected, portainer_root)
+        return {"compose_issue": "not_mounted", "compose_expected": expected, "compose_mount": portainer_root}
+    folder = working_dir or str(Path(expected).parent)
+    parent = str(Path(folder).parent)
+    mount = parent if parent.count("/") >= 2 else folder
+    return {"compose_issue": "not_mounted", "compose_expected": expected, "compose_mount": mount}
+
+
 def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
     client = get_docker_client()
     casaos_meta_map = load_casaos_metadata()
@@ -217,6 +273,7 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
 
     containers = client.containers.list(all=True)
     items: list[dict[str, Any]] = []
+    portainer_root = portainer_compose_root(containers)
 
     for c in containers:
         attrs = c.attrs or {}
@@ -277,6 +334,12 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
         # /var/lib/casaos/apps chỉ dùng khi không đọc được file đó: một app chạy lại bằng terminal từ
         # thư mục khác (vd /DATA/AppData/<app>) vẫn trùng tên project với bản CasaOS cũ; dùng nhầm bản cũ
         # sẽ tạo lại container sai cấu hình (volume ./data trỏ chỗ khác, mật khẩu/biến cũ...) -> unhealthy.
+        if portainer_root and ((working_dir + "/").startswith(PORTAINER_PREFIX) or config_files.startswith(PORTAINER_PREFIX)):
+            working_dir = translate_portainer_path(working_dir, portainer_root)
+            config_files = ",".join(translate_portainer_path(x.strip(), portainer_root) for x in config_files.split(",") if x.strip())
+            portainer_stack = True
+        else:
+            portainer_stack = False
         compose_path = ""
         if config_files:
             first_cfg = config_files.split(",")[0].strip()
@@ -290,6 +353,12 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
                     break
         if not compose_path and meta:
             compose_path = meta["compose_path"]
+        if compose_path and portainer_stack and project:
+            COMPOSE_PROJECTS[compose_path] = labels.get("com.docker.compose.project") or project
+        hint = {"compose_issue": "", "compose_expected": "", "compose_mount": ""}
+        if not (compose_path and Path(compose_path).exists()):
+            hint = compose_hint(labels.get("com.docker.compose.project.working_dir") or "",
+                                labels.get("com.docker.compose.project.config_files") or "", portainer_root)
 
         source_url = (
             image_labels.get("org.opencontainers.image.source")
@@ -354,6 +423,8 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
                 "compose_path": compose_path,
                 "appdata_path": appdata_path,
                 "can_update": bool(compose_path and Path(compose_path).exists()),
+                **hint,
+                "portainer_stack": portainer_stack,
                 "project": project,
                 "service": service,
                 "source_url": pref.get("custom_repo") or cached.get("source_url") or source_url,

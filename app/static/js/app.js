@@ -79,6 +79,7 @@
         restorePicker: { open: false, app: null, items: [], selected: '' },
         versionPicker: { open: false, loading: false, error: '', items: [], selected: '' },
         dataSetup: { open: false, step: 'intro', status: null, manualPath: '', busy: false, error: '', candidates: [], selected: [], elapsed: 0, source: '' },
+        composeHint: { open: false, app: null, loading: false, busy: false, preview: null, folder: '', yaml: '', log: '', error: '', done: false },
         dupPopup: { open: false, loading: false, busy: false, app: null, composePath: '', files: [] },
         updateAllExcluded: [],
         updateAllPicker: { open: false, selected: [], saving: false },
@@ -366,7 +367,7 @@
 
         async init() {
           this.$watch(() => [this.confirmModal, this.actionSheet, this.logModal, this.batchModal, this.deployModal, this.updateModal,
-                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker, this.restoreRun, this.updateAllPicker, this.versionPicker, this.dupPopup, this.dataSetup].some(m => m && m.open), (open) => {
+                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker, this.restoreRun, this.updateAllPicker, this.versionPicker, this.dupPopup, this.dataSetup, this.composeHint].some(m => m && m.open), (open) => {
             const b = document.body, h = document.documentElement;
             if (open) {
               this._lockY = window.scrollY || 0;
@@ -972,6 +973,55 @@
         },
 
         // ---------------- Edit App (Visual UI <-> YAML) ----------------
+        // ---------------- App không dùng được compose: lý do + khắc phục / chuyển sang compose ----------------
+        async openComposeHint(app) {
+          const h = this.composeHint;
+          Object.assign(h, { open: true, app, loading: false, busy: false, preview: null, folder: '', yaml: '', log: '', error: '', done: false });
+          if (app.compose_issue !== 'not_compose') return;
+          h.loading = true;
+          try {
+            const res = await fetch(`/api/apps/${encodeURIComponent(app.name)}/compose-convert`);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            h.preview = data; h.folder = data.folder; h.yaml = data.yaml;
+          } catch (err) { h.error = err.message; }
+          finally { h.loading = false; }
+        },
+
+        composeHintSnippet() {
+          const m = this.composeHint.app?.compose_mount || '';
+          return m ? `    volumes:\n      - ${m}:${m}` : '';
+        },
+
+        confirmConvertCompose() {
+          const h = this.composeHint;
+          this.askConfirm({
+            tone: 'update', title: this.t('convertConfirmTitle'),
+            message: `${h.app.title} → ${h.folder}/docker-compose.yml. ${this.t('convertConfirmMsg')}`,
+            confirmLabel: this.t('convertToCompose'), onConfirm: () => this.runConvertCompose()
+          });
+        },
+
+        async runConvertCompose() {
+          const h = this.composeHint;
+          h.busy = true; h.error = ''; h.log = this.t('converting') + '\n';
+          try {
+            const { res, data } = await this._postJson(`/api/apps/${encodeURIComponent(h.app.name)}/compose-convert`, { folder: h.folder, yaml: h.yaml });
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            h.log = data.log || '';
+            if (data.ok) { h.done = true; this.showToast(this.t('convertDone')); this.loadApps(); }
+            else h.error = data.error || 'Failed';
+          } catch (err) { h.error = err.message; }
+          finally { h.busy = false; }
+        },
+
+        openDataSetupManual(path) {
+          this.openDataSetup().then(() => {
+            if (path) this.dataSetup.manualPath = path;
+            this.dataSetup.step = 'manual';
+          });
+        },
+
         // ---------------- Thiết lập thư mục Data App (người dùng mới) ----------------
         async checkDataSetup() {
           try {

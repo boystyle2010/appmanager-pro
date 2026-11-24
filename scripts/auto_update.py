@@ -357,7 +357,7 @@ def build_section(version: str, prev: str, changes: list[dict], others: list[str
     fe = [c for c in changes if c["group"] == "frontend"]
     lines = [f"## {version}", "", f"*Released: {date}*", "", "### 📦 Component & Version Matrix", ""]
     lines.append(f"- **App Release:** Bumped from `v{prev}` ➡️ `v{version}`")
-    lines.append("- **Supported Architectures:** `linux/amd64` (x86_64) & `linux/arm64` (ARM64) *(Multi-arch GHCR Image)*")
+    lines.append("- **Supported Architectures:** `linux/amd64` (x86_64), `linux/arm64` (ARM64) & `linux/arm/v7` (ARMv7 32-bit) *(Multi-arch GHCR Image)*")
     for b in base:
         lines.append(f"- **{b['name']}:** {_fmt(b, b['id'] + ' ')}")
     if py:

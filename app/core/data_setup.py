@@ -20,7 +20,9 @@ import time
 from pathlib import Path
 from typing import Any
 
-from app.core.docker_client import APPDATA_DIR, get_docker_client
+import re
+
+from app.core.docker_client import APPDATA_DIR, get_docker_client, portainer_compose_root, translate_portainer_path
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +96,9 @@ def path_allowed(path: str) -> tuple[bool, str]:
         return False, "Enter an absolute host path, e.g. /DATA/AppData"
     if any(part in ("..",) for part in p.split("/")):
         return False, "The path must not contain '..'"
+    # Ngoại lệ: thư mục stack của Portainer trong volume dữ liệu của nó (vd /var/lib/docker/volumes/portainer_data/_data/compose)
+    if re.match(r"^/var/lib/docker/volumes/[A-Za-z0-9][A-Za-z0-9_.-]*/_data/compose(/.*)?$", p):
+        return True, p
     if p in FORBIDDEN or any(p.startswith(x) for x in FORBIDDEN_PREFIXES):
         return False, f"{p} is a system folder or too broad; choose the folder that holds your apps' data"
     if "docker.sock" in p:
@@ -127,12 +132,14 @@ def _own_mount_paths(own) -> list[str]:
 def _compose_apps(client, own_id: str) -> list[dict[str, str]]:
     """Mọi container do Docker Compose tạo (trừ AppManager): tên, thư mục làm việc, file compose (đường dẫn host)."""
     apps = []
-    for c in client.containers.list(all=True):
+    containers = client.containers.list(all=True)
+    proot = portainer_compose_root(containers)
+    for c in containers:
         if c.id == own_id:
             continue
         labels = (c.attrs.get("Config") or {}).get("Labels") or {}
-        wd = labels.get("com.docker.compose.project.working_dir") or ""
-        cfg = (labels.get("com.docker.compose.project.config_files") or "").split(",")[0].strip()
+        wd = translate_portainer_path(labels.get("com.docker.compose.project.working_dir") or "", proot)
+        cfg = translate_portainer_path((labels.get("com.docker.compose.project.config_files") or "").split(",")[0].strip(), proot)
         if not wd and not cfg:
             continue
         apps.append({"name": c.name, "working_dir": wd or str(Path(cfg).parent), "config": cfg})
@@ -179,6 +186,8 @@ def _suggest_roots(compose_dirs: list[str], mounted: list[str]) -> list[dict[str
             continue
         parent = posixpath.dirname(d)
         root = parent if path_allowed(parent)[0] else d
+        if re.match(r"^/var/lib/docker/volumes/[^/]+/_data/compose/", d + "/") and not d.endswith("/compose"):
+            root = parent  # .../_data/compose/<id> -> .../_data/compose
         if not path_allowed(root)[0]:
             continue
         groups.setdefault(root, set()).add(d)

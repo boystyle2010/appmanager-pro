@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.database import DATA_DIR
-from app.core.docker_client import APPDATA_DIR, get_docker_client
+from app.core.docker_client import APPDATA_DIR, compose_cmd, get_docker_client
 
 BACKUP_ROOT = DATA_DIR / "app-backups"
 DEFAULT_FILE_MAX_MB = 50
@@ -486,7 +486,7 @@ def _restore_version(client, meta: dict[str, Any], current_image_id: str, log: l
 
     log.append(f"$ docker compose -f {compose_path} up -d --force-recreate --no-deps {service}")
     proc = subprocess.run(
-        ["docker", "compose", "-f", compose_path, "up", "-d", "--force-recreate", "--no-deps", service],
+        [*compose_cmd(compose_path), "up", "-d", "--force-recreate", "--no-deps", service],
         cwd=str(Path(compose_path).parent), capture_output=True, text=True, timeout=600,
     )
     out = (proc.stdout or "") + (proc.stderr or "")

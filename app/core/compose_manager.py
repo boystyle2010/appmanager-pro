@@ -10,6 +10,7 @@ from ruamel.yaml import YAML
 
 from app.core.database import DATA_DIR, get_setting, set_setting
 from app.core.docker_client import (
+    compose_cmd,
     APPDATA_DIR,
     CASAOS_APPS_DIR,
     get_app_by_name,
@@ -766,7 +767,7 @@ def _container_name_after_edit(raw_yaml: str, app_info: dict[str, Any]) -> str:
 
 async def _compose_up(compose_path: str, compose_dir: str, extra: Optional[list[str]] = None) -> tuple[int, str]:
     proc = await asyncio.create_subprocess_exec(
-        "docker", "compose", "-f", compose_path, "up", "-d", "--remove-orphans", *(extra or []),
+        *compose_cmd(compose_path), "up", "-d", "--remove-orphans", *(extra or []),
         cwd=compose_dir,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
@@ -936,7 +937,7 @@ async def uninstall_app(
 
     if shared_stack and Path(compose_path).exists():
         proc = await asyncio.create_subprocess_exec(
-            "docker", "compose", "-f", compose_path, "rm", "-s", "-f", service,
+            *compose_cmd(compose_path), "rm", "-s", "-f", service,
             cwd=str(Path(compose_path).parent),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
@@ -960,7 +961,7 @@ async def uninstall_app(
             remove_appdata = False
             logs.append("Kept the AppData folder because it may be shared by the other services.")
     elif compose_path and Path(compose_path).exists():
-        cmd = ["docker", "compose", "-f", compose_path, "down", "--remove-orphans"]
+        cmd = [*compose_cmd(compose_path), "down", "--remove-orphans"]
         if remove_images:
             cmd.extend(["--rmi", "all"])
         proc = await asyncio.create_subprocess_exec(

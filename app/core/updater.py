@@ -15,7 +15,7 @@ from app.core.database import (
     get_setting,
 )
 from app.core.compose_snapshot import rollback_compose_text, save_good
-from app.core.docker_client import get_app_by_name, get_docker_client, list_all_apps
+from app.core.docker_client import compose_cmd, get_app_by_name, get_docker_client, list_all_apps
 from app.core.registry_checker import check_one_app_by_name
 
 LogCallback = Callable[[str], Awaitable[None]]
@@ -193,7 +193,7 @@ async def _rollback_to_previous(
     elif not compose_changed and not data_backup:
         return False, "Previous image is unknown"
 
-    cmd = ["docker", "compose", "-f", compose_path, "up", "-d", "--force-recreate", "--no-deps"]
+    cmd = [*compose_cmd(compose_path), "up", "-d", "--force-recreate", "--no-deps"]
     if service:
         cmd.append(service)
 
@@ -647,7 +647,7 @@ async def _update_app_stream_impl(
         baseline = None
 
     # Bước 1: docker compose pull
-    pull_cmd = ["docker", "compose", "-f", compose_path, "pull"]
+    pull_cmd = [*compose_cmd(compose_path), "pull"]
     if service:
         pull_cmd.append(service)
     await send_log(f"$ {' '.join(pull_cmd)}\n")
@@ -663,7 +663,7 @@ async def _update_app_stream_impl(
         return {"ok": False, "error": f"Pull failed (exit {rc})"}
 
     # Bước 2: docker compose up -d
-    up_cmd = ["docker", "compose", "-f", compose_path, "up", "-d", "--remove-orphans"]
+    up_cmd = [*compose_cmd(compose_path), "up", "-d", "--remove-orphans"]
     if service:
         up_cmd.append(service)
     await send_log(f"\n$ {' '.join(up_cmd)}\n")

@@ -375,6 +375,15 @@
                           class="inline-flex items-center justify-center h-[18px] min-w-[38px] px-1.5 rounded-md text-[9px] leading-none font-bold tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-400/30">AUTO</span>
                   </div>
                 </div>
+
+                <!-- Không dùng được compose: nói rõ lý do + cách khắc phục -->
+                <button x-show="!app.can_update && app.compose_issue && !app.is_self" type="button" @click.stop="openComposeHint(app)"
+                        class="w-full flex items-center gap-1.5 text-left text-[10.5px] leading-snug text-amber-300/95 hover:text-amber-200 min-w-0">
+                  <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+                  </svg>
+                  <span class="truncate" x-text="t(app.compose_issue === 'not_compose' ? 'hintCardNotCompose' : 'hintCardNotMounted')"></span>
+                </button>
               </div>
             </div>
 
@@ -684,6 +693,20 @@
             <span x-text="t('updateAndChangelog')"></span>
           </span>
           <span x-show="actionSheet.app?.has_update" class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300">NEW</span>
+        </button>
+
+        <button x-show="!actionSheet.app?.can_update && actionSheet.app?.compose_issue && !actionSheet.app?.is_self"
+                @click="const a = actionSheet.app; closeActionSheet(); openComposeHint(a)" class="ios-row">
+          <span class="flex items-center gap-3 min-w-0">
+            <svg class="w-4 h-4 text-amber-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085"/>
+            </svg>
+            <span class="min-w-0 text-left">
+              <span class="block" x-text="t(actionSheet.app?.compose_issue === 'not_compose' ? 'convertToCompose' : 'fixCompose')"></span>
+              <span class="block text-[10.5px] font-normal text-muted" x-text="t(actionSheet.app?.compose_issue === 'not_compose' ? 'hintCardNotCompose' : 'hintCardNotMounted')"></span>
+            </span>
+          </span>
+          <svg class="w-3.5 h-3.5 text-subtle" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
         </button>
 
         <button :disabled="!actionSheet.app?.can_update"
@@ -2349,6 +2372,95 @@
       <div class="grid grid-cols-2 gap-2.5 pt-1 shrink-0">
         <button @click="updateAllPicker.open = false" class="glass-btn py-2.5 px-3 rounded-xl text-xs font-semibold" x-text="t('cancel')"></button>
         <button @click="saveUpdateAllPicker()" :disabled="updateAllPicker.saving" class="glass-btn-update py-2.5 px-3 rounded-xl text-xs font-semibold disabled:opacity-50" x-text="t('save')"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- POPUP: vì sao app không dùng được compose + khắc phục / chuyển sang compose -->
+  <div x-show="composeHint.open" x-cloak x-transition.opacity
+       class="fixed inset-0 z-[57] flex items-center justify-center p-4 sm:p-5 bg-black/70 backdrop-blur-md"
+       @click.self="if (!composeHint.busy) composeHint.open = false" @keydown.escape.window="if (!composeHint.busy && !confirmModal.open) composeHint.open = false">
+    <div class="glass-panel w-full max-w-md rounded-[26px] p-5 space-y-4 shadow-2xl max-h-[88dvh] flex flex-col">
+      <div class="flex items-center gap-3 shrink-0">
+        <template x-if="composeHint.app && composeHint.app.icon">
+          <div class="w-11 h-11 rounded-2xl shrink-0 overflow-hidden flex items-center justify-center shadow-md glass-icon-box p-1.5">
+            <img :src="composeHint.app.icon" class="w-full h-full object-contain rounded-xl" />
+          </div>
+        </template>
+        <template x-if="composeHint.app && !composeHint.app.icon">
+          <div class="w-11 h-11 rounded-2xl shrink-0 flex items-center justify-center text-white font-bold text-sm uppercase"
+               :class="avatarGradient(composeHint.app.title)" x-text="composeHint.app.title.slice(0, 2)"></div>
+        </template>
+        <div class="min-w-0">
+          <h3 class="font-bold text-[15px] leading-tight truncate" x-text="composeHint.app?.title"></h3>
+          <p class="text-[11px] text-muted font-mono-code truncate mt-0.5" :title="composeHint.app?.image" x-text="shortImage(composeHint.app?.image)"></p>
+        </div>
+      </div>
+
+      <div class="overflow-y-auto min-h-0 space-y-3 text-[11.5px]">
+        <p class="text-[13px] font-semibold text-amber-300 leading-snug flex items-start gap-2">
+          <svg class="w-4 h-4 shrink-0 mt-px text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+          <span x-text="t(composeHint.app?.compose_issue === 'not_compose' ? 'hintTitleNotCompose' : composeHint.app?.compose_issue === 'portainer' ? 'hintTitlePortainer' : 'hintTitleNotMounted')"></span>
+        </p>
+
+        <!-- Chưa mount thư mục chứa compose -->
+        <template x-if="composeHint.app?.compose_issue === 'not_mounted'">
+          <div class="space-y-2.5">
+            <p class="text-muted leading-relaxed" x-text="t('hintNotMountedMsg')"></p>
+            <p class="font-mono-code text-[10.5px] break-all rounded-xl px-3 py-2 bg-white/5 border border-[var(--glass-border)]" x-text="composeHint.app?.compose_expected"></p>
+            <div class="flex items-end justify-between gap-2">
+              <p class="text-muted leading-relaxed" x-text="t('hintMountMsg')"></p>
+              <button type="button" @click="copyText(composeHintSnippet())" class="glass-btn px-2.5 py-1 rounded-lg text-[10.5px] font-semibold shrink-0" x-text="t('copy')"></button>
+            </div>
+            <pre class="glass-terminal font-mono-code rounded-xl p-3 text-[10.5px] text-emerald-300 whitespace-pre-wrap break-all" x-text="composeHintSnippet()"></pre>
+            <p x-show="composeHint.app?.portainer_stack || (composeHint.app?.compose_mount || '').includes('/_data/compose')" class="text-[10.5px] text-subtle leading-snug" x-text="t('hintPortainerNote')"></p>
+          </div>
+        </template>
+
+        <template x-if="composeHint.app?.compose_issue === 'portainer'">
+          <p class="text-muted leading-relaxed" x-text="t('hintPortainerMsg').replace('{path}', composeHint.app?.compose_expected || '')"></p>
+        </template>
+
+        <!-- Container tạo bằng docker run -> chuyển sang compose -->
+        <template x-if="composeHint.app?.compose_issue === 'not_compose'">
+          <div class="space-y-2.5">
+            <p class="text-muted leading-relaxed" x-text="t('hintNotComposeMsg')"></p>
+            <div x-show="composeHint.loading" class="text-xs text-muted" x-text="t('loadingDetails')"></div>
+            <template x-if="composeHint.preview && !composeHint.log">
+              <div class="space-y-2.5">
+                <label class="block space-y-1">
+                  <span class="text-[10.5px] font-semibold text-muted" x-text="t('convertFolder')"></span>
+                  <input type="text" x-model="composeHint.folder" autocapitalize="off" autocorrect="off" spellcheck="false"
+                         class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
+                </label>
+                <label class="block space-y-1">
+                  <span class="text-[10.5px] font-semibold text-muted" x-text="t('convertYaml')"></span>
+                  <textarea x-model="composeHint.yaml" rows="12" spellcheck="false"
+                            class="glass-input w-full rounded-xl px-3 py-2 text-[10.5px] font-mono-code leading-relaxed"></textarea>
+                </label>
+                <template x-for="n in composeHint.preview.notes || []" :key="n">
+                  <p class="text-[10.5px] text-amber-200" x-text="'• ' + n"></p>
+                </template>
+                <p class="text-[10.5px] text-subtle leading-snug" x-text="t('convertNote')"></p>
+              </div>
+            </template>
+            <pre x-show="composeHint.log" class="glass-terminal font-mono-code rounded-xl p-3 h-56 overflow-auto text-[10.5px] text-emerald-300 whitespace-pre-wrap break-all" x-text="composeHint.log"></pre>
+          </div>
+        </template>
+
+        <div x-show="composeHint.error" class="rounded-xl px-3 py-2 bg-rose-500/12 border border-rose-500/30 text-[11px] text-rose-300 break-words" x-text="composeHint.error"></div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2.5 pt-1 shrink-0">
+        <button @click="composeHint.open = false" :disabled="composeHint.busy" class="glass-btn py-2.5 px-3 rounded-xl text-xs font-semibold disabled:opacity-50"
+                :class="composeHint.app?.compose_issue === 'portainer' || composeHint.done ? 'col-span-2' : ''"
+                x-text="composeHint.app?.compose_issue === 'portainer' || composeHint.done ? t('close') : t('cancel')"></button>
+        <button x-show="composeHint.app?.compose_issue === 'not_mounted'" @click="const m = composeHint.app.compose_mount; composeHint.open = false; openDataSetupManual(m)"
+                class="glass-btn-primary py-2.5 px-3 rounded-xl text-xs font-semibold" x-text="t('hintOpenDataSetup')"></button>
+        <button x-show="composeHint.app?.compose_issue === 'not_compose' && !composeHint.done" @click="confirmConvertCompose()"
+                :disabled="composeHint.busy || composeHint.loading || !composeHint.preview"
+                class="glass-btn-update py-2.5 px-3 rounded-xl text-xs font-semibold disabled:opacity-50"
+                x-text="composeHint.busy ? t('converting') : t('convertToCompose')"></button>
       </div>
     </div>
   </div>

@@ -11,7 +11,7 @@
 [![Release Date](https://img.shields.io/github/release-date/boystyle2010/appmanager-pro?label=released)](https://github.com/boystyle2010/appmanager-pro/releases/latest)
 [![GHCR](https://img.shields.io/badge/ghcr.io-appmanager--pro-2496ED?logo=docker&logoColor=white)](https://github.com/boystyle2010/appmanager-pro/pkgs/container/appmanager-pro)
 [![Docker Hub](https://img.shields.io/badge/Docker%20Hub-appmanager--pro-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/boystyle2010/appmanager-pro)
-[![Platforms](https://img.shields.io/badge/platform-linux%2Famd64%20%7C%20linux%2Farm64-informational?logo=linux&logoColor=white)](#-installation)
+[![Platforms](https://img.shields.io/badge/platform-linux%2Famd64%20%7C%20linux%2Farm64%20%7C%20linux%2Farm%2Fv7-informational?logo=linux&logoColor=white)](#-installation)
 [![Signed](https://img.shields.io/badge/build%20provenance-signed%20by%20GitHub-6e40c9?logo=githubactions&logoColor=white)](https://github.com/boystyle2010/appmanager-pro/attestations)
 
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
@@ -77,7 +77,7 @@ It runs as a single container, ships a mobile-first "liquid glass" UI in English
 ## 🚀 Installation
 
 ### Requirements
-- A Linux host with Docker Engine and Docker Compose v2 (`amd64` or `arm64`)
+- A Linux host with Docker Engine and Docker Compose v2 (`amd64`, `arm64` or 32-bit `armv7`)
 - Optional: CasaOS (apps in `/var/lib/casaos/apps`, data in `/DATA/AppData`)
 
 ### Docker Compose (recommended)
@@ -119,6 +119,93 @@ docker compose up -d
 Open **`http://<server-ip>:8098`** and create the admin account on first launch.
 
 > **Note:** the container name must stay `appmanager-pro` so the app can recognise and update itself.
+
+### Other environments
+
+AppManager reads every app's `docker-compose.yml` **at the same path as on the host** (Docker Compose stores host paths in the container labels). Mount the folder that holds your apps **with the same path on both sides** (`/x:/x`). If you forget, a popup after the first login offers **Manual** entry or **Auto Scan** and adds the folder for you (also in *Settings → Storage → App data folder*). Cards of apps whose compose file cannot be read show the expected path and the line to add.
+
+<details>
+<summary><b>Plain Ubuntu / Debian</b> — apps in <code>/home/&lt;user&gt;/docker</code> (or any folder)</summary>
+
+```yaml
+name: appmanager-pro
+services:
+  appmanager-pro:
+    image: ghcr.io/boystyle2010/appmanager-pro:latest
+    container_name: appmanager-pro
+    restart: unless-stopped
+    ports:
+      - "8098:8000"
+    environment:
+      - TZ=Europe/Berlin
+      - APPDATA_DIR=/home/me/docker          # folder used for app settings backups
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /home/me/docker:/home/me/docker      # SAME path on both sides
+      - ./data:/app/data
+```
+Save it as `/home/me/docker/appmanager-pro/docker-compose.yml`.
+</details>
+
+<details>
+<summary><b>Dockge</b> — stacks in <code>/opt/stacks</code></summary>
+
+```yaml
+name: appmanager-pro
+services:
+  appmanager-pro:
+    image: ghcr.io/boystyle2010/appmanager-pro:latest
+    container_name: appmanager-pro
+    restart: unless-stopped
+    ports:
+      - "8098:8000"
+    environment:
+      - TZ=Europe/Berlin
+      - APPDATA_DIR=/opt/stacks
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/stacks:/opt/stacks
+      - ./data:/app/data
+```
+Create it as a new stack named `appmanager-pro` in Dockge.
+</details>
+
+<details>
+<summary><b>Portainer stacks</b></summary>
+
+Portainer keeps stack files in its own data volume (`/data/compose/<id>` inside Portainer). AppManager finds the Portainer container, maps that path to the host and runs the stack with its real project name and `stack.env`. Mount Portainer's compose folder at the same path:
+
+```yaml
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # named volume "portainer_data" (default install):
+      - /var/lib/docker/volumes/portainer_data/_data/compose:/var/lib/docker/volumes/portainer_data/_data/compose
+      # or, if Portainer uses a folder: - /srv/portainer/compose:/srv/portainer/compose
+      - ./data:/app/data
+```
+Deploy AppManager itself with Docker Compose (not as a Portainer stack), so it can update itself.
+</details>
+
+<details>
+<summary><b>Containers created with <code>docker run</code></b></summary>
+
+They are listed and can be started, stopped and inspected. Open the card's **⋯ → Convert to compose**: AppManager generates a `docker-compose.yml` from the container's current settings (image, ports, volumes, environment, devices…), lets you review it, then recreates the container from it. Named volumes are kept as `external`, the old container is only removed after the new one runs correctly, and it is restored if the new one fails.
+</details>
+
+<details>
+<summary><b>Podman</b> (experimental)</summary>
+
+Enable the Docker-compatible API socket and mount it as the Docker socket:
+
+```bash
+systemctl enable --now podman.socket          # rootful: /run/podman/podman.sock
+```
+```yaml
+    volumes:
+      - /run/podman/podman.sock:/var/run/docker.sock
+```
+`docker compose` inside AppManager talks to Podman through that socket. Self-update and rollback use helper containers; report issues if something behaves differently from Docker.
+</details>
 
 ### CasaOS
 Import the same compose file through **CasaOS → App Store → Custom Install → Import**. The repository's compose file already contains the `x-casaos` metadata (icon, port, descriptions).
@@ -189,8 +276,8 @@ One GitHub Actions workflow ([`release.yml`](.github/workflows/release.yml)) run
 
 1. **Checks the source** — Python syntax, internal imports, Jinja templates, static files and JavaScript ([`scripts/check_project.py`](scripts/check_project.py)).
 2. **Looks for updates** ([`scripts/auto_update.py`](scripts/auto_update.py)) of the Python base image, Docker CLI, Python packages, frontend libraries and — with the `WORKFLOW_TOKEN` secret — the GitHub Actions used by the workflow. Always the newest stable release, **including new major versions**.
-3. **Verifies** the result by building the real image (amd64 + arm64, with build cache) and starting the app inside it with a smoke test ([`scripts/verify.sh`](scripts/verify.sh)). If the newest versions fail, it retries with same-major updates only and notes the held-back upgrades. The result is **committed via the GitHub API**, so commits are signed by GitHub (*Verified*).
-4. **Builds** the multi-arch image (`linux/amd64`, `linux/arm64`), pushes it to **GHCR** and **Docker Hub**, and **signs** both with a GitHub build-provenance attestation.
+3. **Verifies** the result by building the real image (amd64 + arm64 + armv7, with build cache) and starting the app inside it with a smoke test ([`scripts/verify.sh`](scripts/verify.sh)). If the newest versions fail, it retries with same-major updates only and notes the held-back upgrades. The result is **committed via the GitHub API**, so commits are signed by GitHub (*Verified*).
+4. **Builds** the multi-arch image (`linux/amd64`, `linux/arm64`, `linux/arm/v7`), pushes it to **GHCR** and **Docker Hub**, and **signs** both with a GitHub build-provenance attestation.
 5. **Scans the image with Trivy** (critical/high, fixable only).
 6. **Publishes a GitHub Release** whose notes come from `CHANGELOG.md` (Component & Version Matrix, Package Integrity with the Trivy result, What's Changed), and syncs this README to Docker Hub.
 
