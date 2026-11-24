@@ -517,6 +517,9 @@ async def _update_app_stream_impl(
         await send_log(f"[ERROR] Container '{container_name}' not found.\n")
         return {"ok": False, "error": "Container not found"}
 
+    if app_info.get("manage") == "run" and not app_info.get("is_self"):
+        return await _update_run_app(app_info, send_log, mode, force_tag)
+
     compose_path = app_info.get("compose_path") or ""
     if not compose_path or not Path(compose_path).exists():
         msg = "No accessible docker-compose.yml found for this container."
@@ -741,6 +744,58 @@ async def _update_app_stream_impl(
     else:
         await send_log(f"\n⚠️ Container status after update: {new_status}. Check Live Logs.\n")
         return {"ok": False, "error": f"Status is {new_status}"}
+
+
+async def _update_run_app(app_info: dict, send_log: LogCallback, mode: str, force_tag: str) -> dict:
+    """Cập nhật container tạo bằng `docker run`: tạo lại cùng cấu hình với image mới (xem run_manager)."""
+    from app.core.registry_checker import pinned_version_label
+    from app.core.run_manager import image_ref_with_tag, recreate_stream
+
+    name, title = app_info["name"], app_info["title"]
+    from_ver = app_info.get("version") or ""
+    tag = force_tag or app_info.get("target_tag") or ""
+    image_ref = image_ref_with_tag(app_info["image"], tag) if tag else app_info["image"].split("@", 1)[0]
+    if force_tag:
+        ch = next((c for c in (app_info.get("channels") or []) if c.get("tag") == force_tag), {})
+        target_ver = ch.get("version") or pinned_version_label(force_tag) or force_tag
+        await send_log(f"==> Switching image: {app_info['image']} -> {image_ref}\n")
+    else:
+        target_ver = app_info.get("remote_version") or tag or "latest"
+        if tag:
+            await send_log(f"==> Pinned tag: {app_info['image']} -> {image_ref}\n")
+    await send_log(f"==> Updating {title} ({name}) — docker run container, recreated with the same settings\n\n")
+    try:
+        window = max(10, min(120, int(get_setting("health_wait_seconds", "25"))))
+    except Exception:
+        window = 25
+    res = await recreate_stream(
+        name, image_ref, send_log, window=window, force=bool(force_tag) or mode == "manual",
+        auto_rollback=get_setting("auto_rollback", "true").lower() == "true",
+    )
+    await send_log("==> Refreshing update status...\n")
+    await check_one_app_by_name(name)
+    if res.get("ok"):
+        if res.get("changed") and get_setting("prune_old_images", "true").lower() == "true":
+            msg = await asyncio.to_thread(_prune_old_image_sync, res.get("old_image_id") or "", res.get("new_image_id") or "")
+            if msg:
+                await send_log(f"==> {msg}\n")
+        refreshed = await asyncio.to_thread(get_app_by_name, name)
+        new_ver = (refreshed or {}).get("version") or target_ver
+        if force_tag and (not new_ver or new_ver.lower() in ("latest", "beta", "stable", "edge", "dev", "nightly", force_tag.lower())):
+            new_ver = target_ver
+        add_update_history(name, title, from_ver, new_ver, mode, "success",
+                           "Recreated (docker run)" if res.get("changed") else "Already up to date")
+        await send_log(f"\n✅ {title} updated successfully ({from_ver} -> {new_ver})!\n")
+        return {"ok": True, "from_version": from_ver, "to_version": new_ver}
+    reason = res.get("reason") or "Update failed"
+    if res.get("rolled_back"):
+        add_update_history(name, title, from_ver, target_ver, mode, "rolled_back",
+                           f"Update failed ({reason}); previous container restored"[:300])
+        await send_log("\n↩️ Rolled back: the previous container is running again.\n")
+        return {"ok": False, "error": f"Update failed ({reason}); rolled back to {from_ver or 'previous version'}"}
+    add_update_history(name, title, from_ver, target_ver, mode, "failed", reason[:300])
+    await send_log(f"\n[ERROR] {reason}\n")
+    return {"ok": False, "error": reason}
 
 
 async def update_all_apps_stream(send_event: EventCallback) -> None:

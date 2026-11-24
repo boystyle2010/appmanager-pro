@@ -355,8 +355,18 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
             compose_path = meta["compose_path"]
         if compose_path and portainer_stack and project:
             COMPOSE_PROJECTS[compose_path] = labels.get("com.docker.compose.project") or project
+        from app.core.run_manager import manage_kind
+
+        manage = manage_kind(labels)
+        if manage == "helper" or c.name.endswith("-amp-old"):
+            continue  # container phụ của AppManager / container cũ đang giữ tạm khi cập nhật: không hiện
         hint = {"compose_issue": "", "compose_expected": "", "compose_mount": ""}
-        if not (compose_path and Path(compose_path).exists()):
+        has_compose = bool(compose_path and Path(compose_path).exists())
+        if manage == "run" and not has_compose:
+            pass  # quản lý trực tiếp (tạo lại container), không cần compose
+        elif manage == "external":
+            hint = {"compose_issue": "external", "compose_expected": "", "compose_mount": ""}
+        elif not has_compose:
             hint = compose_hint(labels.get("com.docker.compose.project.working_dir") or "",
                                 labels.get("com.docker.compose.project.config_files") or "", portainer_root)
 
@@ -422,7 +432,10 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
                 "index": index_path,
                 "compose_path": compose_path,
                 "appdata_path": appdata_path,
-                "can_update": bool(compose_path and Path(compose_path).exists()),
+                # compose: cần đọc được file; docker run: tạo lại trực tiếp (trừ AppManager — đợt sau)
+                "can_update": has_compose or (manage == "run" and not is_self),
+                "can_edit": has_compose,
+                "manage": "compose" if has_compose else manage,
                 **hint,
                 "portainer_stack": portainer_stack,
                 "project": project,

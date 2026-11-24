@@ -189,7 +189,9 @@ Deploy AppManager itself with Docker Compose (not as a Portainer stack), so it c
 <details>
 <summary><b>Containers created with <code>docker run</code></b></summary>
 
-They are listed and can be started, stopped and inspected. Open the card's **⋯ → Convert to compose**: AppManager generates a `docker-compose.yml` from the container's current settings (image, ports, volumes, environment, devices…), lets you review it, then recreates the container from it. Named volumes are kept as `external`, the old container is only removed after the new one runs correctly, and it is restored if the new one fails.
+They are managed **directly** (card badge `RUN`) — no compose file needed. Update, Update All, scheduled auto-update, *Choose version* and release channels work like for compose apps: AppManager pulls the new image, stops the old container and keeps it renamed as `<name>-amp-old`, creates a new container with the **same settings** (ports, volumes incl. anonymous ones, environment, networks with static IPs and aliases, devices, capabilities, healthcheck, restart policy…), checks it, and removes the old one only when the new one runs correctly — otherwise the old container is started again. Values that come from the image itself (default environment, command, labels) are not copied, so the new image's defaults apply. Containers sharing the network of the updated one (`--network container:<name>`) are recreated to join the new container. The last working configuration is saved in `data/run-snapshots/`.
+
+Containers managed by another tool (Docker Swarm, Kubernetes, Unraid, Synology, Portainer agent…) are only shown and can be started / stopped. Converting a `docker run` container to compose stays available as an option (**⋯ → Convert to compose**).
 </details>
 
 <details>

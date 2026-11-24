@@ -6,3 +6,6 @@
 - Portainer stacks: compose files in Portainer's data volume are found and run with the stack's real project name and stack.env.
 - README: ready-made compose examples for plain Ubuntu/Debian, Dockge, Portainer, docker run containers and Podman (experimental).
 - New architecture: linux/arm/v7 (32-bit ARM) images.
+- docker run containers are now managed directly (badge `RUN`): Update, Update All, auto-update, Choose version and release channels recreate the container with the same settings (ports, volumes incl. anonymous ones, environment, networks with static IP and aliases, devices, capabilities, healthcheck…). The old container is kept stopped until the new one runs correctly and is started again on failure; containers sharing its network are reconnected. Converting to compose stays optional.
+- Containers managed by another tool (Swarm, Kubernetes, Unraid, Synology, Portainer agent) are shown as read-only (start / stop only).
+- Fix: after switching version or channel, the update window no longer shows the loading text and the switch button again.

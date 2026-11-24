@@ -291,10 +291,12 @@
                         :title="app.title" x-text="app.title"></h2>
                     <div class="flex items-center gap-1.5 shrink-0">
                       <span class="h-6 inline-flex items-center text-[9.5px] px-2 rounded-lg font-semibold uppercase tracking-wider border leading-none"
-                            :class="app.source === 'casaos'
+                            :class="app.manage === 'run' ? 'bg-teal-500/12 text-teal-300 border-teal-400/25'
+                              : app.source === 'casaos'
                               ? 'bg-indigo-500/12 text-indigo-300 border-indigo-400/20'
                               : 'bg-sky-500/12 text-sky-300 border-sky-400/20'"
-                            x-text="app.source"></span>
+                            :title="app.manage === 'run' ? t('runBadgeTitle') : ''"
+                            x-text="app.manage === 'run' ? 'run' : app.source"></span>
                       <button @click.stop="openActionSheet(app)" :aria-label="t('moreActions')"
                               class="h-6 w-8 rounded-lg border border-[var(--glass-border)] bg-white/5 inline-flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:bg-white/10 active:bg-white/15 transition">
                         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -382,13 +384,13 @@
                   <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
                   </svg>
-                  <span class="truncate" x-text="t(app.compose_issue === 'not_compose' ? 'hintCardNotCompose' : 'hintCardNotMounted')"></span>
+                  <span class="truncate" x-text="t(app.compose_issue === 'not_compose' ? 'hintCardNotCompose' : app.compose_issue === 'external' ? 'hintCardExternal' : 'hintCardNotMounted')"></span>
                 </button>
               </div>
             </div>
 
             <div class="flex items-center gap-2 pt-0.5">
-              <template x-if="app.has_update">
+              <template x-if="app.has_update && app.compose_issue !== 'external'">
                 <button @click="openUpdateModal(app)"
                         class="glass-btn-update flex-1 h-9 px-3.5 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
@@ -398,7 +400,7 @@
                 </button>
               </template>
 
-              <template x-if="!app.has_update && app.port_map && app.status === 'running'">
+              <template x-if="(!app.has_update || app.compose_issue === 'external') && app.port_map && app.status === 'running'">
                 <a :href="buildWebUrl(app)" target="_blank" rel="noopener"
                    class="glass-btn-primary flex-1 h-9 px-3.5 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5">
                   <span x-text="t('open')"></span>
@@ -408,7 +410,7 @@
                 </a>
               </template>
 
-              <template x-if="!app.has_update && (!app.port_map || app.status !== 'running')">
+              <template x-if="(!app.has_update || app.compose_issue === 'external') && (!app.port_map || app.status !== 'running')">
                 <button @click="app.status === 'running' ? openLogs(app) : runAction(app, 'start')"
                         :disabled="busyId === app.id"
                         class="flex-1 h-9 px-3.5 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
@@ -702,8 +704,8 @@
               <path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085"/>
             </svg>
             <span class="min-w-0 text-left">
-              <span class="block" x-text="t(actionSheet.app?.compose_issue === 'not_compose' ? 'convertToCompose' : 'fixCompose')"></span>
-              <span class="block text-[10.5px] font-normal text-muted" x-text="t(actionSheet.app?.compose_issue === 'not_compose' ? 'hintCardNotCompose' : 'hintCardNotMounted')"></span>
+              <span class="block" x-text="t(actionSheet.app?.compose_issue === 'not_compose' ? 'convertToCompose' : actionSheet.app?.compose_issue === 'external' ? 'externalTitleShort' : 'fixCompose')"></span>
+              <span class="block text-[10.5px] font-normal text-muted" x-text="t(actionSheet.app?.compose_issue === 'not_compose' ? 'hintCardNotCompose' : actionSheet.app?.compose_issue === 'external' ? 'hintCardExternal' : 'hintCardNotMounted')"></span>
             </span>
           </span>
           <svg class="w-3.5 h-3.5 text-subtle" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
@@ -723,7 +725,21 @@
           <svg class="w-3.5 h-3.5 text-subtle" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
         </button>
 
-        <button :disabled="!actionSheet.app?.can_update"
+        <button x-show="actionSheet.app?.manage === 'run' && !actionSheet.app?.is_self"
+                @click="const a = actionSheet.app; closeActionSheet(); openComposeHint({ ...a, compose_issue: 'not_compose' })" class="ios-row">
+          <span class="flex items-center gap-3 min-w-0">
+            <svg class="w-4 h-4 text-teal-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
+            </svg>
+            <span class="min-w-0 text-left">
+              <span class="block" x-text="t('convertToCompose')"></span>
+              <span class="block text-[10.5px] font-normal text-muted" x-text="t('convertOptional')"></span>
+            </span>
+          </span>
+          <svg class="w-3.5 h-3.5 text-subtle" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+        </button>
+
+        <button :disabled="!actionSheet.app?.can_edit"
                 @click="const a = actionSheet.app; closeActionSheet(); openEditModal(a)" class="ios-row disabled:opacity-45">
           <span class="flex items-center gap-3 min-w-0">
             <svg class="w-4 h-4 text-indigo-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -731,7 +747,7 @@
             </svg>
             <span class="min-w-0 text-left">
               <span class="block" x-text="t('editCompose')"></span>
-              <span x-show="!actionSheet.app?.can_update" class="block text-[10.5px] font-normal text-muted" x-text="t('noComposeWarning')"></span>
+              <span x-show="!actionSheet.app?.can_edit" class="block text-[10.5px] font-normal text-muted" x-text="t(actionSheet.app?.manage === 'run' ? 'runNoEdit' : 'noComposeWarning')"></span>
             </span>
           </span>
           <svg class="w-3.5 h-3.5 text-subtle" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
@@ -887,12 +903,12 @@
       </div>
 
       <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-4 flex flex-col gap-3.5">
-        <div x-show="updateModal.loading" class="py-10 text-center text-xs text-muted" x-text="t('loadingDetails')"></div>
+        <div x-show="updateModal.loading && !updateModal.updateLogs && !updateModal.updating" class="py-10 text-center text-xs text-muted" x-text="t('loadingDetails')"></div>
 
         <template x-if="!updateModal.loading && !updateModal.updating && !updateModal.updateLogs">
           <div class="flex flex-col gap-3.5 flex-1 min-h-0">
             <div x-show="updateModal.preview?.kind === 'version'" class="rounded-2xl px-3.5 py-2.5 text-[11.5px] leading-snug border shrink-0 bg-amber-500/10 border-amber-400/35 text-amber-200 space-y-1">
-              <p x-text="t('versionPreviewNote').replace('{tag}', updateModal.preview?.tag || '')"></p>
+              <p x-text="t(updateModal.app?.manage === 'run' ? 'versionPreviewNoteRun' : 'versionPreviewNote').replace('{tag}', updateModal.preview?.tag || '')"></p>
               <p x-show="updateModal.preview?.older" class="font-semibold text-amber-300" x-text="t('downgradeWarning')"></p>
             </div>
             <div x-show="updateModal.preview && updateModal.preview.kind !== 'version'" class="rounded-2xl px-3.5 py-2.5 text-[11.5px] leading-snug border shrink-0"
@@ -904,10 +920,16 @@
               <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"/>
               </svg>
-              <span x-text="lang === 'vi'
-                ? `App đang ghim tag cứng — khi cập nhật sẽ tự nâng tag trong docker-compose.yml lên ${updateModal.app?.target_tag} (có sao lưu tự động).`
-                : `Pinned tag detected — updating will bump docker-compose.yml to ${updateModal.app?.target_tag} (with automatic backup).`"></span>
+              <span x-text="updateModal.app?.manage === 'run'
+                ? (lang === 'vi'
+                  ? `App đang ghim tag cứng — khi cập nhật, container được tạo lại với image :${updateModal.app?.target_tag} và cùng cấu hình.`
+                  : `Pinned tag detected — updating recreates the container from :${updateModal.app?.target_tag} with the same settings.`)
+                : (lang === 'vi'
+                  ? `App đang ghim tag cứng — khi cập nhật sẽ tự nâng tag trong docker-compose.yml lên ${updateModal.app?.target_tag} (có sao lưu tự động).`
+                  : `Pinned tag detected — updating will bump docker-compose.yml to ${updateModal.app?.target_tag} (with automatic backup).`)"></span>
             </div>
+
+            <div x-show="updateModal.app?.manage === 'run' && !updateModal.preview" class="rounded-2xl px-3.5 py-2.5 bg-teal-500/10 border border-teal-400/30 text-[11px] text-teal-200 leading-snug" x-text="t('runUpdateNote')"></div>
 
             <!-- Kênh phát hành: chuyển latest <-> beta... (chỉ hiện khi image có nhiều kênh) -->
             <div x-show="(updateModal.app?.channels || []).length > 1" class="glass-inset rounded-2xl p-3.5 shrink-0 space-y-2.5">
@@ -2400,7 +2422,7 @@
       <div class="overflow-y-auto min-h-0 space-y-3 text-[11.5px]">
         <p class="text-[13px] font-semibold text-amber-300 leading-snug flex items-start gap-2">
           <svg class="w-4 h-4 shrink-0 mt-px text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
-          <span x-text="t(composeHint.app?.compose_issue === 'not_compose' ? 'hintTitleNotCompose' : composeHint.app?.compose_issue === 'portainer' ? 'hintTitlePortainer' : 'hintTitleNotMounted')"></span>
+          <span x-text="t(composeHint.app?.compose_issue === 'not_compose' ? (composeHint.app?.manage === 'run' ? 'convertTitleOptional' : 'hintTitleNotCompose') : composeHint.app?.compose_issue === 'portainer' ? 'hintTitlePortainer' : composeHint.app?.compose_issue === 'external' ? 'hintTitleExternal' : 'hintTitleNotMounted')"></span>
         </p>
 
         <!-- Chưa mount thư mục chứa compose -->
@@ -2417,6 +2439,10 @@
           </div>
         </template>
 
+        <template x-if="composeHint.app?.compose_issue === 'external'">
+          <p class="text-muted leading-relaxed" x-text="t('hintExternalMsg')"></p>
+        </template>
+
         <template x-if="composeHint.app?.compose_issue === 'portainer'">
           <p class="text-muted leading-relaxed" x-text="t('hintPortainerMsg').replace('{path}', composeHint.app?.compose_expected || '')"></p>
         </template>
@@ -2424,7 +2450,7 @@
         <!-- Container tạo bằng docker run -> chuyển sang compose -->
         <template x-if="composeHint.app?.compose_issue === 'not_compose'">
           <div class="space-y-2.5">
-            <p class="text-muted leading-relaxed" x-text="t('hintNotComposeMsg')"></p>
+            <p class="text-muted leading-relaxed" x-text="t(composeHint.app?.manage === 'run' ? 'convertOptionalMsg' : 'hintNotComposeMsg')"></p>
             <div x-show="composeHint.loading" class="text-xs text-muted" x-text="t('loadingDetails')"></div>
             <template x-if="composeHint.preview && !composeHint.log">
               <div class="space-y-2.5">
@@ -2453,8 +2479,8 @@
 
       <div class="grid grid-cols-2 gap-2.5 pt-1 shrink-0">
         <button @click="composeHint.open = false" :disabled="composeHint.busy" class="glass-btn py-2.5 px-3 rounded-xl text-xs font-semibold disabled:opacity-50"
-                :class="composeHint.app?.compose_issue === 'portainer' || composeHint.done ? 'col-span-2' : ''"
-                x-text="composeHint.app?.compose_issue === 'portainer' || composeHint.done ? t('close') : t('cancel')"></button>
+                :class="['portainer', 'external'].includes(composeHint.app?.compose_issue) || composeHint.done ? 'col-span-2' : ''"
+                x-text="['portainer', 'external'].includes(composeHint.app?.compose_issue) || composeHint.done ? t('close') : t('cancel')"></button>
         <button x-show="composeHint.app?.compose_issue === 'not_mounted'" @click="const m = composeHint.app.compose_mount; composeHint.open = false; openDataSetupManual(m)"
                 class="glass-btn-primary py-2.5 px-3 rounded-xl text-xs font-semibold" x-text="t('hintOpenDataSetup')"></button>
         <button x-show="composeHint.app?.compose_issue === 'not_compose' && !composeHint.done" @click="confirmConvertCompose()"

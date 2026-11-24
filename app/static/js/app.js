@@ -905,6 +905,7 @@
             this.updateModal.ws = null;
             if (event.code === 4401) { window.location.href = '/login'; return; }
             if (selfUpdate) { this._waitAndReload(); return; }
+            this.updateModal.preview = null;  // đã chuyển xong -> bỏ trạng thái "xem trước", không hiện lại nút chuyển
             await this.loadApps();
             if (this.updateModal.open && this.updateModal.app) {
               await this._fetchAppDetails(this.updateModal.app.name, false);
