@@ -760,7 +760,6 @@ async def _update_app_stream_impl(
     if not healthy:
         await _send_diagnostics(container_name, send_log)
 
-    rolled_back = False
     if not healthy and get_setting("auto_rollback", "true").lower() == "true":
         rb_ok, rb_reason = await _rollback_to_previous(
             compose_path=compose_path, compose_dir=compose_dir, service=service,
@@ -769,7 +768,6 @@ async def _update_app_stream_impl(
             send_log=send_log, window=window, data_backup=backup_name,
         )
         if rb_ok:
-            rolled_back = True
             await send_log("\n↩️ Rolled back: the previous version is running again.\n")
             add_update_history(
                 container_name, title, from_ver, target_ver, mode, "rolled_back",

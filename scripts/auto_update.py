@@ -20,7 +20,6 @@ Ngoại lệ: Tailwind CSS giữ ở v3 (v4 không có bản chạy trong trình
 from __future__ import annotations
 
 import argparse
-import base64  # noqa: F401  (dùng ở signed_commit)
 import json
 import os
 import re
