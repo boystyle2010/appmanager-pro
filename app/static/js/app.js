@@ -985,7 +985,12 @@
             const { res, data } = await this._postJson(`/api/apps/${encodeURIComponent(m.app.name)}/compose/duplicates`, { action });
             if (!res.ok) throw new Error(data.detail || 'Failed');
             this.showToast(data.message || 'OK');
+            // Ẩn ngay biểu tượng "nhiều file compose" trên thẻ app, rồi tải lại danh sách để đồng bộ
+            const card = this.apps.find(a => a.name === m.app.name);
+            if (card) card.dup_compose = 0;
+            if (m.app) m.app.dup_compose = 0;
             await this._loadCompose(m.app.name, m.lastService);
+            this.loadApps();
           } catch (err) { this.showToast(err.message); }
           finally { m.dupBusy = false; }
         },
