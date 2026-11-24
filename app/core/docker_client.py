@@ -531,3 +531,36 @@ def container_action(container_id: str, action: str) -> dict[str, Any]:
         raise KeyError("Container not found")
     except DockerException as e:
         raise RuntimeError(str(e))
+
+
+def image_users_sync(image_id: str, exclude: str = "") -> list[dict[str, Any]]:
+    """Container (trừ `exclude`) đang dùng image này: [{name, status, project, is_self}] — để báo vì sao không xoá được."""
+    if not image_id:
+        return []
+    client = get_docker_client()
+    own = socket.gethostname()
+    out = []
+    for c in client.containers.list(all=True):
+        if c.name == exclude or (c.attrs.get("Image") or "") != image_id:
+            continue
+        labels = (c.attrs.get("Config") or {}).get("Labels") or {}
+        out.append({"name": c.name, "status": c.status, "project": labels.get("com.docker.compose.project") or "",
+                    "is_self": c.id.startswith(own) or c.name == "appmanager-pro"})
+    return out
+
+
+def mount_users_sync(path: str, exclude: str = "") -> list[str]:
+    """Container khác đang mount thư mục `path` (hoặc thư mục con / cha của nó)."""
+    if not path:
+        return []
+    p = path.rstrip("/")
+    out = []
+    for c in get_docker_client().containers.list(all=True):
+        if c.name == exclude:
+            continue
+        for m in c.attrs.get("Mounts") or []:
+            src = (m.get("Source") or "").rstrip("/")
+            if src and (src == p or src.startswith(p + "/") or p.startswith(src + "/")) and m.get("Type") == "bind":
+                out.append(c.name)
+                break
+    return out

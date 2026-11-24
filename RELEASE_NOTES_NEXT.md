@@ -20,3 +20,7 @@
 - Containers using --link to an updated container are recreated so the link points to the new container.
 - Private registries: when a pull is refused for lack of login, the update log explains how to give AppManager the host's docker credentials (nothing is changed).
 - Much faster app list on servers with many containers (137 containers: 17 s -> under 1 s).
+- Uninstall shows "What will happen" with every step and its effect (container, CasaOS folder, image, AppData, backups kept), notes other services of the same stack, and warns when the AppData folder is shared with other apps. A risky uninstall asks for a final confirmation listing what will be deleted, and the result shows each step.
+- Uninstall + "delete image" when the image is still used by other containers: the dialog lists those containers and explains why the image cannot be deleted; choose "Keep the image" (default) or "Also uninstall those apps" (containers only, their AppData is kept). AppManager itself is never removed this way.
+- Update log explains when the old image is kept because another container still uses it.
+- Code cleanup: removed an unused variable and import reported by pyflakes.

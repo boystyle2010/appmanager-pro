@@ -53,7 +53,13 @@ async def _run_cmd_stream(
 def _prune_old_image_sync(old_image_id: str, new_image_id: str) -> str:
     if not old_image_id or old_image_id == new_image_id:
         return ""
+    from app.core.docker_client import image_users_sync
+
     try:
+        users = image_users_sync(old_image_id)
+        if users:  # giải thích vì sao image cũ còn lại trên ổ đĩa
+            return (f"Old image {old_image_id[:19]} kept: still used by "
+                    + ", ".join(f"{u['name']} ({u['status']})" for u in users))
         client = get_docker_client()
         client.images.remove(image=old_image_id, force=False)
         return f"Removed unused old image {old_image_id[:19]}"

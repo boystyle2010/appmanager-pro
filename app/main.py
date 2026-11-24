@@ -254,6 +254,7 @@ class UninstallPayload(BaseModel):
     remove_images: bool = False
     remove_appdata: bool = False
     confirm_name: str = ""
+    remove_image_users: list[str] = []  # gỡ cả các app đang dùng chung image (người dùng đã xác nhận đúng danh sách)
 
 
 class PrunePayload(BaseModel):
@@ -916,6 +917,17 @@ async def api_rollback_compose(
 
 # ---------------- Smart Uninstall & Actions ----------------
 
+@app.get("/api/apps/{container_name}/uninstall-check")
+async def api_uninstall_check(container_name: str, _: str = Depends(require_user)):
+    """Trước khi gỡ: app khác dùng chung image / AppData, stack nhiều service (để người dùng biết ảnh hưởng)."""
+    from app.core.compose_manager import uninstall_check
+
+    res = await uninstall_check(container_name)
+    if not res.get("ok"):
+        raise HTTPException(status_code=404, detail=res.get("error") or "Not found")
+    return res
+
+
 @app.post("/api/apps/{container_name}/uninstall")
 async def api_uninstall_app(
     container_name: str, payload: UninstallPayload, request: Request, user: str = Depends(require_user)
@@ -926,10 +938,11 @@ async def api_uninstall_app(
         remove_images=payload.remove_images,
         remove_appdata=payload.remove_appdata,
         confirm_name=payload.confirm_name,
+        remove_image_users=payload.remove_image_users,
     )
     audit(
         request, user, "uninstall", container_name,
-        f"compose={payload.remove_compose} images={payload.remove_images} appdata={payload.remove_appdata}",
+        f"compose={payload.remove_compose} images={payload.remove_images} appdata={payload.remove_appdata} also={','.join(payload.remove_image_users)[:200]}",
         bool(res.get("ok")),
     )
     if not res.get("ok"):

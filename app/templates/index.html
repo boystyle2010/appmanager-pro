@@ -1480,7 +1480,7 @@
   <div x-show="uninstallModal.open" x-cloak x-transition.opacity
        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/70 backdrop-blur-md"
        @click.self="if (!uninstallModal.running) uninstallModal.open = false">
-    <div class="glass-panel w-full max-w-md rounded-t-[28px] sm:rounded-[28px] p-5 sm:p-6 space-y-4"
+    <div class="glass-panel w-full max-w-md rounded-t-[28px] sm:rounded-[28px] p-5 sm:p-6 space-y-4 max-h-[90dvh] overflow-y-auto"
          style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
       <div class="sheet-handle sm:hidden"></div>
       <div class="flex items-center justify-between gap-3 pb-3 border-b border-[var(--glass-border)]">
@@ -1511,13 +1511,35 @@
           </div>
           <input type="checkbox" x-model="uninstallModal.removeCompose" class="w-4 h-4 accent-rose-500 shrink-0" />
         </label>
-        <label class="glass-inset rounded-2xl p-3.5 flex items-center justify-between gap-3 cursor-pointer">
-          <div>
-            <p class="font-semibold" x-text="t('unStepImage')"></p>
-            <p class="text-[11px] text-muted" x-text="t('unStepImageDesc')"></p>
+        <div class="glass-inset rounded-2xl p-3.5 space-y-2.5">
+          <label class="flex items-center justify-between gap-3 cursor-pointer">
+            <div>
+              <p class="font-semibold" x-text="t('unStepImage')"></p>
+              <p class="text-[11px] text-muted" x-text="t('unStepImageDesc')"></p>
+            </div>
+            <input type="checkbox" x-model="uninstallModal.removeImages" class="w-4 h-4 accent-rose-500 shrink-0" />
+          </label>
+          <!-- Image còn được app khác dùng: nói rõ và cho chọn -->
+          <div x-show="uninstallModal.removeImages && (uninstallModal.check?.image_users || []).length" x-cloak
+               class="rounded-xl border border-amber-400/40 bg-amber-500/10 p-3 space-y-2 text-[11px] text-amber-200">
+            <p class="font-semibold flex items-start gap-1.5">
+              <svg class="w-4 h-4 shrink-0 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+              <span x-text="t('imageInUseTitle')"></span>
+            </p>
+            <template x-for="usr in (uninstallModal.check?.image_users || [])" :key="usr.name">
+              <p class="font-mono-code text-[10.5px]" x-text="`• ${usr.name} (${usr.status === 'running' ? t('running') : usr.status})${usr.is_self ? ' — AppManager' : ''}`"></p>
+            </template>
+            <p class="text-amber-200/90 leading-snug" x-text="t('imageInUseWhy')"></p>
+            <label class="flex items-start gap-2 cursor-pointer">
+              <input type="radio" value="keep" x-model="uninstallModal.imageChoice" class="mt-0.5 accent-amber-400" />
+              <span><b x-text="t('imageKeepOpt')"></b> — <span x-text="t('imageKeepOptDesc')"></span></span>
+            </label>
+            <label class="flex items-start gap-2" :class="(uninstallModal.check?.image_users || []).some(x => x.is_self) ? 'opacity-50' : 'cursor-pointer'">
+              <input type="radio" value="remove" x-model="uninstallModal.imageChoice" :disabled="(uninstallModal.check?.image_users || []).some(x => x.is_self)" class="mt-0.5 accent-rose-500" />
+              <span class="text-rose-200"><b x-text="t('imageRemoveUsersOpt')"></b> — <span x-text="(uninstallModal.check?.image_users || []).some(x => x.is_self) ? t('imageRemoveUsersSelf') : t('imageRemoveUsersOptDesc')"></span></span>
+            </label>
           </div>
-          <input type="checkbox" x-model="uninstallModal.removeImages" class="w-4 h-4 accent-rose-500 shrink-0" />
-        </label>
+        </div>
         <div x-show="uninstallModal.app?.appdata_path"
              class="rounded-2xl p-3.5 border space-y-2.5 transition"
              :class="uninstallModal.removeAppdata ? 'bg-rose-500/12 border-rose-500/40' : 'glass-inset'">
@@ -1535,11 +1557,29 @@
           </div>
         </div>
       </div>
+      <!-- Sẽ thực hiện: từng việc + ảnh hưởng -->
+      <div x-show="!uninstallModal.resultLogs" class="rounded-2xl border border-[var(--glass-border)] p-3 space-y-1.5 text-[11px]">
+        <p class="text-[10.5px] font-semibold uppercase tracking-wider text-muted" x-text="t('uninstallPlanTitle')"></p>
+        <template x-for="(step, i) in uninstallPlan()" :key="i">
+          <p class="flex items-start gap-2 leading-snug"
+             :class="{ 'text-rose-300': step.tone === 'danger', 'text-amber-200': step.tone === 'warn', 'text-emerald-300': step.tone === 'ok', 'text-muted': step.tone === 'info' }">
+            <span class="shrink-0" x-text="{ danger: '✕', warn: '!', ok: '✓', info: 'ⓘ' }[step.tone]"></span>
+            <span x-text="step.text"></span>
+          </p>
+        </template>
+      </div>
+      <div x-show="uninstallModal.resultLogs" x-cloak class="space-y-1.5">
+        <p class="text-xs font-semibold text-emerald-300" x-text="t('uninstallDone')"></p>
+        <pre class="glass-terminal font-mono-code rounded-xl p-3 text-[10.5px] text-emerald-300 whitespace-pre-wrap break-words max-h-48 overflow-y-auto" x-text="uninstallModal.resultLogs"></pre>
+      </div>
       <div x-show="uninstallModal.error" x-cloak class="text-xs text-rose-400 px-1" x-text="uninstallModal.error"></div>
-      <div class="flex gap-2 pt-1">
+      <div x-show="uninstallModal.resultLogs" x-cloak>
+        <button @click="uninstallModal.open = false" class="glass-btn w-full py-3 rounded-2xl text-xs font-semibold" x-text="t('close')"></button>
+      </div>
+      <div x-show="!uninstallModal.resultLogs" class="flex gap-2 pt-1">
         <button @click="uninstallModal.open = false" :disabled="uninstallModal.running"
                 class="glass-btn flex-1 py-3 rounded-2xl text-xs font-semibold" x-text="t('cancel')"></button>
-        <button @click="confirmUninstall()"
+        <button @click="requestUninstall()"
                 :disabled="uninstallModal.running || (uninstallModal.removeAppdata && uninstallModal.confirmName.trim().toLowerCase() !== (uninstallModal.app?.name || '').toLowerCase())"
                 class="glass-btn-danger flex-1 py-3 rounded-2xl text-xs font-semibold disabled:opacity-45"
                 x-text="uninstallModal.running ? t('uninstalling') : t('confirmUninstall')"></button>
@@ -2869,7 +2909,7 @@
         </div>
         <div class="min-w-0 flex-1">
           <h3 class="font-bold text-[15px] leading-snug" x-text="confirmModal.title"></h3>
-          <p class="text-xs text-muted mt-1.5 leading-relaxed" x-text="confirmModal.message"></p>
+          <p class="text-xs text-muted mt-1.5 leading-relaxed whitespace-pre-line" x-text="confirmModal.message"></p>
         </div>
       </div>
 

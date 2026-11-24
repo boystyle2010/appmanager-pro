@@ -962,13 +962,41 @@ def _is_safe_subpath(target: Path, parent: Path) -> bool:
         return False
 
 
+async def uninstall_check(container_name: str) -> dict[str, Any]:
+    """Trước khi gỡ: những gì sẽ bị ảnh hưởng (app khác dùng chung image / AppData, stack nhiều service)."""
+    from app.core.docker_client import image_users_sync, mount_users_sync
+
+    app_info = await asyncio.to_thread(get_app_by_name, container_name)
+    if not app_info:
+        return {"ok": False, "error": "Container not found"}
+    project = app_info.get("project") or ""
+    stack_others: list[str] = []
+    if project and app_info.get("service"):
+        client = get_docker_client()
+        stack_others = [c.name for c in await asyncio.to_thread(
+            client.containers.list, all=True, filters={"label": f"com.docker.compose.project={project}"}) if c.name != container_name]
+    return {
+        "ok": True,
+        "image": app_info.get("image") or "",
+        "image_users": await asyncio.to_thread(image_users_sync, app_info.get("image_id") or "", container_name),
+        "appdata_path": app_info.get("appdata_path") or "",
+        "appdata_users": await asyncio.to_thread(mount_users_sync, app_info.get("appdata_path") or "", container_name),
+        "project": project,
+        "stack_others": stack_others,
+        "manage": app_info.get("manage") or "",
+    }
+
+
 async def uninstall_app(
     container_name: str,
     remove_compose: bool = True,
     remove_images: bool = False,
     remove_appdata: bool = False,
     confirm_name: str = "",
+    remove_image_users: Optional[list[str]] = None,
 ) -> dict[str, Any]:
+    from app.core.docker_client import image_users_sync
+
     app_info = await asyncio.to_thread(get_app_by_name, container_name)
     if not app_info:
         return {"ok": False, "error": "Container not found"}
@@ -981,6 +1009,21 @@ async def uninstall_app(
     logs: list[str] = []
     compose_path = app_info.get("compose_path") or ""
     image_id = app_info.get("image_id") or ""
+
+    # Image còn được app khác dùng: chỉ xoá khi người dùng chọn gỡ ĐÚNG các app đó (không bao giờ gỡ AppManager)
+    also_remove: list[str] = []
+    if remove_images and image_id:
+        users = await asyncio.to_thread(image_users_sync, image_id, container_name)
+        if users:
+            names = {u["name"] for u in users}
+            if remove_image_users and set(remove_image_users) == names and not any(u["is_self"] for u in users):
+                also_remove = sorted(names)
+            else:
+                remove_images = False
+                logs.append("Image kept: it is still used by " + ", ".join(
+                    f"{u['name']} ({u['status']})" for u in users) + ".")
+    if also_remove:
+        remove_images = False  # xoá image SAU khi đã gỡ các app đang dùng nó (bên dưới)
     appdata_path = app_info.get("appdata_path") or ""
 
     # App nằm trong một stack nhiều service (vd: immich + redis)? -> chỉ gỡ đúng service này
@@ -1064,5 +1107,17 @@ async def uninstall_app(
             logs.append(f"Deleted AppData folder: {adir}")
         else:
             logs.append(f"Skipped AppData deletion (unsafe or missing path): {adir}")
+
+    if also_remove:
+        for other in also_remove:
+            r = await uninstall_app(other, remove_compose=False, remove_images=False, remove_appdata=False)
+            logs.append(f"Also uninstalled {other} (it used the same image): " + ("done" if r.get("ok") else r.get("error", "failed")))
+        def _rm_shared_img() -> str:
+            try:
+                get_docker_client().images.remove(image=image_id, force=False)
+                return "Removed image."
+            except Exception as exc:
+                return f"Image kept (still in use or error: {exc})"
+        logs.append(await asyncio.to_thread(_rm_shared_img))
 
     return {"ok": True, "logs": "\n".join(x for x in logs if x)}

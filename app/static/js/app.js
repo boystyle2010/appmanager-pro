@@ -1403,12 +1403,56 @@
         },
 
         // ---------------- Smart Uninstall ----------------
-        openUninstallModal(app) {
+        async openUninstallModal(app) {
           this.uninstallModal = {
             open: true, running: false, app,
             removeCompose: true, removeImages: false, removeAppdata: false,
-            confirmName: '', error: ''
+            confirmName: '', error: '', check: null, imageChoice: 'keep', resultLogs: ''
           };
+          // Những gì bị ảnh hưởng: app khác dùng chung image / AppData, stack nhiều service
+          try {
+            const res = await fetch(`/api/apps/${encodeURIComponent(app.name)}/uninstall-check`);
+            if (res.ok) this.uninstallModal.check = await res.json();
+          } catch (_) {}
+        },
+
+        // Danh sách việc sẽ làm + ảnh hưởng (hiện trong cửa sổ gỡ trước khi bấm)
+        uninstallPlan() {
+          const u = this.uninstallModal, c = u.check || {}, a = u.app || {};
+          const vi = this.lang === 'vi', out = [];
+          const users = c.image_users || [];
+          out.push({ tone: 'danger', text: vi ? `Dừng và xoá container ${a.name}. App sẽ ngừng hoạt động.` : `Stop and delete the container ${a.name}. The app stops working.` });
+          if ((c.stack_others || []).length) out.push({ tone: 'info', text: vi
+            ? `Chỉ gỡ service này. ${c.stack_others.length} service khác của stack "${c.project}" (${c.stack_others.join(', ')}) vẫn chạy.`
+            : `Only this service is removed. ${c.stack_others.length} other service(s) of stack "${c.project}" (${c.stack_others.join(', ')}) keep running.` });
+          if (a.source === 'casaos') out.push(u.removeCompose
+            ? { tone: 'warn', text: vi ? 'Xoá thư mục app của CasaOS (docker-compose.yml). App biến mất khỏi CasaOS.' : 'Delete the CasaOS app folder (docker-compose.yml). The app disappears from CasaOS.' }
+            : { tone: 'ok', text: vi ? 'Giữ docker-compose.yml của CasaOS.' : 'Keep the CasaOS docker-compose.yml.' });
+          if (!u.removeImages) out.push({ tone: 'ok', text: vi ? `Giữ image ${c.image || ''} trên ổ đĩa (cài lại nhanh, không tải lại).` : `Keep the image ${c.image || ''} on disk (fast reinstall, no download).` });
+          else if (!users.length) out.push({ tone: 'warn', text: vi ? `Xoá image ${c.image || ''} để giải phóng dung lượng. Cài lại sẽ phải tải lại.` : `Delete the image ${c.image || ''} to free disk space. A reinstall downloads it again.` });
+          else if (u.imageChoice === 'keep') out.push({ tone: 'ok', text: vi
+            ? `Giữ image: nó vẫn đang được ${users.map(x => x.name).join(', ')} dùng (xoá sẽ làm hỏng các app đó).`
+            : `Keep the image: it is still used by ${users.map(x => x.name).join(', ')} (deleting it would break those apps).` });
+          else out.push({ tone: 'danger', text: vi
+            ? `Gỡ luôn ${users.map(x => x.name).join(', ')} (chỉ container; AppData của các app đó được giữ), rồi xoá image.`
+            : `Also uninstall ${users.map(x => x.name).join(', ')} (containers only; their AppData is kept), then delete the image.` });
+          if (a.appdata_path) out.push(u.removeAppdata
+            ? { tone: 'danger', text: (vi ? `XOÁ VĨNH VIỄN dữ liệu trong ${a.appdata_path}. Không thể khôi phục.` : `PERMANENTLY delete the data in ${a.appdata_path}. This cannot be undone.`)
+                + ((c.appdata_users || []).length ? (vi ? ` Thư mục này cũng đang được ${c.appdata_users.join(', ')} dùng: các app đó sẽ mất dữ liệu.` : ` This folder is also used by ${c.appdata_users.join(', ')}: those apps will lose data.`) : '') }
+            : { tone: 'ok', text: vi ? `Giữ dữ liệu trong ${a.appdata_path} (cài lại app sẽ dùng lại dữ liệu này).` : `Keep the data in ${a.appdata_path} (a reinstall reuses it).` });
+          out.push({ tone: 'info', text: vi ? 'Các bản sao lưu của AppManager cho app này vẫn được giữ trong Cài đặt.' : "AppManager's backups of this app are kept (Settings)." });
+          return out;
+        },
+
+        requestUninstall() {
+          const u = this.uninstallModal, users = (u.check?.image_users || []);
+          const risky = u.removeAppdata || (u.removeImages && users.length && u.imageChoice === 'remove');
+          if (!risky) return this.confirmUninstall();
+          this.askConfirm({
+            tone: 'danger', title: this.t('uninstallConfirmTitle').replace('{app}', u.app.title),
+            message: this.uninstallPlan().filter(x => x.tone === 'danger').map(x => '• ' + x.text).join('\n'),
+            confirmLabel: this.t('confirmUninstall'), onConfirm: () => this.confirmUninstall()
+          });
         },
 
         async confirmUninstall() {
@@ -1420,13 +1464,16 @@
               `/api/apps/${encodeURIComponent(u.app.name)}/uninstall`,
               {
                 remove_compose: u.removeCompose, remove_images: u.removeImages,
-                remove_appdata: u.removeAppdata, confirm_name: u.confirmName
+                remove_appdata: u.removeAppdata, confirm_name: u.confirmName,
+                remove_image_users: (u.removeImages && u.imageChoice === 'remove') ? (u.check?.image_users || []).map(x => x.name) : []
               }
             );
             if (!res.ok) throw new Error(data.detail || 'Uninstall failed');
             const title = u.app.title;
-            u.open = false;
             this.showToast(this.lang === 'vi' ? `Đã gỡ ${title} ✓` : `${title} uninstalled ✓`);
+            // Hiện kết quả từng bước (vd image được giữ vì app khác đang dùng) thay vì đóng ngay
+            u.resultLogs = data.logs || '';
+            if (!u.resultLogs) u.open = false;
             await this.loadApps();
           } catch (err) {
             u.error = err.message;
