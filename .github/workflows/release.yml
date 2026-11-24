@@ -182,6 +182,10 @@ jobs:
     outputs:
       digest: ${{ steps.build.outputs.digest }}
       scan: ${{ steps.scan_sum.outputs.summary }}
+    env:
+      # Đẩy thêm lên Docker Hub khi có secret DOCKERHUB_USERNAME + DOCKERHUB_TOKEN (GHCR vẫn là nguồn chính)
+      DOCKERHUB_ENABLED: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+      DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USERNAME }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -195,6 +199,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        if: env.DOCKERHUB_ENABLED == 'true'
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract Docker metadata (labels)
         id: meta
@@ -211,11 +222,19 @@ jobs:
           CHANGED: ${{ needs.update.outputs.changed }}
           VERSION: ${{ needs.update.outputs.version }}
         run: |
+          IMAGES="$IMAGE"
+          if [ "$DOCKERHUB_ENABLED" = "true" ]; then
+            HUB="docker.io/${DOCKERHUB_USER,,}/${GITHUB_REPOSITORY#*/}"
+            IMAGES="$IMAGES $HUB"
+            echo "hub=$HUB" >> "$GITHUB_OUTPUT"
+          fi
           {
             echo "list<<EOF"
-            echo "$IMAGE:latest"
-            echo "$IMAGE:build-$SHORT"
-            if [ "$CHANGED" = "true" ] && [ -n "$VERSION" ]; then echo "$IMAGE:$VERSION"; fi
+            for img in $IMAGES; do
+              echo "$img:latest"
+              echo "$img:build-$SHORT"
+              if [ "$CHANGED" = "true" ] && [ -n "$VERSION" ]; then echo "$img:$VERSION"; fi
+            done
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -239,6 +258,28 @@ jobs:
           subject-name: ${{ needs.update.outputs.image }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
+
+      - name: Sign Docker Hub image (attestation)
+        if: env.DOCKERHUB_ENABLED == 'true'
+        continue-on-error: true
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ steps.tags.outputs.hub }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      # Mô tả trang Docker Hub lấy từ README (token cần quyền Read, Write, Delete; thiếu quyền thì chỉ bỏ qua bước này)
+      - name: Sync Docker Hub description
+        if: env.DOCKERHUB_ENABLED == 'true' && needs.update.outputs.changed == 'true'
+        continue-on-error: true
+        uses: peter-evans/dockerhub-description@v5
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ format('{0}/{1}', secrets.DOCKERHUB_USERNAME, github.event.repository.name) }}
+          short-description: "Fast Docker & CasaOS app manager: digest-based update checks, changelogs, safe compose editing, automatic rollback."
+          readme-filepath: ./README.md
+          enable-url-completion: true
 
       # Quét lỗ hổng image vừa build (không chặn release; kết quả ghi vào Release notes).
       # Ghim theo commit SHA (v0.36.0) vì các tag cũ của trivy-action từng bị chiếm quyền (GHSA-69fq-xp46-6x23).

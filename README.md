@@ -10,6 +10,7 @@
 [![Latest Release](https://img.shields.io/github/v/release/boystyle2010/appmanager-pro?label=release&color=2ea043)](https://github.com/boystyle2010/appmanager-pro/releases/latest)
 [![Release Date](https://img.shields.io/github/release-date/boystyle2010/appmanager-pro?label=released)](https://github.com/boystyle2010/appmanager-pro/releases/latest)
 [![GHCR](https://img.shields.io/badge/ghcr.io-appmanager--pro-2496ED?logo=docker&logoColor=white)](https://github.com/boystyle2010/appmanager-pro/pkgs/container/appmanager-pro)
+[![Docker Hub](https://img.shields.io/badge/Docker%20Hub-appmanager--pro-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/boystyle2010/appmanager-pro)
 [![Platforms](https://img.shields.io/badge/platform-linux%2Famd64%20%7C%20linux%2Farm64-informational?logo=linux&logoColor=white)](#-installation)
 [![Signed](https://img.shields.io/badge/build%20provenance-signed%20by%20GitHub-6e40c9?logo=githubactions&logoColor=white)](https://github.com/boystyle2010/appmanager-pro/attestations)
 
@@ -99,6 +100,9 @@ services:
       - /DATA/AppData:/DATA/AppData
       - /DATA/AppData/appmanager-pro/data:/app/data
 ```
+
+> The image is also published on Docker Hub as `boystyle2010/appmanager-pro` (same tags: `latest`, `X.Y.Z`, `build-<sha>`). GHCR is the recommended source: Docker Hub limits anonymous pulls.
+
 
 Then start it:
 

@@ -39,6 +39,7 @@ bash scripts/verify.sh amp-test smoke    # cần Docker: build image, chạy uvi
 ## CI (`.github/workflows/release.yml`)
 - Chạy hằng ngày, khi push `main` (bỏ qua thay đổi chỉ `*.md`/LICENSE), hoặc bấm tay (`force_release`, `version`).
 - Bot nâng **mọi** thành phần lên bản mới nhất (kể cả major) → build & chạy thử thật (uvicorn + smoke test + build arm64) → hỏng thì lùi về nâng cùng major → commit qua GitHub API (có chữ ký) → build multi-arch, ký attestation, quét Trivy → tạo Release.
+- Image đẩy lên **GHCR** (nguồn chính) và **Docker Hub** (`<DOCKERHUB_USERNAME>/appmanager-pro`, khi có secret `DOCKERHUB_USERNAME` + `DOCKERHUB_TOKEN`), cùng tag `latest`/`X.Y.Z`/`build-<sha>`; mô tả Docker Hub đồng bộ từ README khi có bản phát hành.
 - Bot nâng cả action trong `.github/workflows/` (lên major mới nhất, bỏ qua nếu bản mới mất input đang dùng) khi có secret `WORKFLOW_TOKEN` (fine-grained PAT: Contents + Workflows Read/Write, chỉ repo này). Không có secret thì phải nâng tay. Commit của bot có `[skip ci]`. Trivy ghim theo commit SHA (không tự nâng).
 
 ## Việc còn mở
