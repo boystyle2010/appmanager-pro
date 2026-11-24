@@ -269,8 +269,25 @@ jobs:
           push-to-registry: true
 
       # Mô tả trang Docker Hub lấy từ README (token cần quyền Read, Write, Delete; thiếu quyền thì chỉ bỏ qua bước này)
+      # Docker Hub giới hạn 25 000 byte: bỏ các mục dành cho người phát triển, đổi link tương đối thành link GitHub
+      - name: Prepare Docker Hub README
+        if: env.DOCKERHUB_ENABLED == 'true' && (needs.update.outputs.changed == 'true' || github.event_name == 'workflow_dispatch')
+        run: |
+          python3 - <<'PY'
+          import re
+          s = open("README.md", encoding="utf-8").read()
+          for title in ("🗂️ Project structure", "🔌 API reference", "🛠️ Development"):
+              s = re.sub(r"^## " + re.escape(title) + r".*?(?=^## )", "", s, flags=re.S | re.M)
+          s += "\n\n> Full documentation: https://github.com/boystyle2010/appmanager-pro\n"
+          b = s.encode("utf-8")
+          if len(b) > 24500:
+              s = b[:24400].decode("utf-8", "ignore") + "\n\n… Full documentation: https://github.com/boystyle2010/appmanager-pro\n"
+          open("dockerhub-README.md", "w", encoding="utf-8").write(s)
+          print("Docker Hub README:", len(s.encode("utf-8")), "bytes")
+          PY
+
       - name: Sync Docker Hub description
-        if: env.DOCKERHUB_ENABLED == 'true' && needs.update.outputs.changed == 'true'
+        if: env.DOCKERHUB_ENABLED == 'true' && (needs.update.outputs.changed == 'true' || github.event_name == 'workflow_dispatch')
         continue-on-error: true
         uses: peter-evans/dockerhub-description@v5
         with:
@@ -278,7 +295,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: ${{ format('{0}/{1}', secrets.DOCKERHUB_USERNAME, github.event.repository.name) }}
           short-description: "Fast Docker & CasaOS app manager: digest-based update checks, changelogs, safe compose editing, automatic rollback."
-          readme-filepath: ./README.md
+          readme-filepath: ./dockerhub-README.md
           enable-url-completion: true
 
       # Quét lỗ hổng image vừa build (không chặn release; kết quả ghi vào Release notes).

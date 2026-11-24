@@ -32,24 +32,28 @@
 
 ## 📖 Overview
 
-AppManager Pro is a self-hosted web dashboard for managing the Docker containers on a home server — especially servers running **CasaOS**. It finds the `docker-compose.yml` behind each app, checks the registry for newer images by comparing **real digests** (not just tags), shows the upstream changelog, and updates apps safely with automatic backup and **automatic rollback** if the new version fails.
+AppManager Pro is a self-hosted web dashboard for managing the Docker containers on a home server — especially servers running **CasaOS**. It finds the `docker-compose.yml` behind each app (the exact file the container was created from), checks the registry for newer images by comparing **real digests** (not just tags), shows the upstream changelog, lets you switch between **release channels** (stable ↔ beta / dev), and updates apps safely with a settings backup and **automatic rollback** if the new version fails — for every app and for AppManager Pro itself.
 
 It runs as a single container, ships a mobile-first "liquid glass" UI in English and Vietnamese, and needs nothing more than access to the Docker socket.
 
 ## ✨ Features
 
 ### Updates & changelogs
-- **Real update detection** — compares the local image digest with the registry digest (Docker Hub, GHCR, and other OCI registries), so `latest`-tagged apps are detected correctly.
-- **Pinned-tag bumping** — apps pinned to a version (e.g. `cloudflare/cloudflared:2026.10.7`) are bumped to the new tag in `docker-compose.yml`, with an automatic `.bak` backup.
-- **Changelog viewer** — reads GitHub release notes, falls back to `CHANGELOG.md`, `RELEASE_NOTES`, `CHANGES.md` and recent commits; checksum-only releases (SHA256 lists) are cleaned up automatically. Custom repo override per app.
-- **One-click & batch updates** — update a single app or *Update All* with live streaming logs; AppManager Pro updates itself last via a detached helper.
+- **Real update detection** — compares the local image digest with the registry digest (Docker Hub, GHCR, lscr.io and other OCI registries), so `latest`-tagged apps are detected correctly. On Docker Hub the real version of a rolling tag is resolved from the versioned tag with the same digest (e.g. `latest` → `v0.147.0`); version labels inherited from the base OS (e.g. Ubuntu `24.04`) are ignored.
+- **Pinned-tag bumping** — apps pinned to a version (e.g. `php:8.5.12-apache`, `lscr.io/linuxserver/syncthing:v1.27.0-ls140`) get the newest tag **of the same variant and major version** written to `docker-compose.yml`. Works on large repositories (all tag pages are read), build-numbered tags and `version-1.2.3` style tags.
+- **Release channels** — when an image also publishes `beta`, `next`, `rc`, `dev`… (or pre-release versions such as `3.0.0-beta.2`) that are newer than the stable one *and* exist for the server's CPU architecture, the app shows a **BETA / DEV** badge. Pick a channel in the app details: its changelog loads first, and nothing changes until you tap *Switch & update* (normal update flow, with rollback).
+- **Changelog viewer** — GitHub release notes of the exact version or pre-release; when a beta has no release, the commits on the main branch since the last stable release; falls back to `CHANGELOG.md`, `RELEASE_NOTES`, `CHANGES.md` and recent commits. Checksum-only releases are cleaned up. Custom repo override per app.
+- **One-click & batch updates** — update a single app or *Update All* with live streaming logs. **Customize Update All** to leave chosen apps out (remembered; by default everything is updated).
 - **Auto-update schedule** — opt-in per app, runs daily at the time you choose.
 - **Skip version** — hide a specific release until the next one.
-- **Auto-rollback** — after an update the new container is health-checked (crash, restart loop, `unhealthy`); if it fails, the previous version is restored automatically. Old images are pruned only once the new version is healthy.
+- **Auto-rollback** — the new container is health-checked (crash, restart loop, `unhealthy`). If it fails, the previous image and the **last working `docker-compose.yml`** are restored while the app data stays untouched; only if the old version still does not start is the settings backup restored too. The full log (including the failing container's last log lines) is kept in *History*.
+- **Safe self-update** — AppManager Pro updates itself through a helper container running the current image, checks that the new version answers, and rolls back image, compose and its own database if it does not.
 
 ### App management
 - **Start / Stop / Restart / Kill** and **live logs** for every container.
-- **Compose editor** — two-way *Visual UI ↔ YAML* editor (lossless `ruamel.yaml`), validation with `docker compose config`, timestamped backups and **one-click rollback**.
+- **Compose editor (Edit Config)** — two-way *Visual UI ↔ YAML* editor (lossless `ruamel.yaml`), validation with `docker compose config`, timestamped backups and **one-click rollback**. *Save & Apply* checks that the app really starts and restores the previous file automatically if it does not.
+- **Tag suggestions** — the *Image & Tag* field has a dropdown with the rolling tag of the same variant and the 3 newest stable versions from the registry.
+- **Duplicate compose files** — when an app has another `docker-compose.yml` with different content (e.g. a CasaOS copy and one in `/DATA/AppData`), the card shows a badge; *Merge* keeps the running, working file as the base (only missing `x-casaos` blocks are taken from the other), *Skip* hides the warning until a file changes.
 - **Deploy new apps** — paste YAML or use the quick form, validate, then deploy with live pull/up logs.
 - **Smart uninstall** — four levels: container, CasaOS compose folder, Docker image, and (with confirmation) app data in `/DATA/AppData`.
 
@@ -58,7 +62,8 @@ It runs as a single container, ships a mobile-first "liquid glass" UI in English
 - **Storage / SSD cleanup** — disk-usage breakdown (images, build cache, containers, volumes), selective prune with size estimate.
 - **Scheduled SSD cleanup** — daily / weekly / monthly cleanup of images and build cache (containers and volumes are never removed automatically).
 - **Update history** — every update, rollback and cleanup is logged.
-- **App data backups** — optional `.tar.gz` backup of the app's `/DATA/AppData` folder before each update, with size limit, retention and one-click restore.
+- **Settings backups** — before each update the app's **settings files** are archived (json / yaml / conf / env / xml, small databases with their `-wal`/`-shm`, certificates, small text/JSON settings files) from the folders it mounts from `/DATA/AppData` — never media, storage, downloads, sync folders, caches or logs — together with the image (digest) and `docker-compose.yml`. Apps without a config folder still get an image + compose backup.
+- **Restore** — a *Restore* button on every app card lets you pick the backup (newest preselected) and shows progress and each step. If the old image was removed, it is pulled again by digest (or version tag). Current logs and all other data are kept.
 
 ### Security & UI
 - **Admin account** with Argon2id password hashing, signed session cookies (`HttpOnly`, `SameSite=Lax`, `Secure` over HTTPS) and **IP lockout** after 5 failed logins (15 minutes, persisted across restarts). Proxy headers are only trusted from configured proxies, so the lockout cannot be bypassed with fake IPs.
@@ -154,13 +159,13 @@ docker compose pull && docker compose up -d
 
 | Setting | Default | Description |
 |---|---|---|
-| Silent check interval | 6 h | How often registries are checked in the background. |
+| Periodic check | 6 h | How often registries are checked in the background. |
 | Scheduled auto-update | off | Daily time to update apps that have *Auto-Update* enabled. |
 | Auto-clean old images | on | Remove the previous image after a successful update. |
 | Auto-rollback | on | Restore the previous version if the update fails the health check. |
 | Health check time | 25 s | How long the new container is watched (10–120 s). |
 | Scheduled SSD cleanup | off | Daily / weekly / monthly cleanup of images & build cache. |
-| Back up app data before updates | off | Archive `/DATA/AppData/<app>` before each update (max size & number kept are configurable). |
+| Back up app data before updates | on | Archive the app's settings files + image + compose before each update (max per file, total size and number kept are configurable). |
 | GitHub token | — | Optional; raises the GitHub API limit (60 → 5,000 requests/hour) and allows private repos. |
 | Security tab | — | Two-factor authentication, password change, activity log. |
 
@@ -168,9 +173,11 @@ docker compose pull && docker compose up -d
 
 | Where | What you can do |
 |---|---|
-| **Dashboard** | Search, sort (smart, name A–Z / Z–A, running or stopped first), filter (All / Updates / Running / Stopped), *Update All*, re-check registries. |
-| **App card → version row** | Open update details: changelog, auto-update toggle, skip version, *Update App*. |
-| **App card → ⋯** | Logs, start/stop/restart, edit compose, uninstall. |
+| **Dashboard** | Search, sort (smart, name A–Z / Z–A, running or stopped first), filter (All / Updates / Running / Stopped), *Update All* and its ⚙ customize button, re-check registries. |
+| **App card → version row** | Open update details: changelog, release channel, auto-update toggle, skip version, *Update App*. |
+| **App card → Restore** | Go back to a saved version (image + compose + settings). |
+| **App card → badges** | **BETA / DEV** (channel available / in use), **AUTO** (auto-update on), **2** (duplicate compose files — tap to review). |
+| **App card → ⋯** | Logs, start/stop/restart, Edit Config, uninstall. |
 | **Header → activity icon** | Task Manager (live resources, restart/stop/kill). |
 | **Header → ⚙️** | General settings, Storage / SSD cleanup & app data backups, Security (2FA, password, activity log), update history. |
 | **Task Manager → 24h** | CPU/RAM charts for all containers or a single one. |
@@ -181,12 +188,13 @@ docker compose pull && docker compose up -d
 One GitHub Actions workflow ([`release.yml`](.github/workflows/release.yml)) runs **every day**, on **every push to `main`**, and **on demand**:
 
 1. **Checks the source** — Python syntax, internal imports, Jinja templates, static files and JavaScript ([`scripts/check_project.py`](scripts/check_project.py)).
-2. **Looks for updates** ([`scripts/auto_update.py`](scripts/auto_update.py)) of the Python base image, Docker CLI, Python packages and frontend libraries — **always the newest stable release, including new major versions**.
-3. **Verifies** the result by building the real Docker image and starting the app inside it ([`scripts/verify.sh`](scripts/verify.sh)). If the newest versions fail, it automatically retries with same-major updates only and notes the held-back upgrades in the changelog. The result is **committed via the GitHub API**, so commits are signed by GitHub (*Verified*).
-4. **Builds** the multi-arch image (`linux/amd64`, `linux/arm64`), pushes it to GHCR and **signs it** with a GitHub build-provenance attestation.
-5. **Publishes a GitHub Release** whose notes come from `CHANGELOG.md` (Component & Version Matrix, Package Integrity, What's Changed).
+2. **Looks for updates** ([`scripts/auto_update.py`](scripts/auto_update.py)) of the Python base image, Docker CLI, Python packages, frontend libraries and — with the `WORKFLOW_TOKEN` secret — the GitHub Actions used by the workflow. Always the newest stable release, **including new major versions**.
+3. **Verifies** the result by building the real image (amd64 + arm64, with build cache) and starting the app inside it with a smoke test ([`scripts/verify.sh`](scripts/verify.sh)). If the newest versions fail, it retries with same-major updates only and notes the held-back upgrades. The result is **committed via the GitHub API**, so commits are signed by GitHub (*Verified*).
+4. **Builds** the multi-arch image (`linux/amd64`, `linux/arm64`), pushes it to **GHCR** and **Docker Hub**, and **signs** both with a GitHub build-provenance attestation.
+5. **Scans the image with Trivy** (critical/high, fixable only).
+6. **Publishes a GitHub Release** whose notes come from `CHANGELOG.md` (Component & Version Matrix, Package Integrity with the Trivy result, What's Changed), and syncs this README to Docker Hub.
 
-Image tags: `latest`, `X.Y.Z` (on release) and `build-<commit>`.
+Image tags (same on both registries): `latest`, `X.Y.Z` (on release) and `build-<commit>`.
 
 Verify an image:
 
@@ -194,17 +202,17 @@ Verify an image:
 gh attestation verify oci://ghcr.io/boystyle2010/appmanager-pro:latest -R boystyle2010/appmanager-pro
 ```
 
-6. **Scans the image with Trivy** (critical/high, fixable only) and adds the result to the release notes.
-
 **Manual releases:** *Actions → Auto Update, Build & Release → Run workflow* — tick `force_release`, or type a version such as `1.0.0` in `version`.
-The changelog only lists **component updates** (base image, Python packages, frontend libraries) — editing or uploading files on GitHub does not add entries. To add your own notes to the next release, write bullet lines in `RELEASE_NOTES_NEXT.md`; they are moved into the changelog automatically and the file is cleared.
+The changelog lists **component updates** plus your own notes: write bullet lines in `RELEASE_NOTES_NEXT.md`; they are moved into the changelog on the next release and the file is cleared.
+
+**Repository secrets (optional):** `WORKFLOW_TOKEN` (fine-grained token, Contents + Workflows read/write, this repo only) lets the bot upgrade workflow actions; `DOCKERHUB_USERNAME` + `DOCKERHUB_TOKEN` (Read, Write, Delete) publish to Docker Hub and sync its description.
 
 ## 🗂️ Project structure
 
 ```
 appmanager-pro/
 ├── .github/workflows/release.yml   # daily update check, build, sign & release
-├── Dockerfile                      # python:3.12-slim + Docker CLI & Compose v2
+├── Dockerfile                      # python slim + Docker CLI & Compose v2 (pip removed after install)
 ├── requirements.txt
 ├── CHANGELOG.md                    # maintained automatically
 ├── LICENSE                         # MIT
@@ -217,13 +225,15 @@ appmanager-pro/
 │   └── signed_commit.py            # commits through the GitHub API (signed)
 └── app/
     ├── main.py                     # FastAPI app: pages, REST API, WebSockets
+    ├── self_update_helper.py       # helper container: self-update with health check & rollback
     ├── core/
     │   ├── app_backup.py           # app data backups & restore
     │   ├── auth.py                 # Argon2 login, sessions, lockout, TOTP 2FA
-    │   ├── compose_manager.py      # compose discovery, editor, backups, uninstall
+    │   ├── compose_manager.py      # compose editor, Save & Apply with rollback, merge, uninstall
+    │   ├── compose_snapshot.py     # remembers the last working compose of each app
     │   ├── database.py             # SQLite settings, cache & history
     │   ├── docker_client.py        # container listing & actions
-    │   ├── registry_checker.py     # digest checks & changelog fetching
+    │   ├── registry_checker.py     # digest checks, tags, release channels, changelogs
     │   ├── scheduler.py            # background checks, auto-update, SSD cleanup
     │   ├── system_monitor.py       # Task Manager metrics
     │   ├── system_prune.py         # disk usage & prune
@@ -263,7 +273,12 @@ All endpoints except login/setup require the session cookie.
 | `POST` | `/api/system/prune` | Prune images / cache / containers / volumes |
 | `GET` · `POST` | `/api/settings` | Read / save settings & history |
 | `GET` | `/api/system/history?container=&hours=` | CPU/RAM samples (all containers when `container` is empty) |
-| `GET` | `/api/backups` · `POST` `/api/backups/{restore,delete}` | App data backups |
+| `GET` | `/api/backups` · `POST` `/api/backups/{restore,delete}` | Settings backups & restore |
+| `GET` | `/api/apps/{name}/channel-preview?tag=` | Changelog of a release channel (read-only) |
+| `GET` | `/api/image-tags?image=` | Tag suggestions for the compose editor |
+| `POST` | `/api/apps/{name}/compose/duplicates` | `merge` / `skip` duplicate compose files |
+| `POST` | `/api/update-all/excluded` | Apps left out of *Update All* |
+| `GET` | `/api/history/{id}/log` | Full log of one update |
 
 </details>
 
@@ -273,7 +288,7 @@ All endpoints except login/setup require the session cookie.
 | Path | Description |
 |---|---|
 | `/ws/logs/{id}` | Live container logs |
-| `/ws/update/{name}` | Streamed update of one app |
+| `/ws/update/{name}` | Streamed update of one app (`?tag=` switches release channel) |
 | `/ws/update-all` | Streamed batch update |
 | `/ws/deploy` | Streamed deployment |
 | `/ws/task-manager` | Live resource metrics |
@@ -285,7 +300,7 @@ All endpoints except login/setup require the session cookie.
 ```bash
 git clone https://github.com/boystyle2010/appmanager-pro.git
 cd appmanager-pro
-python3.12 -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 APP_DATA_DIR=./data uvicorn app.main:app --reload --port 8000
 ```
@@ -313,7 +328,9 @@ Commit messages do not appear in the changelog; use `RELEASE_NOTES_NEXT.md` for 
 |---|---|
 | Changelog is empty or shows only checksums | Add a **GitHub token** in Settings (rate limit), or set the app's repo with **Repo** in the update dialog. |
 | An app shows no update although one exists | Press **Re-check**; private registries may need `docker login` on the host. |
-| Update failed and was rolled back | Open **Live Logs** of the app and check **Settings → History** for the reason. |
+| Update failed and was rolled back | **Settings → History → View log** shows each step and the failing container's last log lines. |
+| An app runs from a different compose file than CasaOS shows | The card shows a **2** badge — open Edit Config and use *Merge* (keeps the running file) or *Skip*. |
+| A BETA / DEV channel is missing | Channels are only offered when newer than stable and built for the server's CPU architecture. Press **Re-check**. |
 | UI looks unstyled | Hard-refresh the page; the app falls back to CDNs if bundled libraries are missing. |
 | Container restarts with `ModuleNotFoundError` | A file in `app/core/` is missing or misnamed — CI's *Check source* step reports which one. |
 | Everyone gets locked out together | All requests come through one proxy that is not trusted — add that proxy's IP to `TRUSTED_PROXIES` (find it with `docker inspect <proxy-container>`). |
