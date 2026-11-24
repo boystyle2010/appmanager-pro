@@ -42,6 +42,9 @@ RUN pip install --no-cache-dir --upgrade pip setuptools \
 COPY app/ ./app/
 COPY --from=css /out/tailwind.css ./app/static/css/tailwind.css
 COPY assets/ ./assets/
+# Giấy phép của mã nguồn & các thành phần bên thứ ba được đóng gói (xem THIRD_PARTY_NOTICES.md)
+COPY LICENSE THIRD_PARTY_NOTICES.md ./
+COPY licenses/ ./licenses/
 
 # Tải sẵn Tailwind/Alpine/marked/DOMPurify/font về image để không phụ thuộc CDN lúc chạy
 # (lỗi tải chỉ cảnh báo; trang tự dùng CDN dự phòng nếu thiếu file)

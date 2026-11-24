@@ -3,3 +3,4 @@
 - Images are also published to Docker Hub (boystyle2010/appmanager-pro) with the same tags; the Docker Hub page description is synced from the README
 - Copyright line (© boystyle2010 · version · MIT License · GitHub) at the bottom of the dashboard and on the sign-in page; README rewritten for the new features
 - Settings → About (ⓘ tab): version and update status, image in use, links to source code, releases, Docker Hub, GHCR and issues, MIT license and credits
+- Licensing: THIRD_PARTY_NOTICES.md and the full license texts of bundled components (Alpine.js, Tailwind CSS, marked, DOMPurify, Plus Jakarta Sans & JetBrains Mono fonts, Docker CLI & Compose) are added to the repository and copied into the image at /app/licenses; Settings → About links to them

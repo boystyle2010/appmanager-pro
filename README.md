@@ -350,6 +350,8 @@ See [CHANGELOG.md](CHANGELOG.md) or the [Releases](https://github.com/boystyle20
 
 Released under the [MIT License](LICENSE) — free to use, modify and distribute, provided the copyright notice is kept. The software is provided "as is", without warranty.
 
+Copyright (c) 2026 boystyle2010. The app icon is original work by the author. Third-party components (Python packages, Alpine.js, Tailwind CSS, marked, DOMPurify, fonts, Docker CLI & Compose) keep their own licenses — see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [`licenses/`](licenses/).
+
 ---
 
 <div align="center">Made with ❤️ by <a href="https://github.com/boystyle2010">boystyle2010</a></div>
