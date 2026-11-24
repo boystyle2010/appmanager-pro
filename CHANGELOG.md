@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.13.1
+
+*Released: 2026-11-24*
+
+### 📦 Component & Version Matrix
+
+- **App Release:** Bumped from `v0.13.0` ➡️ `v0.13.1`
+- **Supported Architectures:** `linux/amd64` (x86_64) & `linux/arm64` (ARM64) *(Multi-arch GHCR Image)*
+- **Python Base Image:** `python 3.15.2`
+- **Docker CLI:** `docker 29.10.0`
+- **Core Python Stack:** `FastAPI 0.165.0` • `Uvicorn 0.54.0` • `Docker SDK 7.2.0` • `ruamel.yaml 0.19.1` • `Argon2 25.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.28.1` • `APScheduler 3.11.3` • `segno 1.6.6`
+- **Frontend Libraries:** `Alpine.js 3.17.5` • `Tailwind CSS 4.3.5` • `marked 18.3.0` • `DOMPurify 3.5.0`
+
+### 🚀 What's Changed
+
+- Duplicate compose files: the card badge disappears only after Merge. Skip hides the warning and turns the badge grey; tapping the grey badge opens the original warning with Merge / Cancel. The warning returns if one of the files changes.
+- Choose version: apps whose tag is a branch without a version number (e.g. scrutiny `master-omnibus`) now list the versioned tags of the same variant (`v0.10.0-omnibus`...).
+
 ## 0.13.0
 
 *Released: 2026-11-24*
