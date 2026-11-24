@@ -45,7 +45,7 @@
         },
         editModal: {
           open: false, loading: false, saving: false, tab: 'ui',
-          app: null, composePath: '', rawYaml: '', ui: null, otherComposeFiles: [], dupBusy: false,
+          app: null, composePath: '', rawYaml: '', ui: null, otherComposeFiles: [], skippedComposeFiles: [], dupBusy: false,
           backups: [], feedback: '', feedbackOk: true, feedbackLogs: '',
           sec: { container: true, ports: true, volumes: false, env: false, casaos: false }
         },
@@ -973,7 +973,7 @@
           const m = this.editModal;
           this.askConfirm({
             tone: 'danger', title: this.t('dupMergeTitle'),
-            message: `${m.composePath} → ${m.otherComposeFiles.join(', ')}. ${this.t('dupMergeMsg')}`,
+            message: `${m.composePath} → ${(m.otherComposeFiles.length ? m.otherComposeFiles : m.skippedComposeFiles).join(', ')}. ${this.t('dupMergeMsg')}`,
             confirmLabel: this.t('dupMerge'), onConfirm: () => this.resolveDuplicates('merge')
           });
         },
@@ -1002,7 +1002,7 @@
           this.tagMenu = { open: false, loading: false, items: [], error: '', image: '' };
           this.editModal = {
             open: true, loading: true, saving: false, tab: 'ui',
-            app, composePath: '', rawYaml: '', ui: null, otherComposeFiles: [], dupBusy: false, lastService: '', yamlTouched: false,
+            app, composePath: '', rawYaml: '', ui: null, otherComposeFiles: [], skippedComposeFiles: [], dupBusy: false, lastService: '', yamlTouched: false,
             backups: [], feedback: '', feedbackOk: true, feedbackLogs: '',
             sec: { container: true, ports: true, volumes: false, env: false, casaos: false }
           };
@@ -1019,6 +1019,7 @@
             if (!res.ok) throw new Error(data.detail || 'Cannot load docker-compose.yml');
             this.editModal.composePath = data.compose_path || '';
             this.editModal.otherComposeFiles = data.other_compose_files || [];
+            this.editModal.skippedComposeFiles = data.skipped_compose_files || [];
             this.editModal.rawYaml = data.raw_yaml || '';
             this.editModal.ui = data.ui || null;
             this.editModal.lastService = data.ui?.selected_service || '';

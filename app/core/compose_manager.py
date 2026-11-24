@@ -736,18 +736,18 @@ async def get_compose_state(container_name: str, service: Optional[str] = None) 
 
     raw_yaml = Path(compose_path).read_text(encoding="utf-8")
     ui = parse_yaml_to_ui(raw_yaml, preferred_service=service or app_info.get("service") or None)
+    dup_names = [app_info.get("project") or "", container_name, Path(compose_path).parent.name]
+    visible = await asyncio.to_thread(visible_duplicate_files, container_name, compose_path, dup_names)
+    # Đã bấm Skip: cảnh báo vàng ẩn, nhưng vẫn trả danh sách để người dùng có thể Gộp sau này
+    skipped = [] if visible else await asyncio.to_thread(find_other_compose_files, compose_path, dup_names)
     return {
         "app": app_info,
         "compose_path": compose_path,
         "raw_yaml": raw_yaml,
         "ui": ui,
         "backups": list_backups(container_name),
-        "other_compose_files": await asyncio.to_thread(
-            visible_duplicate_files,
-            container_name,
-            compose_path,
-            [app_info.get("project") or "", container_name, Path(compose_path).parent.name],
-        ),
+        "other_compose_files": visible,
+        "skipped_compose_files": skipped,
     }
 
 
