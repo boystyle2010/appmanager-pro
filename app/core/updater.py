@@ -327,7 +327,9 @@ def _trigger_self_update_helper(
             command=["python", "-m", "app.self_update_helper"],
             working_dir="/app",
             environment={"APP_DATA_DIR": str(DATA_DIR)},
-            remove=True,
+            # Không tự xoá + on-failure: mất điện / Docker khởi động lại giữa chừng -> Docker chạy lại container phụ,
+            # nó thấy việc dang dở và trả AppManager về trạng thái chạy được. Xong việc luôn thoát mã 0 (không lặp lại).
+            restart_policy={"Name": "on-failure", "MaximumRetryCount": 5},
             detach=True,
             volumes={
                 "/var/run/docker.sock": {"bind": "/var/run/docker.sock", "mode": "rw"},
@@ -386,6 +388,15 @@ def collect_self_update_result() -> None:
 _COLLECT_LOCK = threading.Lock()
 
 
+def _remove_finished_helper() -> None:
+    try:
+        h = get_docker_client().containers.get(SELF_HELPER_NAME)
+        if h.status in ("exited", "dead", "created"):
+            h.remove(force=True)
+    except Exception:
+        pass
+
+
 def _collect_self_update_result_locked() -> None:
     try:
         if SELF_RESULT_FILE.exists():
@@ -404,6 +415,7 @@ def _collect_self_update_result_locked() -> None:
                 res.get("history_mode") or "manual", res.get("status") or "failed", (res.get("message") or "")[:300],
             )
             attach_update_log(res.get("container") or "appmanager-pro", before, res.get("log") or "")
+            _remove_finished_helper()
             return
         if SELF_JOB_FILE.exists():
             job = json.loads(SELF_JOB_FILE.read_text(encoding="utf-8"))

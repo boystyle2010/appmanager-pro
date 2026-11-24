@@ -126,7 +126,6 @@ def write_result(job: dict[str, Any], status: str, message: str) -> None:
     tmp = RESULT_FILE.with_suffix(".tmp")
     tmp.write_text(json.dumps(result), encoding="utf-8")
     tmp.replace(RESULT_FILE)
-    JOB_FILE.unlink(missing_ok=True)
 
 
 def restore_compose(job: dict[str, Any]) -> None:
@@ -308,6 +307,82 @@ def run_mode(client, job: dict[str, Any]) -> int:
     return 1
 
 
+PROGRESS_FILE = DATA_DIR / "self-update-progress.json"
+
+
+def recover_interrupted(client, job: dict[str, Any]) -> None:
+    """
+    Container phụ bị chạy lại (mất điện / Docker khởi động lại giữa lúc tự cập nhật): đưa AppManager về trạng thái chạy
+    được — container mới đang chạy ổn thì giữ, không thì trả container cũ (tên <tên>-amp-old) hoặc compose cũ.
+    """
+    name = job["container"]
+    backup_name = f"{name}-amp-old"
+    log("==> The self-update was interrupted (power loss or Docker restart); recovering AppManager...")
+    try:
+        cur = client.containers.get(name)
+    except Exception:
+        cur = None
+    try:
+        old = client.containers.get(backup_name)
+    except Exception:
+        old = None
+    window = int(job.get("window") or 120)
+    if cur is not None:
+        try:
+            if cur.status != "running":
+                cur.start()
+        except Exception:
+            pass
+        ok, reason = wait_healthy(client, name, window)
+        if ok:
+            if old is not None:
+                try:
+                    old.remove(v=False)
+                except Exception:
+                    pass
+            write_result(job, "success", "Completed after an interruption")
+            return
+        log(f"==> Current container: {reason}")
+        if old is None and not job.get("run_body"):
+            # compose: trả compose + image cũ rồi tạo lại
+            restore_compose(job)
+            repo, tag = split_ref(job.get("image_ref") or "")
+            if repo and job.get("old_image_id"):
+                try:
+                    client.images.get(job["old_image_id"]).tag(repo, tag=tag)
+                except Exception:
+                    pass
+            compose = job.get("compose_path") or ""
+            if compose:
+                svc = [job["service"]] if job.get("service") else []
+                run(["docker", "compose", "-f", compose, "up", "-d", "--force-recreate", "--no-deps", *svc], str(Path(compose).parent))
+            ok, why = wait_healthy(client, name, window)
+            write_result(job, "rolled_back" if ok else "failed", f"Interrupted; previous version {'restored' if ok else 'did not start: ' + why}")
+            return
+        if old is None:
+            # Không còn bản cũ để thay -> KHÔNG xoá container hiện tại; để nó chạy (Docker / người dùng xử lý tiếp)
+            try:
+                cur.start()
+            except Exception:
+                pass
+            write_result(job, "failed", f"Interrupted; the current AppManager container is not healthy ({reason}) and no previous container is left")
+            return
+        try:
+            cur.remove(force=True)
+        except Exception:
+            pass
+    if old is not None:
+        try:
+            old.rename(name)
+            old.start()
+        except Exception as exc:
+            log(f"[ERROR] {exc}")
+        ok, why = wait_healthy(client, name, window)
+        write_result(job, "rolled_back" if ok else "failed", f"Interrupted; previous container {'restored' if ok else 'did not start: ' + why}")
+        return
+    write_result(job, "failed", "Interrupted and no AppManager container could be found")
+
+
 def main() -> int:
     import docker  # có sẵn trong image
 
@@ -318,6 +393,10 @@ def main() -> int:
         return 1
 
     client = docker.from_env()
+    if PROGRESS_FILE.exists():  # lần chạy trước bị cắt ngang
+        recover_interrupted(client, job)
+        return 0
+    PROGRESS_FILE.write_text(json.dumps({"started": int(time.time())}), encoding="utf-8")
     if job.get("run_body"):
         time.sleep(2)  # để AppManager kịp trả lời trình duyệt
         return run_mode(client, job)
@@ -398,5 +477,39 @@ def main() -> int:
     return 1
 
 
+def finish() -> int:
+    """
+    Chỉ kết thúc khi AppManager CHẮC CHẮN đang chạy. Không xác nhận được (vd Docker đang tắt vì mất điện / khởi động lại)
+    -> thoát mã 1: Docker chạy lại container phụ (on-failure) sau khi khởi động, nó thấy việc dang dở và phục hồi.
+    """
+    try:
+        import docker
+
+        job = json.loads(JOB_FILE.read_text(encoding="utf-8"))
+        client = docker.from_env()
+        c = client.containers.get(job["container"])
+        if c.status != "running":
+            c.start()
+            c.reload()
+        if c.status != "running":
+            return 1
+    except FileNotFoundError:
+        return 0  # không còn việc
+    except Exception as exc:
+        log(f"[WARN] Cannot confirm that AppManager is running yet ({exc}); will retry after Docker restarts")
+        return 1
+    JOB_FILE.unlink(missing_ok=True)
+    PROGRESS_FILE.unlink(missing_ok=True)
+    return 0
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        main()
+    except Exception as exc:  # lỗi bất ngờ: vẫn để lại kết quả cho AppManager
+        log(f"[ERROR] Helper crashed: {exc}")
+        try:
+            write_result(json.loads(JOB_FILE.read_text(encoding="utf-8")), "failed", f"Helper crashed: {exc}")
+        except Exception:
+            pass
+    sys.exit(finish())

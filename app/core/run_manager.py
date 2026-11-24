@@ -727,3 +727,53 @@ def settings_differ(cur: dict[str, Any], snap: dict[str, Any]) -> bool:
             sorted(nets.keys()), host.get("Memory"), host.get("NanoCpus"),
         )
     return key(cur) != key(snap)
+
+
+# ---------------------------------------------------------------- tự phục hồi sau sự cố (mất điện / Docker khởi động lại)
+def recover_interrupted_sync(busy: Optional[set[str]] = None) -> list[str]:
+    """
+    Cập nhật / sửa / chuyển compose bị cắt ngang (mất điện, Docker hoặc AppManager khởi động lại) có thể để lại
+    container cũ dưới tên tạm (<tên>-amp-old, <tên>-pre-compose-<số>):
+      - không còn container tên gốc -> đổi tên container cũ về tên gốc và chạy lại (nếu trước đó nó đang chạy);
+      - container mới đã có và đang chạy ổn -> xoá container cũ (giữ volume);
+      - container mới có nhưng không chạy được -> xoá container mới, trả container cũ về và chạy lại.
+    `busy`: các app đang được cập nhật trong tiến trình này (bỏ qua). Trả về danh sách việc đã làm.
+    """
+    import re as _re
+
+    busy = busy or set()
+    client = _client()
+    actions: list[str] = []
+    try:
+        containers = client.containers.list(all=True)
+    except Exception:
+        return actions
+    names = {c.name: c for c in containers}
+    for c in containers:
+        m = _re.match(r"^(.+?)(?:-amp-old|-pre-compose-\d+)$", c.name)
+        if not m:
+            continue
+        base = m.group(1)
+        if base in busy:
+            continue
+        snap = load_snapshot(base) or {}
+        was_running = ((snap.get("attrs") or {}).get("State") or {}).get("Running", True)
+        cur = names.get(base)
+        try:
+            if cur is not None:
+                cur.reload()
+                st = cur.attrs.get("State") or {}
+                health = (st.get("Health") or {}).get("Status") or ""
+                if st.get("Running") and not st.get("Restarting") and health != "unhealthy":
+                    c.remove(v=False)
+                    actions.append(f"{base}: the new container is running; removed the leftover {c.name}")
+                    continue
+                cur.remove(force=True)
+                actions.append(f"{base}: the new container was not running; removed it")
+            c.rename(base)
+            if was_running or (cur is not None):
+                c.start()
+            actions.append(f"{base}: restored the previous container from {c.name}" + (" and started it" if (was_running or cur is not None) else ""))
+        except Exception as exc:
+            actions.append(f"{base}: could not recover {c.name}: {exc}")
+    return actions

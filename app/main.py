@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import json
 import httpx
 import threading
@@ -96,10 +97,32 @@ BASE_DIR = Path(__file__).resolve().parent
 ASSETS_DIR = BASE_DIR.parent / "assets"
 
 
+logger = logging.getLogger("appmanager")
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
     collect_self_update_result()
+    # Cập nhật / sửa cấu hình bị cắt ngang (mất điện, Docker khởi động lại) -> trả container về như cũ
+    try:
+        from app.core.database import add_update_history
+        from app.core.run_manager import recover_interrupted_sync
+
+        from app.core.updater import SELF_JOB_FILE, _own_container
+
+        busy: set[str] = set()
+        if SELF_JOB_FILE.exists():  # container phụ đang cập nhật AppManager: nó tự lo container cũ / rollback
+            try:
+                busy.add(_own_container(get_docker_client()).name)
+            except Exception:
+                busy.add("appmanager-pro")
+        for line in await asyncio.to_thread(recover_interrupted_sync, busy):
+            logger.warning("Recovery: %s", line)
+            name = line.split(":", 1)[0]
+            add_update_history(name, name, "", "", "recovery", "rolled_back" if "restored" in line else "success", line[:300])
+    except Exception:
+        logger.exception("Recovery of interrupted updates failed")
     start_scheduler()
     yield
     stop_scheduler()
