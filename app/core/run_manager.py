@@ -18,7 +18,6 @@ import copy
 import json
 import logging
 import time
-from pathlib import Path
 from typing import Any, Awaitable, Callable, Optional
 
 from app.core.database import DATA_DIR
@@ -36,6 +35,11 @@ _EXTERNAL_LABEL_PREFIXES = (
     "io.balena.", "io.rancher.", "org.nomadproject.",
 )
 _HELPER_LABEL = "appmanager-pro.helper"
+
+
+def is_auto_remove(attrs: dict[str, Any]) -> bool:
+    """Container chạy với --rm: dừng là Docker tự xoá -> không thể giữ bản cũ để rollback, nên không tự tạo lại."""
+    return bool((attrs.get("HostConfig") or {}).get("AutoRemove"))
 
 
 def manage_kind(labels: dict[str, str]) -> str:
@@ -124,7 +128,7 @@ def _endpoint(ep: dict[str, Any], cid: str) -> dict[str, Any]:
     if ep.get("IPAMConfig"):
         out["IPAMConfig"] = ep["IPAMConfig"]
     # Alias tự sinh = ID ngắn của container cũ -> bỏ
-    aliases = [a for a in (ep.get("Aliases") or []) if a and not cid.startswith(a)]
+    aliases = [a for a in (ep.get("Aliases") or []) if a and not (len(a) >= 12 and cid.startswith(a))]
     if aliases:
         out["Aliases"] = aliases
     if ep.get("Links"):
@@ -257,7 +261,7 @@ def _dependents_sync(name: str, cid: str) -> list[tuple[str, str]]:
 
 async def recreate_stream(
     name: str, image_ref: str, send_log: LogCallback, *, window: int = 25, pull: bool = True,
-    force: bool = False, auto_rollback: bool = True, network_mode: str = "",
+    force: bool = False, auto_rollback: bool = True, network_mode: str = "", yaml_text: str = "",
 ) -> dict[str, Any]:
     """
     Tạo lại container `name` bằng image `image_ref` (cùng cấu hình). Trả về
@@ -273,6 +277,9 @@ async def recreate_stream(
     attrs = old.attrs or {}
     if manage_kind((attrs.get("Config") or {}).get("Labels") or {}) != "run":
         return {"ok": False, "reason": "This container is not a docker run container managed by AppManager"}
+    if is_auto_remove(attrs):
+        return {"ok": False, "reason": "The container was started with --rm (Docker deletes it when it stops), so it "
+                                        "cannot be recreated safely; nothing was changed"}
     old_image_id = attrs.get("Image") or ""
     try:
         old_image_cfg = (await asyncio.to_thread(client.images.get, old_image_id)).attrs.get("Config") or {}
@@ -280,10 +287,28 @@ async def recreate_stream(
         old_image_cfg = {}
     await asyncio.to_thread(save_snapshot, name, attrs, old_image_cfg)
 
+    edited = None
+    if yaml_text:  # sửa cấu hình: dựng cấu hình mới từ YAML trước khi đụng tới container
+        try:
+            edited = body_from_yaml(attrs, old_image_cfg, yaml_text, name)
+        except Exception as exc:
+            return {"ok": False, "reason": f"Invalid configuration: {exc}; nothing was changed"}
+        image_ref = edited["body"]["Image"]
+        local = True
+        try:
+            await asyncio.to_thread(client.images.get, image_ref)
+        except Exception:
+            local = False
+        pull = pull and (not local or image_ref != (attrs.get("Config") or {}).get("Image"))
+        force = True
     if pull:
         rc = await _stream(["docker", "pull", image_ref], send_log)
         if rc != 0:
-            return {"ok": False, "reason": f"docker pull failed (exit {rc}); nothing was changed"}
+            try:
+                await asyncio.to_thread(client.images.get, image_ref)
+                await send_log("[WARN] docker pull failed; using the image already on this host\n")
+            except Exception:
+                return {"ok": False, "reason": f"docker pull failed (exit {rc}); nothing was changed"}
     try:
         new_image = await asyncio.to_thread(client.images.get, image_ref)
     except Exception as exc:
@@ -292,7 +317,7 @@ async def recreate_stream(
         await send_log("==> The container already runs this image; nothing to do.\n")
         return {"ok": True, "changed": False, "old_image_id": old_image_id, "new_image_id": new_image.id}
 
-    built = build_create_config(attrs, old_image_cfg, image_ref)
+    built = edited or build_create_config(attrs, old_image_cfg, image_ref)
     if network_mode:  # container phụ dùng chung mạng: trỏ sang container chính MỚI
         built["body"]["HostConfig"]["NetworkMode"] = network_mode
     if (built["body"]["HostConfig"].get("NetworkMode") or "").startswith("container:"):
@@ -483,3 +508,222 @@ def recreate_from_snapshot_sync(name: str, snapshot: dict[str, Any], image_ref: 
         except Exception as exc:
             log.append(f"[ERROR] Cannot restore the previous container: {exc}")
     return False, f"Restored container did not start: {why}"
+
+
+# ---------------------------------------------------------------- sửa cấu hình container docker run (đợt 3)
+# Các khoá do trình sinh YAML (compose_convert.generate_compose) xuất ra: thiếu trong YAML đã sửa = người dùng xoá ->
+# trả về mặc định. Thứ không hiện trong YAML (IP tĩnh, alias, healthcheck...) được giữ nguyên từ container hiện tại.
+_UNITS = {"b": 1, "k": 1024, "kb": 1024, "m": 1024 ** 2, "mb": 1024 ** 2, "g": 1024 ** 3, "gb": 1024 ** 3}
+
+
+def _bytes(val: Any) -> int:
+    import re as _re
+
+    if val in (None, ""):
+        return 0
+    if isinstance(val, (int, float)):
+        return int(val)
+    m = _re.match(r"^\s*([\d.]+)\s*([a-zA-Z]*)\s*$", str(val))
+    if not m or m.group(2).lower() not in _UNITS | {"": 1}:
+        raise ValueError(f"Invalid size: {val}")
+    return int(float(m.group(1)) * _UNITS.get(m.group(2).lower(), 1))
+
+
+def _as_list(val: Any, key: str) -> list:
+    if val is None:
+        return []
+    if isinstance(val, str):
+        return [val]
+    if isinstance(val, list):
+        return list(val)
+    raise ValueError(f"'{key}' must be a list")
+
+
+def _parse_ports(entries: list) -> tuple[dict, dict]:
+    bindings: dict[str, list] = {}
+    for e in entries:
+        if isinstance(e, dict):
+            target = str(e.get("target") or "")
+            proto = e.get("protocol") or "tcp"
+            hp = str(e.get("published") or "")
+            hip = e.get("host_ip") or ""
+        else:
+            spec = str(e)
+            proto = "tcp"
+            if "/" in spec:
+                spec, proto = spec.rsplit("/", 1)
+            parts = spec.rsplit(":", 2) if spec.count(":") <= 2 else [spec]
+            if len(parts) == 3:
+                hip, hp, target = parts
+            elif len(parts) == 2:
+                hip, (hp, target) = "", parts
+            else:
+                hip, hp, target = "", "", parts[0]
+        if not target.isdigit() or (hp and not hp.split("-")[0].isdigit()):
+            raise ValueError(f"Invalid port: {e}")
+        key = f"{target}/{proto}"
+        bindings.setdefault(key, []).append({"HostIp": hip, "HostPort": hp})
+    return bindings, {k: {} for k in bindings}
+
+
+def _parse_volumes(entries: list) -> list[str]:
+    binds = []
+    for e in entries:
+        if isinstance(e, dict):
+            src, dst = str(e.get("source") or ""), str(e.get("target") or "")
+            mode = ":ro" if e.get("read_only") else ""
+        else:
+            parts = str(e).split(":")
+            if len(parts) == 1:
+                src, dst, mode = "", parts[0], ""
+            else:
+                src, dst = parts[0], parts[1]
+                mode = (":" + ":".join(parts[2:])) if len(parts) > 2 else ""
+        if not dst.startswith("/"):
+            raise ValueError(f"Invalid volume (container path must be absolute): {e}")
+        if src.startswith("."):
+            raise ValueError(f"Relative paths are not supported for docker run containers: {e}")
+        binds.append(f"{src}:{dst}{mode}" if src else dst)
+    return binds
+
+
+def body_from_yaml(attrs: dict[str, Any], old_image_cfg: dict[str, Any], yaml_text: str, name: str) -> dict[str, Any]:
+    """Cấu hình tạo container từ YAML đã sửa (định dạng compose, 1 service) + cấu hình hiện tại."""
+    import io
+    import shlex
+
+    from ruamel.yaml import YAML
+
+    data = YAML(typ="safe").load(io.StringIO(yaml_text)) or {}
+    svcs = data.get("services") or {}
+    if not isinstance(svcs, dict) or len(svcs) != 1:
+        raise ValueError("The configuration must contain exactly one service")
+    svc = next(iter(svcs.values())) or {}
+    if not isinstance(svc, dict):
+        raise ValueError("Invalid service definition")
+    if svc.get("container_name") and str(svc["container_name"]) != name:
+        raise ValueError("Renaming a docker run container is not supported here")
+    image = str(svc.get("image") or "").strip()
+    if not image:
+        raise ValueError("'image' is required")
+
+    built = build_create_config(attrs, old_image_cfg, image)
+    body, host = built["body"], built["body"]["HostConfig"]
+
+    env = svc.get("environment")
+    if isinstance(env, dict):
+        env = [f"{k}={'' if v is None else v}" for k, v in env.items()]
+    body.pop("Env", None)
+    if env:
+        body["Env"] = [str(x) for x in _as_list(env, "environment")]
+    for key, target in (("command", "Cmd"), ("entrypoint", "Entrypoint")):
+        body.pop(target, None)
+        if svc.get(key):
+            v = svc[key]
+            body[target] = shlex.split(v) if isinstance(v, str) else [str(x) for x in v]
+
+    ports, exposed = _parse_ports(_as_list(svc.get("ports"), "ports"))
+    host["PortBindings"] = ports or None
+    img_ports = set((old_image_cfg.get("ExposedPorts") or {}).keys())
+    body["ExposedPorts"] = {**{p: {} for p in img_ports}, **exposed} or None
+    if not body["ExposedPorts"]:
+        body.pop("ExposedPorts")
+
+    host["Binds"] = _parse_volumes(_as_list(svc.get("volumes"), "volumes")) or None
+    host["Mounts"] = None
+    tmpfs = svc.get("tmpfs")
+    host["Tmpfs"] = {p: "" for p in _as_list(tmpfs, "tmpfs")} or None
+
+    rp = str(svc.get("restart") or "no")
+    name_, _, count = rp.partition(":")
+    if name_ not in ("no", "always", "unless-stopped", "on-failure"):
+        raise ValueError(f"Invalid restart policy: {rp}")
+    host["RestartPolicy"] = {"Name": name_, "MaximumRetryCount": int(count or 0)}
+
+    for key, src in (("privileged", "Privileged"), ("read_only", "ReadonlyRootfs"), ("init", "Init")):
+        host[src] = bool(svc.get(key)) if key != "init" else (True if svc.get(key) else None)
+    for key, src in (("cap_add", "CapAdd"), ("cap_drop", "CapDrop"), ("dns", "Dns"), ("dns_search", "DnsSearch"),
+                     ("extra_hosts", "ExtraHosts"), ("security_opt", "SecurityOpt"), ("group_add", "GroupAdd")):
+        vals = _as_list(svc.get(key), key)
+        host[src] = [str(x) for x in vals] or None
+    devices = []
+    for d in _as_list(svc.get("devices"), "devices"):
+        parts = str(d).split(":")
+        devices.append({"PathOnHost": parts[0], "PathInContainer": parts[1] if len(parts) > 1 else parts[0],
+                        "CgroupPermissions": parts[2] if len(parts) > 2 else "rwm"})
+    host["Devices"] = devices or None
+    host["Sysctls"] = {str(k): str(v) for k, v in (svc.get("sysctls") or {}).items()} or None
+    host["ShmSize"] = _bytes(svc.get("shm_size")) or 67108864
+    host["Memory"] = _bytes(svc.get("mem_limit"))
+    host["NanoCpus"] = int(float(svc.get("cpus") or 0) * 1e9)
+    host["PidMode"] = str(svc.get("pid") or "")
+    if svc.get("ipc"):
+        host["IpcMode"] = str(svc["ipc"])
+    elif host.get("IpcMode") == "host":
+        host["IpcMode"] = "private"
+    if svc.get("logging"):
+        lg = svc["logging"] or {}
+        host["LogConfig"] = {"Type": lg.get("driver") or "json-file", "Config": {str(k): str(v) for k, v in (lg.get("options") or {}).items()}}
+    else:
+        host["LogConfig"] = {"Type": "json-file", "Config": {}}
+
+    labels = svc.get("labels") or {}
+    if isinstance(labels, list):
+        labels = dict(str(x).split("=", 1) if "=" in str(x) else (str(x), "") for x in labels)
+    img_labels = old_image_cfg.get("Labels") or {}
+    body["Labels"] = {str(k): str(v) for k, v in labels.items()}
+    for k, v in ((attrs.get("Config") or {}).get("Labels") or {}).items():
+        if k.startswith("com.docker.") and img_labels.get(k) != v:
+            body["Labels"][k] = v
+    for key, target in (("hostname", "Hostname"), ("user", "User"), ("working_dir", "WorkingDir")):
+        body.pop(target, None)
+        if svc.get(key):
+            body[target] = str(svc[key])
+    body["Tty"] = bool(svc.get("tty"))
+    body["OpenStdin"] = bool(svc.get("stdin_open"))
+
+    # Mạng: network_mode (host / none / container:x / bridge) hoặc danh sách networks
+    mode = str(svc.get("network_mode") or "")
+    nets_cfg = svc.get("networks")
+    cur_nets = ((attrs.get("NetworkSettings") or {}).get("Networks") or {})
+    cid = attrs.get("Id") or ""
+    if mode:
+        host["NetworkMode"] = mode
+        body.pop("NetworkingConfig", None)
+        built["extra_networks"] = {}
+        if mode not in ("bridge", "default") and not mode.startswith("container:") and mode not in ("host", "none"):
+            body["NetworkingConfig"] = {"EndpointsConfig": {mode: _endpoint(cur_nets.get(mode) or {}, cid)}}
+    else:
+        names = list(nets_cfg.keys()) if isinstance(nets_cfg, dict) else [str(n) for n in _as_list(nets_cfg, "networks")]
+        if not names:
+            names = ["bridge"]
+        host["NetworkMode"] = names[0]
+        body["NetworkingConfig"] = {"EndpointsConfig": {names[0]: _endpoint(cur_nets.get(names[0]) or {}, cid)}}
+        built["extra_networks"] = {n: _endpoint(cur_nets.get(n) or {}, cid) for n in names[1:]}
+    if host["NetworkMode"].startswith("container:") or host["NetworkMode"] in ("host", "none"):
+        for k in ("Hostname", "Domainname", "NetworkingConfig") if host["NetworkMode"] != "host" else ("NetworkingConfig",):
+            body.pop(k, None)
+        if host["NetworkMode"] != "host" and host["NetworkMode"] != "none":
+            for k in ("PortBindings", "Dns", "DnsSearch", "ExtraHosts", "Links"):
+                host.pop(k, None)
+            body.pop("ExposedPorts", None)
+        if host["NetworkMode"] in ("host", "none"):
+            host["PortBindings"] = None
+        built["extra_networks"] = {}
+    return built
+
+
+def settings_differ(cur: dict[str, Any], snap: dict[str, Any]) -> bool:
+    """Cấu hình container hiện tại khác bản đã lưu (bỏ qua những gì Docker tự sinh: ID, hostname mặc định...)."""
+    def key(a: dict[str, Any]) -> tuple:
+        cfg, host = a.get("Config") or {}, a.get("HostConfig") or {}
+        nets = (a.get("NetworkSettings") or {}).get("Networks") or {}
+        return (
+            sorted(cfg.get("Env") or []), cfg.get("Cmd"), cfg.get("Entrypoint"), cfg.get("User"), cfg.get("WorkingDir"),
+            sorted((cfg.get("Labels") or {}).items()), cfg.get("Image"),
+            sorted(host.get("Binds") or []), sorted((host.get("PortBindings") or {}).items(), key=lambda x: x[0]).__repr__(),
+            (host.get("RestartPolicy") or {}).get("Name"), host.get("NetworkMode"), bool(host.get("Privileged")),
+            sorted(host.get("CapAdd") or []), repr(host.get("Devices")), sorted((host.get("Tmpfs") or {}).items()),
+            sorted(nets.keys()), host.get("Memory"), host.get("NanoCpus"),
+        )
+    return key(cur) != key(snap)

@@ -119,6 +119,9 @@ def generate_compose(container_name: str) -> dict[str, Any]:
             svc.setdefault("tmpfs", []).append(dst)
     if vols:
         svc["volumes"] = vols
+    for path in (host.get("Tmpfs") or {}):
+        if path not in (svc.get("tmpfs") or []):
+            svc.setdefault("tmpfs", []).append(path)
 
     for key, src in (("privileged", "Privileged"), ("read_only", "ReadonlyRootfs"), ("init", "Init")):
         if host.get(src):
@@ -194,6 +197,10 @@ async def convert_stream(container_name: str, folder: str, yaml_text: str, send_
         return {"ok": False, "error": "Container not found"}
     if ((old.attrs.get("Config") or {}).get("Labels") or {}).get("com.docker.compose.project"):
         return {"ok": False, "error": "Already managed by Docker Compose"}
+    if (old.attrs.get("HostConfig") or {}).get("AutoRemove"):
+        msg = "The container was started with --rm (Docker deletes it when it stops); it cannot be converted safely"
+        await send_log(f"[ERROR] {msg}\n")
+        return {"ok": False, "error": msg}
     was_running = old.status == "running"
 
     Path(folder).mkdir(parents=True, exist_ok=True)

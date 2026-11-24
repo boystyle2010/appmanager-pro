@@ -384,13 +384,13 @@
                   <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
                   </svg>
-                  <span class="truncate" x-text="t(app.compose_issue === 'not_compose' ? 'hintCardNotCompose' : app.compose_issue === 'external' ? 'hintCardExternal' : 'hintCardNotMounted')"></span>
+                  <span class="truncate" x-text="t(app.compose_issue === 'not_compose' ? 'hintCardNotCompose' : app.compose_issue === 'external' ? 'hintCardExternal' : app.compose_issue === 'autoremove' ? 'hintCardAutoRemove' : 'hintCardNotMounted')"></span>
                 </button>
               </div>
             </div>
 
             <div class="flex items-center gap-2 pt-0.5">
-              <template x-if="app.has_update && app.compose_issue !== 'external'">
+              <template x-if="app.has_update && app.manage !== 'external'">
                 <button @click="openUpdateModal(app)"
                         class="glass-btn-update flex-1 h-9 px-3.5 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
@@ -400,7 +400,7 @@
                 </button>
               </template>
 
-              <template x-if="(!app.has_update || app.compose_issue === 'external') && app.port_map && app.status === 'running'">
+              <template x-if="(!app.has_update || app.manage === 'external') && app.port_map && app.status === 'running'">
                 <a :href="buildWebUrl(app)" target="_blank" rel="noopener"
                    class="glass-btn-primary flex-1 h-9 px-3.5 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5">
                   <span x-text="t('open')"></span>
@@ -410,7 +410,7 @@
                 </a>
               </template>
 
-              <template x-if="(!app.has_update || app.compose_issue === 'external') && (!app.port_map || app.status !== 'running')">
+              <template x-if="(!app.has_update || app.manage === 'external') && (!app.port_map || app.status !== 'running')">
                 <button @click="app.status === 'running' ? openLogs(app) : runAction(app, 'start')"
                         :disabled="busyId === app.id"
                         class="flex-1 h-9 px-3.5 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
@@ -704,8 +704,8 @@
               <path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085"/>
             </svg>
             <span class="min-w-0 text-left">
-              <span class="block" x-text="t(actionSheet.app?.compose_issue === 'not_compose' ? 'convertToCompose' : actionSheet.app?.compose_issue === 'external' ? 'externalTitleShort' : 'fixCompose')"></span>
-              <span class="block text-[10.5px] font-normal text-muted" x-text="t(actionSheet.app?.compose_issue === 'not_compose' ? 'hintCardNotCompose' : actionSheet.app?.compose_issue === 'external' ? 'hintCardExternal' : 'hintCardNotMounted')"></span>
+              <span class="block" x-text="t(actionSheet.app?.compose_issue === 'not_compose' ? 'convertToCompose' : actionSheet.app?.compose_issue === 'external' ? 'externalTitleShort' : actionSheet.app?.compose_issue === 'autoremove' ? 'autoRemoveTitleShort' : 'fixCompose')"></span>
+              <span class="block text-[10.5px] font-normal text-muted" x-text="t(actionSheet.app?.compose_issue === 'not_compose' ? 'hintCardNotCompose' : actionSheet.app?.compose_issue === 'external' ? 'hintCardExternal' : actionSheet.app?.compose_issue === 'autoremove' ? 'hintCardAutoRemove' : 'hintCardNotMounted')"></span>
             </span>
           </span>
           <svg class="w-3.5 h-3.5 text-subtle" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
@@ -1088,7 +1088,7 @@
       <div class="flex items-center justify-between gap-3 pb-3 border-b border-[var(--glass-border)]">
         <div class="min-w-0">
           <h3 class="font-bold text-base truncate" x-text="`${t('editTitle')} — ${editModal.app?.title || ''}`"></h3>
-          <p class="text-[11px] text-muted font-mono-code truncate" x-text="editModal.composePath"></p>
+          <p class="text-[11px] text-muted font-mono-code truncate" x-text="editModal.runMode ? t('runEditPath') : editModal.composePath"></p>
         </div>
         <button @click="closeEditModal()" :disabled="editModal.saving" aria-label="Close"
                 class="glass-btn w-8 h-8 rounded-full flex items-center justify-center text-muted hover:text-[var(--text-primary)] shrink-0">
@@ -1118,12 +1118,14 @@
         </div>
       </div>
 
-      <div class="glass-dock p-1 rounded-2xl grid grid-cols-3 gap-1 mt-3 mb-3 shrink-0">
+      <div x-show="editModal.runMode" class="mt-3 rounded-2xl px-3.5 py-2.5 bg-teal-500/10 border border-teal-400/30 text-[11px] text-teal-200 leading-snug" x-text="t('runEditNote')"></div>
+
+      <div class="glass-dock p-1 rounded-2xl grid gap-1 mt-3 mb-3 shrink-0" :class="editModal.runMode ? 'grid-cols-2' : 'grid-cols-3'">
         <button @click="switchEditTab('ui')" class="py-2 rounded-xl text-xs font-semibold transition"
                 :class="editModal.tab === 'ui' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabVisualUi')"></button>
         <button @click="switchEditTab('yaml')" class="py-2 rounded-xl text-xs font-semibold transition"
                 :class="editModal.tab === 'yaml' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabYamlCode')"></button>
-        <button @click="switchEditTab('backups')" class="py-2 rounded-xl text-xs font-semibold transition"
+        <button x-show="!editModal.runMode" @click="switchEditTab('backups')" class="py-2 rounded-xl text-xs font-semibold transition"
                 :class="editModal.tab === 'backups' ? 'glass-btn-primary' : 'text-muted'"
                 x-text="`${t('tabBackups')} (${editModal.backups.length})`"></button>
       </div>
@@ -2469,7 +2471,7 @@
       <div class="overflow-y-auto min-h-0 space-y-3 text-[11.5px]">
         <p class="text-[13px] font-semibold text-amber-300 leading-snug flex items-start gap-2">
           <svg class="w-4 h-4 shrink-0 mt-px text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
-          <span x-text="t(composeHint.app?.compose_issue === 'not_compose' ? (composeHint.app?.manage === 'run' ? 'convertTitleOptional' : 'hintTitleNotCompose') : composeHint.app?.compose_issue === 'portainer' ? 'hintTitlePortainer' : composeHint.app?.compose_issue === 'external' ? 'hintTitleExternal' : 'hintTitleNotMounted')"></span>
+          <span x-text="t(composeHint.app?.compose_issue === 'not_compose' ? (composeHint.app?.manage === 'run' ? 'convertTitleOptional' : 'hintTitleNotCompose') : composeHint.app?.compose_issue === 'portainer' ? 'hintTitlePortainer' : composeHint.app?.compose_issue === 'external' ? 'hintTitleExternal' : composeHint.app?.compose_issue === 'autoremove' ? 'hintTitleAutoRemove' : 'hintTitleNotMounted')"></span>
         </p>
 
         <!-- Chưa mount thư mục chứa compose -->
@@ -2488,6 +2490,9 @@
 
         <template x-if="composeHint.app?.compose_issue === 'external'">
           <p class="text-muted leading-relaxed" x-text="t('hintExternalMsg')"></p>
+        </template>
+        <template x-if="composeHint.app?.compose_issue === 'autoremove'">
+          <p class="text-muted leading-relaxed" x-text="t('hintAutoRemoveMsg')"></p>
         </template>
 
         <template x-if="composeHint.app?.compose_issue === 'portainer'">
@@ -2526,8 +2531,8 @@
 
       <div class="grid grid-cols-2 gap-2.5 pt-1 shrink-0">
         <button @click="composeHint.open = false" :disabled="composeHint.busy" class="glass-btn py-2.5 px-3 rounded-xl text-xs font-semibold disabled:opacity-50"
-                :class="['portainer', 'external'].includes(composeHint.app?.compose_issue) || composeHint.done ? 'col-span-2' : ''"
-                x-text="['portainer', 'external'].includes(composeHint.app?.compose_issue) || composeHint.done ? t('close') : t('cancel')"></button>
+                :class="['portainer', 'external', 'autoremove'].includes(composeHint.app?.compose_issue) || composeHint.done ? 'col-span-2' : ''"
+                x-text="['portainer', 'external', 'autoremove'].includes(composeHint.app?.compose_issue) || composeHint.done ? t('close') : t('cancel')"></button>
         <button x-show="composeHint.app?.compose_issue === 'not_mounted'" @click="const m = composeHint.app.compose_mount; composeHint.open = false; openDataSetupManual(m)"
                 class="glass-btn-primary py-2.5 px-3 rounded-xl text-xs font-semibold" x-text="t('hintOpenDataSetup')"></button>
         <button x-show="composeHint.app?.compose_issue === 'not_compose' && !composeHint.done" @click="confirmConvertCompose()"

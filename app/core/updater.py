@@ -1,4 +1,6 @@
 import asyncio
+import os
+import threading
 import json
 import logging
 import time
@@ -263,7 +265,7 @@ def _trigger_self_update_helper(
     mode: "update" (pull + tạo lại) hoặc "recreate" (sau khi sửa compose).
     compose_original: nội dung compose trước khi đổi (để trả lại khi rollback); None = compose không đổi.
     """
-    compose_dir = str(Path(compose_path).parent)
+    compose_dir = str(Path(compose_path).parent) if compose_path else ""
     client = get_docker_client()
     try:
         client.containers.get(SELF_HELPER_NAME).remove(force=True)
@@ -329,21 +331,72 @@ def _trigger_self_update_helper(
             detach=True,
             volumes={
                 "/var/run/docker.sock": {"bind": "/var/run/docker.sock", "mode": "rw"},
-                compose_dir: {"bind": compose_dir, "mode": "rw"},
+                **({compose_dir: {"bind": compose_dir, "mode": "rw"}} if compose_dir else {}),
                 **data_volume,
             },
             name=SELF_HELPER_NAME,
+            labels={"appmanager-pro.helper": "self-update"},
         )
     except Exception:
         SELF_JOB_FILE.unlink(missing_ok=True)
         raise
 
 
+def trigger_self_run(
+    *, mode: str = "update", image_ref: str = "", yaml_text: str = "", from_version: str = "",
+    to_version: str = "", history_mode: str = "manual",
+) -> None:
+    """
+    AppManager chạy bằng `docker run`: dựng sẵn cấu hình container mới (image mới hoặc cấu hình đã sửa) rồi giao cho
+    container phụ tạo lại AppManager (kiểm tra /login, hỏng thì chạy lại container cũ, cần thì trả database).
+    """
+    from app.core.run_manager import body_from_yaml, build_create_config
+
+    client = get_docker_client()
+    own = _own_container(client)
+    attrs = own.attrs or {}
+    try:
+        img_cfg = client.images.get(attrs.get("Image")).attrs.get("Config") or {}
+    except Exception:
+        img_cfg = {}
+    if yaml_text:
+        built = body_from_yaml(attrs, img_cfg, yaml_text, own.name)
+    else:
+        built = build_create_config(attrs, img_cfg, image_ref or (attrs.get("Config") or {}).get("Image") or "")
+    host = built["body"].get("HostConfig") or {}
+    targets = {b.split(":")[1] for b in (host.get("Binds") or []) if ":" in b} | {m.get("Target") for m in (host.get("Mounts") or [])}
+    if str(DATA_DIR) not in targets:
+        raise ValueError(f"The new settings would remove AppManager's data folder ({DATA_DIR}); not applied")
+    if not any(t in targets for t in ("/var/run/docker.sock", "/run/docker.sock")):
+        raise ValueError("The new settings would remove the Docker socket; not applied")
+    _trigger_self_update_helper(
+        "", mode="update" if mode == "update" else "recreate", title="AppManager Pro", from_version=from_version,
+        to_version=to_version, history_mode=history_mode,
+        extra_job={"run_body": built["body"], "run_extra_networks": built["extra_networks"],
+                   "run_image_ref": built["body"].get("Image") or ""},
+    )
+
+
 def collect_self_update_result() -> None:
     """Ghi kết quả tự cập nhật (do container phụ để lại) vào Lịch sử. Gọi lúc khởi động và mỗi phút."""
+    with _COLLECT_LOCK:
+        _collect_self_update_result_locked()
+
+
+_COLLECT_LOCK = threading.Lock()
+
+
+def _collect_self_update_result_locked() -> None:
     try:
         if SELF_RESULT_FILE.exists():
-            res = json.loads(SELF_RESULT_FILE.read_text(encoding="utf-8"))
+            # Nhận file kết quả bằng đổi tên (nguyên tử): nhiều nơi gọi cùng lúc cũng chỉ ghi Lịch sử MỘT lần
+            claimed = SELF_RESULT_FILE.with_name(f"{SELF_RESULT_FILE.name}.{os.getpid()}.claimed")
+            try:
+                os.replace(SELF_RESULT_FILE, claimed)
+            except FileNotFoundError:
+                return
+            res = json.loads(claimed.read_text(encoding="utf-8"))
+            claimed.unlink(missing_ok=True)
             before = get_last_update_history_id()
             add_update_history(
                 res.get("container") or "appmanager-pro", res.get("title") or "AppManager Pro",
@@ -351,7 +404,6 @@ def collect_self_update_result() -> None:
                 res.get("history_mode") or "manual", res.get("status") or "failed", (res.get("message") or "")[:300],
             )
             attach_update_log(res.get("container") or "appmanager-pro", before, res.get("log") or "")
-            SELF_RESULT_FILE.unlink(missing_ok=True)
             return
         if SELF_JOB_FILE.exists():
             job = json.loads(SELF_JOB_FILE.read_text(encoding="utf-8"))
@@ -519,6 +571,27 @@ async def _update_app_stream_impl(
 
     if app_info.get("manage") == "run" and not app_info.get("is_self"):
         return await _update_run_app(app_info, send_log, mode, force_tag)
+    if app_info.get("manage") == "run" and app_info.get("is_self"):
+        from app.core.registry_checker import pinned_version_label
+        from app.core.run_manager import image_ref_with_tag
+
+        tag = force_tag or app_info.get("target_tag") or ""
+        image_ref = image_ref_with_tag(app_info["image"], tag) if tag else app_info["image"]
+        to_ver = (pinned_version_label(force_tag) or force_tag) if force_tag else (app_info.get("remote_version") or tag or "latest")
+        await send_log(f"==> Detected self-update of {app_info['title']} (docker run): {app_info['image']} -> {image_ref}\n")
+        await send_log("==> Launching detached helper container to pull & recreate...\n")
+        try:
+            await asyncio.to_thread(lambda: trigger_self_run(
+                mode="update", image_ref=image_ref, from_version=app_info.get("version") or "", to_version=to_ver,
+                history_mode=mode))
+        except Exception as exc:
+            await send_log(f"[ERROR] Self-update failed: {exc}\n")
+            add_update_history(container_name, app_info["title"], app_info.get("version") or "", to_ver, mode, "failed", str(exc)[:300])
+            return {"ok": False, "error": str(exc)}
+        await send_log("==> Helper launched! AppManager Pro restarts in a few seconds. The new version is checked and "
+                       "rolled back automatically if it does not start; the result appears in Settings → History.\n")
+        await send_log("__SELF_UPDATE_RELOAD__\n")
+        return {"ok": True, "self_update": True, "to_version": to_ver}
 
     compose_path = app_info.get("compose_path") or ""
     if not compose_path or not Path(compose_path).exists():
@@ -754,7 +827,8 @@ async def _update_run_app(app_info: dict, send_log: LogCallback, mode: str, forc
     name, title = app_info["name"], app_info["title"]
     from_ver = app_info.get("version") or ""
     tag = force_tag or app_info.get("target_tag") or ""
-    image_ref = image_ref_with_tag(app_info["image"], tag) if tag else app_info["image"].split("@", 1)[0]
+    # Không có tag mới: giữ nguyên image (kể cả image ghim theo digest repo@sha256:..., không tự đổi sang :latest)
+    image_ref = image_ref_with_tag(app_info["image"], tag) if tag else app_info["image"]
     if force_tag:
         ch = next((c for c in (app_info.get("channels") or []) if c.get("tag") == force_tag), {})
         target_ver = ch.get("version") or pinned_version_label(force_tag) or force_tag

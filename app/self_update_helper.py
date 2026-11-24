@@ -214,6 +214,100 @@ def edit_compose(job: dict[str, Any], service: str) -> None:
     path.write_text(buf.getvalue(), encoding="utf-8")
 
 
+def run_mode(client, job: dict[str, Any]) -> int:
+    """AppManager chạy bằng docker run: tạo lại container từ cấu hình AppManager đã dựng sẵn (run_body)."""
+    name = job["container"]
+    window = int(job.get("window") or 120)
+    image_ref = job.get("run_image_ref") or ""
+    if job.get("mode") == "update" and image_ref:
+        if run(["docker", "pull", image_ref], "/") != 0:
+            try:
+                client.images.get(image_ref)
+                log("[WARN] docker pull failed; using the image already on this host")
+            except Exception:
+                write_result(job, "failed", "docker pull failed; nothing was changed")
+                return 1
+    api = client.api
+    backup_name = f"{name}-amp-old"
+    try:
+        client.containers.get(backup_name).remove(force=True)
+    except Exception:
+        pass
+    old = client.containers.get(name)
+    log(f"==> Stopping {name} and keeping it as {backup_name}")
+    try:
+        old.stop(timeout=20)
+        old.rename(backup_name)
+    except Exception as exc:
+        try:
+            old.start()
+        except Exception:
+            pass
+        write_result(job, "failed", f"Cannot stop / rename AppManager: {exc}")
+        return 1
+
+    new_id = ""
+    try:
+        res = api._result(api._post_json(api._url("/containers/create"), data=job["run_body"], params={"name": name}), True)
+        new_id = res["Id"]
+        for net, ep in (job.get("run_extra_networks") or {}).items():
+            api.connect_container_to_network(new_id, net, aliases=ep.get("Aliases"),
+                                             ipv4_address=(ep.get("IPAMConfig") or {}).get("IPv4Address"))
+        api.start(new_id)
+        log(f"==> Checking the new container for up to {window}s...")
+        ok, reason = wait_healthy(client, name, window)
+    except Exception as exc:
+        ok, reason = False, f"Cannot create/start the new container: {str(exc)[:300]}"
+    log(f"==> {reason}")
+    if ok:
+        try:
+            old.remove(v=False)
+            log(f"==> Removed {backup_name} (volumes and data kept)")
+        except Exception as exc:
+            log(f"[WARN] Could not remove {backup_name}: {exc}")
+        old_id = job.get("old_image_id") or ""
+        if job.get("prune_old_image") and old_id:
+            try:
+                if client.containers.get(name).image.id != old_id:
+                    client.images.remove(image=old_id, force=False)
+                    log(f"==> Removed old image {old_id[:19]}")
+            except Exception:
+                pass
+        write_result(job, "success", "Updated" if job.get("mode") == "update" else "Recreated")
+        return 0
+
+    # ---- Rollback: chạy lại container cũ (giữ database); vẫn hỏng mới trả database ----
+    if new_id:
+        diagnostics(client, name)
+        try:
+            api.remove_container(new_id, force=True)
+        except Exception:
+            pass
+    log("==> Rolling back to the previous AppManager container (database is kept)...")
+    try:
+        old.rename(name)
+        old.start()
+        rb_ok, rb_reason = wait_healthy(client, name, window)
+    except Exception as exc:
+        rb_ok, rb_reason = False, f"Cannot start the previous container: {exc}"
+    log(f"==> Rollback: {rb_reason}")
+    if not rb_ok and job.get("db_backup"):
+        log("==> Previous version does not start with the current database; restoring the database backup...")
+        restore_db(client, job)
+        try:
+            client.containers.get(name).start()
+            rb_ok, rb_reason = wait_healthy(client, name, window)
+        except Exception as exc:
+            rb_ok, rb_reason = False, str(exc)
+        log(f"==> Rollback with restored database: {rb_reason}")
+    if rb_ok:
+        write_result(job, "rolled_back", f"{reason}; previous version restored")
+        return 1
+    diagnostics(client, name)
+    write_result(job, "failed", f"{reason}; rollback failed: {rb_reason}")
+    return 1
+
+
 def main() -> int:
     import docker  # có sẵn trong image
 
@@ -224,6 +318,9 @@ def main() -> int:
         return 1
 
     client = docker.from_env()
+    if job.get("run_body"):
+        time.sleep(2)  # để AppManager kịp trả lời trình duyệt
+        return run_mode(client, job)
     name = job["container"]
     service = job.get("service") or ""
     compose = job["compose_path"]

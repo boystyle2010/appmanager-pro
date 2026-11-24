@@ -364,7 +364,12 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
             continue  # container phụ của AppManager / container cũ đang giữ tạm khi cập nhật: không hiện
         hint = {"compose_issue": "", "compose_expected": "", "compose_mount": ""}
         has_compose = bool(compose_path and Path(compose_path).exists())
-        if manage == "run" and not has_compose:
+        from app.core.run_manager import is_auto_remove
+
+        if manage == "run" and not has_compose and is_auto_remove(attrs):
+            manage = "external"  # --rm: Docker xoá container khi dừng -> không tạo lại an toàn được
+            hint = {"compose_issue": "autoremove", "compose_expected": "", "compose_mount": ""}
+        elif manage == "run" and not has_compose:
             pass  # quản lý trực tiếp (tạo lại container), không cần compose
         elif manage == "external":
             hint = {"compose_issue": "external", "compose_expected": "", "compose_mount": ""}
@@ -435,8 +440,8 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
                 "compose_path": compose_path,
                 "appdata_path": appdata_path,
                 # compose: cần đọc được file; docker run: tạo lại trực tiếp (trừ AppManager — đợt sau)
-                "can_update": has_compose or (manage == "run" and not is_self),
-                "can_edit": has_compose,
+                "can_update": has_compose or manage == "run",
+                "can_edit": has_compose or manage == "run",
                 "manage": "compose" if has_compose else manage,
                 **hint,
                 "portainer_stack": portainer_stack,

@@ -909,6 +909,9 @@
             this.updateModal.preview = null;  // đã chuyển xong -> bỏ trạng thái "xem trước", không hiện lại nút chuyển
             await this.loadApps();
             if (this.updateModal.open && this.updateModal.app) {
+              // phần đầu cửa sổ (image / phiên bản) lấy ngay số liệu mới, không chờ tải lại changelog
+              const fresh = this.apps.find(a => a.name === this.updateModal.app.name);
+              if (fresh) this.updateModal.app = { ...this.updateModal.app, ...fresh };
               await this._fetchAppDetails(this.updateModal.app.name, false);
             }
           };
@@ -1204,7 +1207,7 @@
           this.tagMenu = { open: false, loading: false, items: [], error: '', image: '' };
           this.editModal = {
             open: true, loading: true, saving: false, tab: 'ui',
-            app, composePath: '', rawYaml: '', ui: null, otherComposeFiles: [], skippedComposeFiles: [], dupBusy: false, lastService: '', yamlTouched: false,
+            app, composePath: '', runMode: false, rawYaml: '', ui: null, otherComposeFiles: [], skippedComposeFiles: [], dupBusy: false, lastService: '', yamlTouched: false,
             backups: [], feedback: '', feedbackOk: true, feedbackLogs: '',
             sec: { container: true, ports: true, volumes: false, env: false, casaos: false }
           };
@@ -1220,6 +1223,7 @@
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || 'Cannot load docker-compose.yml');
             this.editModal.composePath = data.compose_path || '';
+            this.editModal.runMode = !!data.run_mode;
             this.editModal.otherComposeFiles = data.other_compose_files || [];
             this.editModal.skippedComposeFiles = data.skipped_compose_files || [];
             this.editModal.rawYaml = data.raw_yaml || '';

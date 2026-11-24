@@ -732,6 +732,15 @@ async def get_compose_state(container_name: str, service: Optional[str] = None) 
     if not app_info:
         raise FileNotFoundError("Container not found")
     compose_path = app_info.get("compose_path") or ""
+    if app_info.get("manage") == "run":
+        # docker run: cấu hình hiện tại của container dưới dạng YAML (không ghi file); áp dụng = tạo lại container
+        from app.core.compose_convert import generate_compose
+
+        gen = await asyncio.to_thread(generate_compose, container_name)
+        return {
+            "app": app_info, "compose_path": "", "run_mode": True, "raw_yaml": gen["yaml"],
+            "ui": parse_yaml_to_ui(gen["yaml"]), "backups": [], "other_compose_files": [], "skipped_compose_files": [],
+        }
     if not compose_path or not Path(compose_path).exists():
         raise FileNotFoundError("No docker-compose.yml found for this container")
 
@@ -784,6 +793,8 @@ async def save_and_apply_compose(container_name: str, raw_yaml: str) -> dict[str
     app_info = await asyncio.to_thread(get_app_by_name, container_name)
     if not app_info:
         return {"ok": False, "error": "Container not found"}
+    if app_info.get("manage") == "run":
+        return await apply_run_config(app_info, raw_yaml)
 
     compose_path = app_info.get("compose_path") or ""
     if not compose_path or not Path(compose_path).exists():
@@ -881,6 +892,56 @@ async def save_and_apply_compose(container_name: str, raw_yaml: str) -> dict[str
         "backup": backup_file,
         "backups": list_backups(container_name),
     }
+
+
+async def apply_run_config(app_info: dict[str, Any], raw_yaml: str) -> dict[str, Any]:
+    """docker run: tạo lại container theo cấu hình đã sửa; hỏng -> chạy lại container cũ. AppManager: qua container phụ.
+    Dùng chung khoá với cập nhật: không sửa cấu hình khi app đang được cập nhật (và ngược lại)."""
+    from app.core.updater import _UPDATE_LOCKS
+
+    name = app_info["name"]
+    lock = _UPDATE_LOCKS.setdefault(name, asyncio.Lock())
+    if lock.locked():
+        return {"ok": False, "error": "This app is being updated or changed right now. Please wait for it to finish."}
+    async with lock:
+        return await _apply_run_config_locked(app_info, raw_yaml)
+
+
+async def _apply_run_config_locked(app_info: dict[str, Any], raw_yaml: str) -> dict[str, Any]:
+    from app.core.database import add_update_history, get_setting
+    from app.core.run_manager import recreate_stream
+
+    name = app_info["name"]
+    if app_info.get("is_self"):
+        from app.core.updater import trigger_self_run
+
+        try:
+            await asyncio.to_thread(trigger_self_run, mode="recreate", yaml_text=raw_yaml, from_version=app_info.get("version") or "",
+                                    to_version=app_info.get("version") or "")
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+        return {"ok": True, "self_update": True}
+    chunks: list[str] = []
+
+    async def log(t: str) -> None:
+        chunks.append(t)
+
+    try:
+        window = max(10, min(120, int(get_setting("health_wait_seconds", "25"))))
+    except Exception:
+        window = 25
+    res = await recreate_stream(name, app_info["image"], log, window=window, yaml_text=raw_yaml,
+                                auto_rollback=get_setting("auto_rollback", "true").lower() == "true")
+    logs = "".join(chunks)
+    if res.get("ok"):
+        add_update_history(name, app_info["title"], app_info.get("version") or "", app_info.get("version") or "",
+                           "config", "success", "Container settings changed (docker run)")
+        return {"ok": True, "logs": logs}
+    if res.get("rolled_back"):
+        add_update_history(name, app_info["title"], app_info.get("version") or "", app_info.get("version") or "",
+                           "config", "rolled_back", f"New settings failed ({res.get('reason')}); previous container restored"[:300])
+        return {"ok": False, "error": f"The new settings did not work ({res.get('reason')}); the previous container is running again.", "logs": logs}
+    return {"ok": False, "error": res.get("reason") or "Apply failed", "logs": logs}
 
 
 async def rollback_compose(container_name: str, backup_filename: str) -> dict[str, Any]:

@@ -44,7 +44,6 @@ from app.core.compose_manager import (
     parse_yaml_to_ui,
     resolve_duplicate_compose,
     duplicate_compose_state,
-    visible_duplicate_files,
     rollback_compose,
     sanitize_app_id,
     save_and_apply_compose,
@@ -684,6 +683,25 @@ async def api_validate_compose(
     container_name: str, payload: ComposeYamlPayload, _: str = Depends(require_user)
 ):
     app_info = await asyncio.to_thread(get_app_by_name, container_name)
+    if app_info and app_info.get("manage") == "run":
+        # docker run: kiểm tra cú pháp + chuyển được sang cấu hình container (không chạy gì)
+        from app.core.docker_client import get_docker_client
+        from app.core.run_manager import body_from_yaml
+
+        def check() -> str:
+            client = get_docker_client()
+            c = client.containers.get(container_name)
+            try:
+                img_cfg = client.images.get(c.attrs.get("Image")).attrs.get("Config") or {}
+            except Exception:
+                img_cfg = {}
+            body_from_yaml(c.attrs, img_cfg, payload.raw_yaml, c.name)
+            return "OK"
+
+        try:
+            return {"ok": True, "message": await asyncio.to_thread(check)}
+        except Exception as exc:
+            return {"ok": False, "message": str(exc)[:300]}
     if not app_info or not app_info.get("compose_path"):
         raise HTTPException(status_code=404, detail="Compose file not found")
     compose_dir = str(Path(app_info["compose_path"]).parent)
@@ -912,6 +930,8 @@ async def api_app_action(container_id: str, action: str, request: Request, user:
 
 @app.get("/api/settings")
 async def api_get_settings(_: str = Depends(require_user)):
+    # Kết quả tự cập nhật do container phụ để lại -> ghi vào Lịch sử ngay khi mở (không phải chờ tới phút sau)
+    await asyncio.to_thread(collect_self_update_result)
     return {
         "settings": {**get_public_settings(), "auto_prune_next_run": get_auto_prune_next_run()},
         "history": get_update_history(30),

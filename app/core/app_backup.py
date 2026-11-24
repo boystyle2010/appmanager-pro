@@ -517,9 +517,13 @@ def _restore_run_version(client, meta: dict[str, Any], current_image_id: str, lo
         client.containers.get(name)
     except Exception:
         exists = False
-    if exists and image_id and image_id == current_image_id and not meta.get("force_recreate"):
-        log.append("Image already matches the backup; container settings kept.")
-        return False, ""
+    if exists and image_id and image_id == current_image_id:
+        from app.core.run_manager import settings_differ
+
+        if not settings_differ(client.containers.get(name).attrs, snap.get("attrs") or {}):
+            log.append("Image and container settings already match the backup.")
+            return False, ""
+        log.append("Container settings differ from the backup; recreating with the backed-up settings")
     source_id = image_id if (image_id and _image_exists(client, image_id)) else ""
     if image_id and not source_id:
         log.append(f"Image {image_id[:19]} ({version}) is not on this host.")
