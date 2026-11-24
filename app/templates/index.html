@@ -1456,17 +1456,26 @@
          style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
       <div class="sheet-handle sm:hidden"></div>
       <div class="flex items-center justify-between pb-3.5 border-b border-[var(--glass-border)]">
-        <h3 class="font-bold text-base" x-text="t('settingsTitle')"></h3>
+        <h3 class="font-bold text-base" x-text="settingsModal.tab === 'about' ? t('tabAbout') : t('settingsTitle')"></h3>
+        <div class="flex items-center gap-2 shrink-0">
+        <button @click="settingsModal.tab = (settingsModal.tab === 'about' ? 'schedule' : 'about')" :aria-label="t('tabAbout')" :title="t('tabAbout')"
+                class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition"
+                :class="settingsModal.tab === 'about' ? 'glass-btn-primary' : 'glass-btn text-muted hover:text-[var(--text-primary)]'">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"/>
+          </svg>
+        </button>
         <button @click="settingsModal.open = false" aria-label="Close"
                 class="glass-btn w-8 h-8 rounded-full flex items-center justify-center text-muted hover:text-[var(--text-primary)] shrink-0">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
           </svg>
         </button>
+        </div>
       </div>
 
-      <!-- 3 Tabs: Schedule | Storage (Prune SSD) | History -->
-      <div class="glass-dock p-1 rounded-2xl grid grid-cols-[1fr_1fr_1fr_1fr_auto] gap-1 mt-4 mb-4">
+      <!-- 4 Tabs: General | Storage (Prune SSD) | Security | History; Giới thiệu mở bằng nút ⓘ trên tiêu đề -->
+      <div class="glass-dock p-1 rounded-2xl grid grid-cols-4 gap-1 mt-4 mb-4">
         <button @click="settingsModal.tab = 'schedule'" class="py-2 rounded-xl text-xs font-semibold transition"
                 :class="settingsModal.tab === 'schedule' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabScheduleShort')"></button>
         <button @click="settingsModal.tab = 'storage'; loadStorage(); loadBackups()" class="py-2 rounded-xl text-xs font-semibold transition"
@@ -1475,13 +1484,6 @@
                 :class="settingsModal.tab === 'security' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabSecurity')"></button>
         <button @click="settingsModal.tab = 'history'" class="py-2 rounded-xl text-xs font-semibold transition"
                 :class="settingsModal.tab === 'history' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabHistory')"></button>
-        <button @click="settingsModal.tab = 'about'" :aria-label="t('tabAbout')" :title="t('tabAbout')"
-                class="py-2 px-2.5 rounded-xl transition flex items-center justify-center"
-                :class="settingsModal.tab === 'about' ? 'glass-btn-primary' : 'text-muted'">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"/>
-          </svg>
-        </button>
       </div>
 
       <div class="flex-1 overflow-y-auto space-y-3.5">
