@@ -278,6 +278,13 @@ jobs:
           s = open("README.md", encoding="utf-8").read()
           for title in ("🗂️ Project structure", "🔌 API reference", "🛠️ Development"):
               s = re.sub(r"^## " + re.escape(title) + r".*?(?=^## )", "", s, flags=re.S | re.M)
+          import os
+          repo = os.environ["GITHUB_REPOSITORY"]
+          # Thẻ HTML (<img src>, <a href>) dùng đường dẫn tương đối không được Docker Hub tự sửa -> đổi sang URL tuyệt đối
+          raw = f"https://raw.githubusercontent.com/{repo}/main/"
+          blob = f"https://github.com/{repo}/blob/main/"
+          s = re.sub(r'(src=")(?!https?://|data:|#)([^"]+)"', lambda m: f'{m.group(1)}{raw}{m.group(2).lstrip("./")}"', s)
+          s = re.sub(r'(href=")(?!https?://|mailto:|#)([^"]+)"', lambda m: f'{m.group(1)}{blob}{m.group(2).lstrip("./")}"', s)
           s += "\n\n> Full documentation: https://github.com/boystyle2010/appmanager-pro\n"
           b = s.encode("utf-8")
           if len(b) > 24500:
