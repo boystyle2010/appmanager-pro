@@ -150,6 +150,8 @@
           });
         },
 
+        get selfApp() { return this.apps.find(a => a.is_self) || null; },
+
         // App có bản cập nhật & cập nhật được; và phần được chọn cho "Cập nhật tất cả"
         get updatableApps() { return this.apps.filter(a => a.has_update && a.can_update); },
         get updateAllTargets() { return this.updatableApps.filter(a => !this.updateAllExcluded.includes(a.name)); },
