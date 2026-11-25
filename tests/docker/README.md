@@ -111,7 +111,7 @@ curl -s -X POST localhost:8797/api/auth/setup -H 'Content-Type: application/json
 node $S/e2e9.js $S/shots
 ```
 Cổng cố định trong từng script: `e2e7.js` (gỡ app) :8798, `e2e9.js`/`e2e10.js` (giới hạn API) :8797,
-`e2e11.js` (tab Thông báo) :8796 — cần `python $S/hook_srv.py $S/hook.log &` (webhook :8094).
+`e2e11.js` (tab Thông báo) :8796 — cần `python $S/hook_srv.py $S/hook.log &` (webhook :8094) và chạy `node $S/e2e11.js $S/shots $S/hook.log` (tham số 2 = file log webhook).
 Ảnh mới: viết `e2eN.js` theo mẫu `e2e9.js` (login bằng `ctx.request.post`, `D(...)` để mở popup/tab, `p.screenshot`).
 Gửi ảnh bằng SendUserFile; dừng uvicorn sau khi xong (`pkill -f "uvicorn app.main:app --port 879"`).
 
