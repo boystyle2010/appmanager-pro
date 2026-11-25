@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.16.0
+
+*Released: 2026-11-25*
+
+### 📦 Component & Version Matrix
+
+- **App Release:** Bumped from `v0.14.1` ➡️ `v0.16.0`
+- **Supported Architectures:** `linux/amd64` (x86_64), `linux/arm64` (ARM64) & `linux/arm/v7` (ARMv7 32-bit) *(Multi-arch GHCR Image)*
+- **Python Base Image:** `python 3.15.2`
+- **Docker CLI:** `docker 29.10.1`
+- **Core Python Stack:** `FastAPI 0.165.0` • `Uvicorn 0.54.0` • `Docker SDK 7.2.0` • `ruamel.yaml 0.19.1` • `Argon2 25.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.28.1` • `APScheduler 3.11.3` • `segno 1.6.6`
+- **Frontend Libraries:** `Alpine.js 3.17.5` • `Tailwind CSS 4.3.5` • `marked 18.3.0` • `DOMPurify 3.5.0`
+
+### 🚀 What's Changed
+
+- Notifications (Settings → Notify): Telegram, Discord, ntfy, Gotify and Webhook (JSON with optional HMAC signature), with events chosen per channel: updates available (grouped, each version once), update finished, update failed / rolled back, AppManager self-update, app problem (keeps restarting, unhealthy, exits with an error — and recovery), disk almost full, security (IP locked, password changed, 2FA disabled).
+- "Send test" per channel with the delivery result; secrets are never shown again after saving.
+- Quiet hours: regular messages are held and sent as one summary afterwards; important ones are always sent. Messages in English or Vietnamese.
+- Notifications are sent in the background with retries, so an unreachable channel never slows down updates.
+
 ## 0.14.1
 
 *Released: 2026-11-25*
