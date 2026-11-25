@@ -1,5 +1,5 @@
 # Lấy Docker CLI & Compose v2 binary chính chủ (amd64, arm64, armv7)
-FROM docker:29.10.0-cli AS docker-cli
+FROM docker:29.10.1-cli AS docker-cli
 
 # Biên dịch Tailwind CSS v4 một lần trên máy build (CSS dùng chung cho mọi kiến trúc)
 FROM --platform=$BUILDPLATFORM node:lts-slim AS css

@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.14.1
+
+*Released: 2026-11-25*
+
+### 📦 Component & Version Matrix
+
+- **App Release:** Bumped from `v0.14.0` ➡️ `v0.14.1`
+- **Supported Architectures:** `linux/amd64` (x86_64), `linux/arm64` (ARM64) & `linux/arm/v7` (ARMv7 32-bit) *(Multi-arch GHCR Image)*
+- **Python Base Image:** `python 3.15.2`
+- **Docker CLI:** `docker 29.10.0` ➡️ `docker 29.10.1`
+- **Core Python Stack:** `FastAPI 0.165.0` • `Uvicorn 0.54.0` • `Docker SDK 7.2.0` • `ruamel.yaml 0.19.1` • `Argon2 25.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.28.1` • `APScheduler 3.11.3` • `segno 1.6.6`
+- **Frontend Libraries:** `Alpine.js 3.17.5` • `Tailwind CSS 4.3.5` • `marked 18.3.0` • `DOMPurify 3.5.0`
+
+### 🚀 What's Changed
+
+- Upgraded **Docker CLI** to `29.10.1`.
+- Uninstall dialog uses red toggle switches (same style as Storage cleanup) instead of checkboxes.
+- Rate limits: every outgoing request goes through one layer that caches answers (blobs and release notes of a tag permanently, tag lists for an hour, GitHub revalidated with ETag so unchanged answers do not count), pauses only the limited source until Retry-After / X-RateLimit-Reset (remembered across restarts) and limits parallel requests per source.
+- While a source is limited, apps keep their last known update status; cards show "Checks paused until HH:MM (API limit)".
+- New Settings section "Update sources & API limits": requests and cache hits per source in the last hour, remaining quota, pauses with "Resume now", and "Clear cached answers".
+- Registry accounts (Docker Hub, GHCR, any registry incl. basic-auth registries): tested before saving, used for update checks (raises Docker Hub limits) and for pulling private images, including in the self-update helper; the host's docker config is not modified.
+
 ## 0.14.0
 
 *Released: 2026-11-24*
