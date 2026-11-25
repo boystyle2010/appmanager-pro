@@ -70,7 +70,7 @@ from app.core.database import (
     set_setting,
 )
 from app.core.database import get_setting
-from app.core import compose_convert, data_setup, net
+from app.core import compose_convert, data_setup, net, notify
 from app.core.docker_client import (
     APP_VERSION,
     container_action,
@@ -334,6 +334,14 @@ async def api_setup(payload: SetupPayload, request: Request, response: Response)
     return {"ok": True}
 
 
+def _notify_if_locked(ip: str, username: str) -> None:
+    if is_ip_locked(ip):
+        vi = notify.settings()["lang"] == "vi"
+        notify.on_security((f"IP {ip} bị khoá 15 phút sau nhiều lần đăng nhập sai (tài khoản: {username or '?'})." if vi
+                            else f"IP {ip} was locked for 15 minutes after repeated failed logins (user: {username or '?'})."),
+                           {"ip": ip, "username": username, "kind": "ip_locked"})
+
+
 @app.post("/api/auth/login")
 async def api_login(payload: LoginPayload, request: Request, response: Response):
     ip = get_client_ip(request)
@@ -350,6 +358,7 @@ async def api_login(payload: LoginPayload, request: Request, response: Response)
     if not user or not await asyncio.to_thread(verify_password, user["password_hash"], payload.password):
         record_failed_attempt(ip)
         audit(request, payload.username.strip(), "login_failed", detail="Wrong username or password", ok=False)
+        _notify_if_locked(ip, payload.username.strip())
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
     if user["totp_enabled"]:
@@ -358,6 +367,7 @@ async def api_login(payload: LoginPayload, request: Request, response: Response)
         if not check_second_factor(user, payload.otp or ""):
             record_failed_attempt(ip)
             audit(request, user["username"], "login_failed", detail="Wrong 2FA code", ok=False)
+            _notify_if_locked(ip, user["username"])
             raise HTTPException(status_code=401, detail="Invalid two-factor code")
 
     clear_failed_attempts(ip)
@@ -421,6 +431,9 @@ async def api_2fa_disable(payload: TwoFactorDisablePayload, request: Request, us
         raise HTTPException(status_code=400, detail="Wrong password or code")
     update_user_fields(user, totp_secret="", totp_enabled=0, totp_last_step=0, backup_codes="[]", totp_pending="")
     audit(request, user, "2fa_disabled")
+    notify.on_security(("Xác thực 2 lớp (2FA) đã bị TẮT cho tài khoản " if notify.settings()["lang"] == "vi"
+                        else "Two-factor authentication was DISABLED for ") + user + f" (IP {get_client_ip(request)}).",
+                       {"kind": "2fa_disabled", "user": user})
     return {"ok": True}
 
 
@@ -446,6 +459,9 @@ async def api_change_password(payload: PasswordChangePayload, request: Request, 
     rotate_session_secret()  # đăng xuất mọi thiết bị khác
     set_session_cookie(response, request, user, remember=True)
     audit(request, user, "password_changed")
+    notify.on_security(("Mật khẩu của " if notify.settings()["lang"] == "vi" else "The password of ") + user +
+                       (" vừa được đổi" if notify.settings()["lang"] == "vi" else " was changed") + f" (IP {get_client_ip(request)}).",
+                       {"kind": "password_changed", "user": user})
     return {"ok": True}
 
 
@@ -890,6 +906,71 @@ async def api_compose_convert(
     res = await compose_convert.convert_stream(container_name, payload.folder.strip(), payload.yaml, collect)
     audit(request, user, "compose_convert", container_name, res.get("error") or res.get("compose_path") or "", bool(res.get("ok")))
     return {**res, "log": "".join(chunks)[-20000:]}
+
+
+# ---------------- Thông báo ----------------
+class NotifyChannelPayload(BaseModel):
+    ui_lang: str = ""  # ngôn ngữ giao diện: lần đầu thêm kênh, tin nhắn dùng luôn ngôn ngữ này
+    id: str = ""
+    type: str
+    name: str = ""
+    enabled: bool = True
+    events: list[str] = []
+    config: dict[str, Any] = {}
+
+
+class NotifySettingsPayload(BaseModel):
+    quiet_enabled: Optional[bool] = None
+    quiet_start: Optional[str] = None
+    quiet_end: Optional[str] = None
+    disk_pct: Optional[int] = None
+    lang: Optional[str] = None
+
+
+class NotifyIdPayload(BaseModel):
+    id: str
+
+
+@app.get("/api/notify")
+async def api_notify_get(_: str = Depends(require_user)):
+    return {"channels": notify.masked_channels(), "settings": notify.settings(), "events": list(notify.EVENTS),
+            "critical": sorted(notify.CRITICAL)}
+
+
+@app.post("/api/notify/channels")
+async def api_notify_save(payload: NotifyChannelPayload, request: Request, user: str = Depends(require_user)):
+    if payload.ui_lang in ("vi", "en") and not get_setting("notify_lang", ""):
+        set_setting("notify_lang", payload.ui_lang)
+    try:
+        ch = await asyncio.to_thread(notify.upsert_channel, payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    audit(request, user, "notify_channel_save", ch["type"], ch["name"])
+    return {"ok": True, "id": ch["id"]}
+
+
+@app.post("/api/notify/channels/delete")
+async def api_notify_delete(payload: NotifyIdPayload, request: Request, user: str = Depends(require_user)):
+    await asyncio.to_thread(notify.delete_channel, payload.id)
+    audit(request, user, "notify_channel_delete", payload.id)
+    return {"ok": True}
+
+
+@app.post("/api/notify/test")
+async def api_notify_test(payload: NotifyIdPayload, request: Request, user: str = Depends(require_user)):
+    ch = next((c for c in notify.channels() if c["id"] == payload.id), None)
+    if not ch:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    ok, detail = await asyncio.to_thread(notify.send_test, ch)
+    audit(request, user, "notify_test", ch["type"], detail, ok)
+    return {"ok": ok, "detail": detail}
+
+
+@app.post("/api/notify/settings")
+async def api_notify_settings(payload: NotifySettingsPayload, request: Request, user: str = Depends(require_user)):
+    await asyncio.to_thread(notify.save_settings, payload.model_dump(exclude_none=True))
+    audit(request, user, "notify_settings")
+    return {"ok": True, "settings": notify.settings()}
 
 
 # ---------------- Nguồn cập nhật & giới hạn API ----------------

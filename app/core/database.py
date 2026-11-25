@@ -504,6 +504,12 @@ def add_update_history(
         conn.commit()
     finally:
         conn.close()
+    try:  # thông báo (Telegram / Discord / ...) cho mọi lần cập nhật / khôi phục / sửa cấu hình
+        from app.core.notify import on_history
+
+        on_history(container_name, app_title, from_version, to_version, mode, status, message)
+    except Exception:
+        pass
 
 
 UPDATE_LOG_MAX_CHARS = 60_000  # giữ phần cuối nhật ký (chỗ báo lỗi) nếu quá dài

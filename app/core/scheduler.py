@@ -180,6 +180,15 @@ def configure_jobs() -> None:
         replace_existing=True,
     )
 
+    # Thông báo: app gặp sự cố / ổ đĩa sắp đầy / gửi tin để dành sau giờ im lặng
+    from app.core import notify
+
+    scheduler.add_job(notify.check_app_health, trigger=IntervalTrigger(minutes=2), id="notify_health",
+                      next_run_time=datetime.now(timezone.utc) + timedelta(seconds=20), replace_existing=True)
+    scheduler.add_job(notify.check_disk, trigger=IntervalTrigger(hours=1), id="notify_disk",
+                      next_run_time=datetime.now(timezone.utc) + timedelta(minutes=2), replace_existing=True)
+    scheduler.add_job(notify.flush_deferred, trigger=IntervalTrigger(minutes=5), id="notify_flush", replace_existing=True)
+
     if scheduler.get_job("auto_prune_job"):
         scheduler.remove_job("auto_prune_job")
 

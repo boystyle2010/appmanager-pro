@@ -1373,6 +1373,13 @@ async def check_all_updates() -> dict[str, Any]:
             updates_found = sum(
                 1 for r in results if isinstance(r, dict) and r.get("has_update") == 1
             )
+            try:  # thông báo các bản mới chưa từng báo (gộp một tin)
+                from app.core.notify import on_updates_found
+
+                fresh = await asyncio.to_thread(list_all_apps, True)
+                await asyncio.to_thread(on_updates_found, fresh["apps"])
+            except Exception:
+                logger.exception("Update notification failed")
             return {
                 "ok": True,
                 "checked": len(apps),

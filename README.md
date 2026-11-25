@@ -258,6 +258,21 @@ docker compose pull && docker compose up -d
 | GitHub token | — | Optional; raises the GitHub API limit (60 → 5,000 requests/hour) and allows private repos. |
 | Security tab | — | Two-factor authentication, password change, activity log. |
 
+### Notifications
+
+*Settings → Notify*: add **Telegram**, **Discord**, **ntfy**, **Gotify** or a generic **Webhook** (JSON, optional HMAC signature in `X-AppManager-Signature`) and choose the events per channel:
+
+| Event | When |
+|---|---|
+| Updates available | new versions found (one grouped message, each version only once) |
+| Update finished / failed / rolled back | every update, version switch, restore and settings change |
+| AppManager self-update | result of AppManager's own update |
+| App problem | a container keeps restarting, is unhealthy, or exits with an error code (and when it recovers) |
+| Disk almost full | usage above the threshold (at most once a day per folder) |
+| Security | IP locked after failed logins, password changed, 2FA disabled |
+
+*Send test* checks a channel. **Quiet hours** hold regular messages and send them as one summary afterwards; important ones (failures, app problems, disk, security) are always sent. Messages are in English or Vietnamese.
+
 ### Rate limits (Docker Hub, GitHub)
 
 Docker Hub and GitHub limit how many requests an IP can make (GitHub: 60/hour without a token, 5,000/hour with one). AppManager:

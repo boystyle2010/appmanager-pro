@@ -1624,12 +1624,14 @@
         </div>
       </div>
 
-      <!-- 4 Tabs: General | Storage (Prune SSD) | Security | History; Giới thiệu mở bằng nút ⓘ trên tiêu đề -->
-      <div class="glass-dock p-1 rounded-2xl grid grid-cols-4 gap-1 mt-4 mb-4">
-        <button @click="settingsModal.tab = 'schedule'" class="py-2 rounded-xl text-xs font-semibold transition"
+      <!-- 5 Tabs: General | Storage (Prune SSD) | Notifications | Security | History; Giới thiệu mở bằng nút ⓘ trên tiêu đề -->
+      <div class="glass-dock p-1 rounded-2xl grid grid-cols-5 gap-1 mt-4 mb-4">
+        <button @click="settingsModal.tab = 'schedule'" class="py-2 rounded-xl text-[11.5px] font-semibold transition"
                 :class="settingsModal.tab === 'schedule' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabScheduleShort')"></button>
         <button @click="settingsModal.tab = 'storage'; loadStorage(); loadBackups()" class="py-2 rounded-xl text-xs font-semibold transition"
                 :class="settingsModal.tab === 'storage' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabStorage')"></button>
+        <button @click="settingsModal.tab = 'notify'; loadNotify()" class="py-2 rounded-xl text-xs font-semibold transition"
+                :class="settingsModal.tab === 'notify' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabNotify')"></button>
         <button @click="settingsModal.tab = 'security'; loadSecurity()" class="py-2 rounded-xl text-xs font-semibold transition"
                 :class="settingsModal.tab === 'security' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabSecurity')"></button>
         <button @click="settingsModal.tab = 'history'" class="py-2 rounded-xl text-xs font-semibold transition"
@@ -2149,6 +2151,123 @@
         </template>
 
         <!-- TAB 3: UPDATE HISTORY -->
+        <!-- TAB: THÔNG BÁO -->
+        <template x-if="settingsModal.tab === 'notify'">
+          <div class="space-y-3.5">
+            <div class="glass-inset rounded-2xl p-3.5 space-y-2.5">
+              <div class="flex items-center justify-between gap-2">
+                <div class="min-w-0">
+                  <p class="text-xs font-semibold" x-text="t('notifyChannels')"></p>
+                  <p class="text-[10.5px] text-muted leading-snug" x-text="t('notifyChannelsDesc')"></p>
+                </div>
+                <button x-show="!notifyState.edit" @click="newNotifyChannel()" class="glass-btn-primary px-3 py-2 rounded-xl text-[11.5px] font-semibold shrink-0" x-text="'+ ' + t('notifyAdd')"></button>
+              </div>
+              <p x-show="!notifyState.channels.length && !notifyState.edit" class="text-[11px] text-subtle py-2" x-text="t('notifyNone')"></p>
+
+              <template x-for="ch in notifyState.channels" :key="ch.id">
+                <div x-show="!notifyState.edit || notifyState.edit.id !== ch.id" class="rounded-xl border border-[var(--glass-border)] px-3 py-2.5 space-y-2">
+                  <div class="flex items-center gap-2.5">
+                    <span class="w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold text-white shrink-0" :class="notifyColor(ch.type)" x-text="notifyTypeShort(ch.type)"></span>
+                    <span class="min-w-0 flex-1">
+                      <span class="block text-xs font-semibold truncate" x-text="ch.name"></span>
+                      <span class="block text-[10.5px] text-muted truncate" x-text="notifyTypeLabel(ch.type) + ' • ' + t('notifyEventsCount').replace('{n}', ch.events.length)"></span>
+                    </span>
+                    <label class="inline-flex items-center cursor-pointer shrink-0">
+                      <input type="checkbox" :checked="ch.enabled" @change="toggleNotifyChannel(ch, $event.target.checked)" class="sr-only peer" />
+                      <div class="w-11 h-6 bg-slate-600/60 rounded-full peer peer-checked:bg-emerald-500 relative transition after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5"></div>
+                    </label>
+                  </div>
+                  <p x-show="ch.last && ch.last.at" class="text-[10.5px]" :class="ch.last?.ok ? 'text-emerald-300' : 'text-rose-300'"
+                     x-text="(ch.last?.ok ? '✓ ' + t('notifyLastOk') : '✕ ' + t('notifyLastFail')) + ' ' + formatTs(ch.last?.at) + (ch.last?.ok ? '' : ' — ' + (ch.last?.detail || ''))"></p>
+                  <div class="grid grid-cols-3 gap-1.5">
+                    <button @click="testNotifyChannel(ch)" :disabled="notifyState.testing === ch.id" class="glass-btn py-1.5 rounded-lg text-[11px] font-semibold text-sky-300 disabled:opacity-50"
+                            x-text="notifyState.testing === ch.id ? '…' : t('notifyTest')"></button>
+                    <button @click="editNotifyChannel(ch)" class="glass-btn py-1.5 rounded-lg text-[11px] font-semibold" x-text="t('notifyEdit')"></button>
+                    <button @click="deleteNotifyChannel(ch)" class="glass-btn py-1.5 rounded-lg text-[11px] font-semibold text-rose-300" x-text="t('delete')"></button>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Form thêm / sửa kênh -->
+              <template x-if="notifyState.edit">
+                <div class="rounded-xl border border-sky-400/40 bg-sky-500/5 p-3 space-y-2.5">
+                  <p class="text-xs font-semibold" x-text="notifyState.edit.id ? t('notifyEditTitle') : t('notifyAddTitle')"></p>
+                  <div class="grid grid-cols-5 gap-1">
+                    <template x-for="tp in ['telegram', 'discord', 'ntfy', 'gotify', 'webhook']" :key="tp">
+                      <button type="button" @click="notifyState.edit.type = tp" :disabled="!!notifyState.edit.id"
+                              class="py-1.5 rounded-lg text-[10px] font-semibold border transition disabled:opacity-60"
+                              :class="notifyState.edit.type === tp ? 'border-sky-400/60 bg-sky-500/15 text-sky-200' : 'border-[var(--glass-border)] text-muted'"
+                              x-text="notifyTypeLabel(tp)"></button>
+                    </template>
+                  </div>
+                  <input type="text" x-model="notifyState.edit.name" :placeholder="t('notifyName')" class="glass-input w-full rounded-xl px-3 py-2 text-xs" />
+                  <template x-for="f in notifyFields(notifyState.edit.type)" :key="notifyState.edit.type + f.k">
+                    <label class="block space-y-1">
+                      <span class="text-[10.5px] font-semibold text-muted" x-text="t('nf_' + f.k) + (f.optional ? ' (' + t('optional') + ')' : '')"></span>
+                      <input :type="f.secret ? 'password' : 'text'" x-model="notifyState.edit.config[f.k]" autocomplete="new-password"
+                             autocapitalize="off" autocorrect="off" spellcheck="false"
+                             :placeholder="f.secret && notifyState.edit.config['has_' + f.k] ? '•••••••• (' + t('notifySaved') + ')' : f.ph"
+                             class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
+                    </label>
+                  </template>
+                  <p class="text-[10px] text-subtle leading-snug" x-text="t('nh_' + notifyState.edit.type)"></p>
+                  <p class="text-[10.5px] font-semibold text-muted pt-1" x-text="t('notifyEvents')"></p>
+                  <template x-for="ev in notifyState.events" :key="ev">
+                    <label class="flex items-center justify-between gap-3 cursor-pointer py-0.5">
+                      <span class="min-w-0">
+                        <span class="block text-[11.5px]" x-text="t('ev_' + ev)"></span>
+                        <span x-show="notifyState.critical.includes(ev)" class="block text-[10px] text-amber-300/90" x-text="t('notifyCriticalHint')"></span>
+                      </span>
+                      <span class="shrink-0">
+                        <input type="checkbox" :value="ev" x-model="notifyState.edit.events" class="sr-only peer" />
+                        <div class="w-10 h-5 bg-slate-600/60 rounded-full peer peer-checked:bg-sky-500 relative transition after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
+                      </span>
+                    </label>
+                  </template>
+                  <div class="grid grid-cols-3 gap-1.5 pt-1">
+                    <button @click="notifyState.edit = null; notifyState.msg = ''" class="glass-btn py-2 rounded-xl text-[11px] font-semibold" x-text="t('cancel')"></button>
+                    <button @click="saveNotifyChannel(false)" :disabled="notifyState.busy" class="glass-btn py-2 rounded-xl text-[11px] font-semibold disabled:opacity-50" x-text="t('save')"></button>
+                    <button @click="saveNotifyChannel(true)" :disabled="notifyState.busy" class="glass-btn-primary py-2 rounded-xl text-[11px] font-semibold disabled:opacity-50" x-text="notifyState.busy ? '…' : t('notifySaveTest')"></button>
+                  </div>
+                </div>
+              </template>
+              <p x-show="notifyState.msg" class="text-[11px]" :class="notifyState.ok ? 'text-emerald-300' : 'text-rose-300'" x-text="notifyState.msg"></p>
+            </div>
+
+            <!-- Giờ im lặng, ngưỡng ổ đĩa, ngôn ngữ -->
+            <div class="glass-inset rounded-2xl p-3.5 space-y-3">
+              <label class="flex items-center justify-between gap-3 cursor-pointer">
+                <span class="min-w-0">
+                  <span class="block text-xs font-semibold" x-text="t('notifyQuiet')"></span>
+                  <span class="block text-[10.5px] text-muted leading-snug" x-text="t('notifyQuietDesc')"></span>
+                </span>
+                <span class="shrink-0">
+                  <input type="checkbox" x-model="notifyState.settings.quiet_enabled" class="sr-only peer" />
+                  <div class="w-11 h-6 bg-slate-600/60 rounded-full peer peer-checked:bg-sky-500 relative transition after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5"></div>
+                </span>
+              </label>
+              <div x-show="notifyState.settings.quiet_enabled" class="grid grid-cols-2 gap-2">
+                <label class="space-y-1"><span class="text-[10.5px] text-muted" x-text="t('notifyFrom')"></span>
+                  <input type="time" x-model="notifyState.settings.quiet_start" class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code text-center" /></label>
+                <label class="space-y-1"><span class="text-[10.5px] text-muted" x-text="t('notifyTo')"></span>
+                  <input type="time" x-model="notifyState.settings.quiet_end" class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code text-center" /></label>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-[11.5px]" x-text="t('notifyDiskPct')"></span>
+                <input type="number" min="50" max="99" x-model.number="notifyState.settings.disk_pct" class="glass-input w-20 rounded-xl px-2 py-2 text-xs font-mono-code text-center" />
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-[11.5px]" x-text="t('notifyLang')"></span>
+                <select x-model="notifyState.settings.lang" class="glass-input rounded-xl px-2.5 py-2 text-xs">
+                  <option value="vi">Tiếng Việt</option>
+                  <option value="en">English</option>
+                </select>
+              </div>
+              <button @click="saveNotifySettings()" class="glass-btn-primary w-full py-2.5 rounded-xl text-xs font-semibold" x-text="t('save')"></button>
+            </div>
+          </div>
+        </template>
+
         <template x-if="settingsModal.tab === 'history'">
           <div class="space-y-2.5">
             <div x-show="updateHistory.length === 0" class="text-center py-8 text-xs text-muted" x-text="t('noHistory')"></div>

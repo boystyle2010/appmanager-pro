@@ -1,0 +1,2 @@
+FROM localhost:5000/amp:1
+CMD ["sh","-c","echo broken build; exit 1"]

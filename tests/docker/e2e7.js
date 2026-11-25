@@ -1,0 +1,28 @@
+const { chromium } = require('playwright');
+const OUT = process.argv[2]; const B = 'http://localhost:8798';
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+(async () => {
+  const b = await chromium.launch();
+  const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await ctx.request.post(B + '/api/auth/login', { data: { username: 'admin', password: 'Test-Passw0rd!x' }, headers: { Origin: B } });
+  const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
+  const D = (code) => p.evaluate((c) => { const d = Alpine.$data(document.body); return (new Function('d', c))(d); }, code);
+  await p.goto(B + '/'); await sleep(2000); await D("d.lang = 'vi'; d.dataSetup.open = false");
+  await D("d.openUninstallModal(d.apps.find(a => a.name === 'ua'))"); await sleep(1500);
+  await p.screenshot({ path: OUT + '/n1-uninstall-default.png' });
+  await D("d.uninstallModal.removeImages = true"); await sleep(500);
+  await p.screenshot({ path: OUT + '/n2-image-in-use.png', fullPage: false });
+  await D("d.uninstallModal.imageChoice = 'remove'; d.uninstallModal.removeAppdata = true; d.uninstallModal.confirmName = 'ua'"); await sleep(400);
+  await p.evaluate(() => document.querySelector('[x-show="uninstallModal.open"] .glass-panel').scrollTop = 9999); await sleep(300);
+  await p.screenshot({ path: OUT + '/n3-plan-danger.png' });
+  await D("d.requestUninstall()"); await sleep(600);
+  await p.screenshot({ path: OUT + '/n4-confirm.png' });
+  await D("d.closeConfirm(); d.uninstallModal.removeAppdata = false; d.uninstallModal.imageChoice = 'keep'"); await sleep(300);
+  await D("d.requestUninstall()"); for (let i = 0; i < 40; i++) { await sleep(500); if (!(await D('return d.uninstallModal.running'))) break; } await sleep(800);
+  await p.screenshot({ path: OUT + '/n5-result.png' });
+  await D("d.uninstallModal.open = false"); await sleep(400);
+  await D("d.openUninstallModal(d.apps.find(a => a.name === 'stableapp-app-1'))"); await sleep(1500);
+  await p.screenshot({ path: OUT + '/n6-stack.png' });
+  console.log('errors:', errs.length ? errs.join(' | ') : 'none');
+  await b.close();
+})();

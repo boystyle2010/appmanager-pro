@@ -17,6 +17,10 @@ Hướng dẫn cho Claude khi làm việc trên repo này (Claude Code / phiên 
   - `app_backup.py` (sao lưu/khôi phục **chỉ file cài đặt** của app — json/yaml/toml/ini/conf/env/xml, database nhỏ + -wal/-shm, chứng chỉ, file văn bản không đuôi hoặc JSON ≤ 1 MB — trong các mount thuộc `/DATA/AppData`; không duyệt thư mục media/storage/share/downloads/sync/cache/backups; bỏ file > giới hạn mỗi file (50 MB); khôi phục chỉ thay đúng các file đó, log & dữ liệu khác giữ nguyên; kèm compose + image), `system_prune.py`, `system_monitor.py`.
   - `compose_snapshot.py`: nhớ "compose chạy tốt gần nhất" mỗi app (`<data>/compose-good/`). Cập nhật hỏng → **trước hết chỉ trả compose chạy tốt + image cũ, giữ nguyên dữ liệu** (lỗi thường ở image/compose); bản cũ vẫn không chạy mới khôi phục cấu hình từ bản sao lưu (log hiện tại luôn giữ); compose bị sửa sau lúc tạo container thì quay về bản chạy tốt chứ không phải file hiện tại.
   - `app/self_update_helper.py`: container phụ chạy bằng **image cũ** để tự cập nhật/tạo lại AppManager → kiểm tra `/login` trong container mới → hỏng thì trả compose + gắn lại tag image cũ (giữ database); bản cũ vẫn hỏng mới trả database (`self-update-db.bak`). Trao đổi qua `<data>/self-update-job.json` → `self-update-result.json` (AppManager đọc lúc khởi động & mỗi phút, ghi vào Lịch sử).
+- Module thêm từ 0.13–0.16 (`app/core/`):
+  - `run_manager.py`: quản lý trực tiếp container **docker run** (nhãn `RUN`): cập nhật = tạo lại cùng cấu hình từ `docker inspect` (giữ container cũ tên `<tên>-amp-old` tới khi bản mới khoẻ, hỏng thì trả lại), sửa cấu hình qua YAML (`body_from_yaml`), lệnh `docker run` tương đương, sidecar `--network container:` / `--link`, phục hồi sau sự cố lúc khởi động (`recover_interrupted_sync`), `--rm` = chỉ xem. `manage_kind()`: compose / run / external (Swarm, K8s, Unraid, Synology…) / helper.
+  - `compose_convert.py` (docker run -> compose, tuỳ chọn), `data_setup.py` (popup thiết lập thư mục Data: nhập tay / tự quét), `net.py` (MỌI lời gọi HTTP ra ngoài phải dùng `net.client()`: cache SQLite, tạm dừng nguồn khi 429/hết lượt, tài khoản registry -> `DOCKER_CONFIG` trong `<data>/docker-config`), `notify.py` (thông báo).
+  - `self_update_helper.py`: hỗ trợ cả AppManager chạy bằng docker run (`run_body` trong job), chạy với `restart=on-failure`, chỉ kết thúc khi AppManager chắc chắn chạy (`finish()`), phục hồi khi bị chạy lại (`self-update-progress.json`).
 - Frontend: Alpine.js — `app/templates/index.html` (markup), `app/static/js/app.js` (logic), `app/static/js/i18n.js` (EN/VI, **mọi key phải có ở cả hai ngôn ngữ**), `app/templates/auth.html`.
 - CSS: **Tailwind v4** biên dịch lúc build image từ `app/static/css/tailwind.input.css` (stage `css` trong Dockerfile). `glass.css` và khối `<style>` trong `index.html` nằm trong `@layer components` để class tiện ích Tailwind luôn thắng. File `tailwind.css` là sản phẩm build, không commit.
 - Thư viện JS (Alpine, marked, DOMPurify) và font được tải vào image bởi `scripts/fetch_vendor.py`, có CDN dự phòng trong HTML.
@@ -26,6 +30,8 @@ Hướng dẫn cho Claude khi làm việc trên repo này (Claude Code / phiên 
 - Changelog **chỉ** ghi thay đổi thành phần nền. Ghi chú tự viết cho bản kế tiếp → thêm dòng `- ...` **bằng tiếng Anh** vào `RELEASE_NOTES_NEXT.md` (không tự tạo release). Changelog / release notes luôn viết tiếng Anh.
 - Starlette 1.0: dùng `templates.TemplateResponse(request, "x.html", {...})`.
 - Mọi POST/PUT/PATCH/DELETE `/api/*` và WebSocket phải qua kiểm tra Origin (`origin_allowed`). Ghi audit log (`audit(...)`) cho hành động quan trọng.
+- Báo cáo cho chủ repo: tiếng Việt, nói rõ đã test thật cái gì (Docker thật trong sandbox, xem `tests/docker/README.md`) và cái gì chưa; gửi ảnh chụp giao diện (Playwright, khổ 390×844, deviceScaleFactor 2).
+- UI đã thống nhất: popup căn giữa màn hình; thẻ app có nhãn nguồn (CASAOS/DOCKER/RUN) cao 24px như nút ⋯; công tắc bật/tắt (đỏ cho thao tác nguy hiểm như gỡ app); mọi thao tác nguy hiểm có mục "Sẽ thực hiện" + hộp xác nhận; thuật ngữ tiếng Việt dễ hiểu.
 - Tailwind v4: dùng `shadow-xs` (thay `shadow-sm` cũ), `backdrop-blur-xs`, `bg-linear-to-*`.
 
 ## Kiểm tra trước khi push
@@ -35,6 +41,7 @@ python scripts/check_project.py          # import nội bộ, Jinja, file tĩnh 
 node --check app/static/js/app.js && node --check app/static/js/i18n.js
 bash scripts/verify.sh amp-test smoke    # cần Docker: build image, chạy uvicorn, smoke test
 ```
+Test kịch bản trên Docker thật (15 bộ, ~2 giờ): làm đúng theo **`tests/docker/README.md`** (dựng dockerd, image mirror, registry/ntfy/Gotify, build image test, chạy `run_everything.sh`, chụp ảnh). Thay đổi lớn ở cập nhật/rollback/docker run/thông báo → chạy lại các bộ liên quan trước khi phát hành; thêm kịch bản mới vào `tests/docker/` (không để chỉ trong scratchpad).
 
 ## CI (`.github/workflows/release.yml`)
 - Chạy hằng ngày, khi push `main` (bỏ qua thay đổi chỉ `*.md`/LICENSE), hoặc bấm tay (`force_release`, `version`).
@@ -42,6 +49,20 @@ bash scripts/verify.sh amp-test smoke    # cần Docker: build image, chạy uvi
 - Image đẩy lên **GHCR** (nguồn chính) và **Docker Hub** (`<DOCKERHUB_USERNAME>/appmanager-pro`, khi có secret `DOCKERHUB_USERNAME` + `DOCKERHUB_TOKEN`), cùng tag `latest`/`X.Y.Z`/`build-<sha>`; mô tả Docker Hub đồng bộ từ README khi có bản phát hành.
 - Bot nâng cả action trong `.github/workflows/` (lên major mới nhất, bỏ qua nếu bản mới mất input đang dùng) khi có secret `WORKFLOW_TOKEN` (fine-grained PAT: Contents + Workflows Read/Write, chỉ repo này). Không có secret thì phải nâng tay. Commit của bot có `[skip ci]`. Trivy ghim theo commit SHA (không tự nâng).
 
+### Phát hành — lưu ý quan trọng
+- Push lên `main` có thể **tự phát hành** nếu bot thấy thành phần nền có bản mới (đã xảy ra: 0.14.1 lấy hết ghi chú của bản định làm 0.15.0). Muốn tự đặt số phiên bản: push với `[skip ci]` trong commit message, rồi chạy workflow `release.yml` (workflow_dispatch) với `force_release=true`, `version=X.Y.Z`. Đề xuất (chưa làm, cần chủ repo đồng ý): lần build khi push chỉ nâng thành phần, không tự tạo Release.
+- Ghi chú phát hành viết **tiếng Anh** vào `RELEASE_NOTES_NEXT.md` (bot gom vào CHANGELOG khi phát hành rồi xoá).
+
 ## Việc còn mở
 - Trivy: `golang.org/x/net` v0.60.0 trong `docker-compose` (CVE-2026-78661, tạm bỏ qua trong `.trivyignore` tới 2027-02-28) — chờ Docker Compose phát hành bản dùng x/net ≥ 0.62.0 (v5.8.0 và nhánh main ngày 2026-11-18 vẫn là v0.60.0).
-- Ý tưởng tính năng: thông báo Telegram/Discord/ntfy; API token cho tự động hoá; sao lưu/khôi phục cấu hình AppManager; tìm & tải log container.
+- Phiên bản đã phát hành gần nhất: **v0.14.1** (gồm cả phần chống giới hạn API định làm 0.15.0 — chủ repo đồng ý giữ số 0.14.1, bỏ qua 0.15.0).
+
+### ĐANG DỞ — bản 0.16.0 (thông báo) — việc đầu tiên của phiên mới
+- Code thông báo đã xong và đã push (commit "Notifications…" có `[skip ci]`, CHƯA phát hành): `app/core/notify.py`; API `/api/notify*`; tab **Thông báo** trong Cài đặt; móc vào `database.add_update_history` (mọi cập nhật/khôi phục/sửa cấu hình), `registry_checker.check_all_updates` (bản mới, gộp 1 tin, mỗi phiên bản chỉ báo 1 lần), `main.py` (khoá IP, đổi mật khẩu, tắt 2FA), `scheduler.py` (sức khoẻ app 2 phút, ổ đĩa 1 giờ, gửi tin để dành sau giờ im lặng 5 phút).
+- Test đã đạt (Docker thật trong sandbox, 2026-11-25): toàn bộ 15 bộ trong `tests/docker/` — bộ 7 giao diện 16/16, bộ 15 thông báo 21/21 (ntfy + Gotify thật, webhook HMAC, Telegram/Discord giả lập, cập nhật thật thành công/rollback, giờ im lặng, crash-loop, ổ đĩa, tiếng Việt, kênh hỏng không làm chậm), bộ 2 = 41/42 (`P4` là điều kiện test đã biết). Ảnh tab Thông báo đã chụp (`e2e11.js`).
+- Việc còn lại: (1) phát hành **0.16.0** bằng workflow_dispatch `release.yml` (`force_release=true`, `version=0.16.0`) — KHÔNG push thường lên `main` trước đó (bot có thể tự phát hành số khác); (2) sau khi phát hành kiểm tra CHANGELOG có đủ các dòng thông báo từ `RELEASE_NOTES_NEXT.md` và image `0.16.0` lên GHCR; (3) báo cáo chủ repo (tiếng Việt) kèm ảnh tab Thông báo.
+
+### Lộ trình tiếp theo (đã thống nhất với chủ repo)
+- **0.17 — API token cho tự động hoá**: tạo token trong Cài đặt → Bảo mật (tên, quyền: chỉ đọc / cập nhật / toàn quyền, hạn dùng, giới hạn IP tuỳ chọn); token chỉ hiện 1 lần, server lưu mã băm; header `Authorization: Bearer amp_…`; ghi audit log; tài liệu API (`/docs` của FastAPI khi đã đăng nhập); dùng cho Home Assistant, script/CI, Uptime Kuma (`/api/health`).
+- **0.18+ — quản lý nhiều máy chủ** (mô hình agent): mỗi máy chạy AppManager; một máy "chính" thêm máy khác bằng địa chỉ + API token, gộp danh sách app, bấm cập nhật/khôi phục từ xa; việc thật vẫn do AppManager từng máy làm; KHÔNG mở Docker socket ra mạng.
+- Ý tưởng khác: sao lưu/khôi phục cấu hình AppManager; tìm & tải log container; Podman/GPU/ARM thật/Docker cũ chưa test được trong sandbox (cần chủ repo thử trên máy thật).

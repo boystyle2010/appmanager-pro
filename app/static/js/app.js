@@ -80,6 +80,7 @@
         versionPicker: { open: false, loading: false, error: '', items: [], selected: '' },
         dataSetup: { open: false, step: 'intro', status: null, manualPath: '', busy: false, error: '', candidates: [], selected: [], elapsed: 0, source: '' },
         composeHint: { open: false, app: null, loading: false, busy: false, preview: null, folder: '', yaml: '', log: '', error: '', done: false },
+        notifyState: { loading: false, channels: [], settings: { quiet_enabled: false, quiet_start: '22:00', quiet_end: '07:00', disk_pct: 90, lang: 'vi' }, events: [], critical: [], edit: null, busy: false, msg: '', ok: true, testing: '' },
         apiStatus: { loading: false, sources: [], logins: [], form: { registry: 'docker.io', custom: '', username: '', token: '' }, busy: false, msg: '', ok: true },
         runCmd: { open: false, app: null, text: '', loading: false, error: '' },
         dupPopup: { open: false, loading: false, busy: false, app: null, composePath: '', files: [] },
@@ -1571,6 +1572,83 @@
             this.updateHistory = data.history || [];
           } catch (err) { this.showToast(err.message); }
           this.loadApiStatus();
+        },
+
+        // ---------------- Thông báo ----------------
+        notifyFields(type) {
+          return {
+            telegram: [{ k: 'bot_token', secret: true, ph: '123456789:AA…' }, { k: 'chat_id', ph: '123456789' }],
+            discord: [{ k: 'webhook_url', secret: true, ph: 'https://discord.com/api/webhooks/…' }],
+            ntfy: [{ k: 'server', ph: 'https://ntfy.sh', optional: true }, { k: 'topic', ph: 'appmanager-…' }, { k: 'token', secret: true, ph: 'tk_…', optional: true }],
+            gotify: [{ k: 'server', ph: 'https://gotify.example.com' }, { k: 'app_token', secret: true, ph: 'A…' }],
+            webhook: [{ k: 'url', ph: 'https://example.com/hook' }, { k: 'secret', secret: true, ph: '…', optional: true }],
+          }[type] || [];
+        },
+        notifyTypeLabel(t) { return { telegram: 'Telegram', discord: 'Discord', ntfy: 'ntfy', gotify: 'Gotify', webhook: 'Webhook' }[t] || t; },
+        notifyTypeShort(t) { return { telegram: 'TG', discord: 'DC', ntfy: 'NT', gotify: 'GO', webhook: 'WH' }[t] || '?'; },
+        notifyColor(t) { return { telegram: 'bg-sky-500', discord: 'bg-indigo-500', ntfy: 'bg-emerald-600', gotify: 'bg-cyan-600', webhook: 'bg-slate-600' }[t] || 'bg-slate-600'; },
+
+        async loadNotify() {
+          const n = this.notifyState;
+          n.loading = true;
+          try {
+            const res = await fetch('/api/notify');
+            if (res.ok) {
+              const d = await res.json();
+              n.channels = d.channels || []; n.events = d.events || []; n.critical = d.critical || [];
+              n.settings = { ...n.settings, ...(d.settings || {}) };
+              if (!n.channels.length) n.settings.lang = this.lang;  // chưa có kênh: tin nhắn theo ngôn ngữ giao diện
+            }
+          } catch (_) {}
+          finally { n.loading = false; }
+        },
+        newNotifyChannel() {
+          const n = this.notifyState;
+          n.msg = '';
+          n.edit = { id: '', type: 'telegram', name: '', enabled: true, events: [...n.events], config: { server: '' } };
+        },
+        editNotifyChannel(ch) {
+          this.notifyState.msg = '';
+          this.notifyState.edit = JSON.parse(JSON.stringify(ch));
+        },
+        async saveNotifyChannel(andTest) {
+          const n = this.notifyState, e = n.edit;
+          n.busy = true; n.msg = '';
+          try {
+            const payload = { ...e, name: e.name || this.notifyTypeLabel(e.type), ui_lang: this.lang };
+            const { res, data } = await this._postJson('/api/notify/channels', payload);
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            n.edit = null;
+            await this.loadNotify();
+            n.ok = true; n.msg = this.t('notifySavedMsg');
+            if (andTest) await this.testNotifyChannel({ id: data.id });
+          } catch (err) { n.ok = false; n.msg = err.message; }
+          finally { n.busy = false; }
+        },
+        async testNotifyChannel(ch) {
+          const n = this.notifyState;
+          n.testing = ch.id;
+          try {
+            const { data } = await this._postJson('/api/notify/test', { id: ch.id });
+            n.ok = !!data.ok; n.msg = data.ok ? this.t('notifyTestOk') : this.t('notifyTestFail') + ' ' + (data.detail || data.detail || '');
+            await this.loadNotify();
+          } catch (err) { n.ok = false; n.msg = err.message; }
+          finally { n.testing = ''; }
+        },
+        async toggleNotifyChannel(ch, on) {
+          await this._postJson('/api/notify/channels', { ...ch, enabled: on });
+          await this.loadNotify();
+        },
+        deleteNotifyChannel(ch) {
+          this.askConfirm({
+            tone: 'danger', title: this.t('notifyDeleteTitle').replace('{n}', ch.name), message: this.t('notifyDeleteMsg'),
+            confirmLabel: this.t('delete'),
+            onConfirm: async () => { await this._postJson('/api/notify/channels/delete', { id: ch.id }); await this.loadNotify(); }
+          });
+        },
+        async saveNotifySettings() {
+          const { res, data } = await this._postJson('/api/notify/settings', this.notifyState.settings);
+          if (res.ok) { this.notifyState.settings = data.settings; this.showToast(this.t('notifySavedMsg')); }
         },
 
         // ---------------- Nguồn cập nhật & giới hạn API ----------------
