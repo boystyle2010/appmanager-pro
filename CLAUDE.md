@@ -55,12 +55,8 @@ Test kịch bản trên Docker thật (15 bộ, ~2 giờ): làm đúng theo **`t
 
 ## Việc còn mở
 - Trivy: `golang.org/x/net` v0.60.0 trong `docker-compose` (CVE-2026-78661, tạm bỏ qua trong `.trivyignore` tới 2027-02-28) — chờ Docker Compose phát hành bản dùng x/net ≥ 0.62.0 (v5.8.0 và nhánh main ngày 2026-11-18 vẫn là v0.60.0).
-- Phiên bản đã phát hành gần nhất: **v0.14.1** (gồm cả phần chống giới hạn API định làm 0.15.0 — chủ repo đồng ý giữ số 0.14.1, bỏ qua 0.15.0).
-
-### ĐANG DỞ — bản 0.16.0 (thông báo) — việc đầu tiên của phiên mới
-- Code thông báo đã xong và đã push (commit "Notifications…" có `[skip ci]`, CHƯA phát hành): `app/core/notify.py`; API `/api/notify*`; tab **Thông báo** trong Cài đặt; móc vào `database.add_update_history` (mọi cập nhật/khôi phục/sửa cấu hình), `registry_checker.check_all_updates` (bản mới, gộp 1 tin, mỗi phiên bản chỉ báo 1 lần), `main.py` (khoá IP, đổi mật khẩu, tắt 2FA), `scheduler.py` (sức khoẻ app 2 phút, ổ đĩa 1 giờ, gửi tin để dành sau giờ im lặng 5 phút).
-- Test đã đạt (Docker thật trong sandbox, 2026-11-25): toàn bộ 15 bộ trong `tests/docker/` — bộ 7 giao diện 16/16, bộ 15 thông báo 21/21 (ntfy + Gotify thật, webhook HMAC, Telegram/Discord giả lập, cập nhật thật thành công/rollback, giờ im lặng, crash-loop, ổ đĩa, tiếng Việt, kênh hỏng không làm chậm), bộ 2 = 41/42 (`P4` là điều kiện test đã biết). Ảnh tab Thông báo đã chụp (`e2e11.js`).
-- Việc còn lại: (1) phát hành **0.16.0** bằng workflow_dispatch `release.yml` (`force_release=true`, `version=0.16.0`) — KHÔNG push thường lên `main` trước đó (bot có thể tự phát hành số khác); (2) sau khi phát hành kiểm tra CHANGELOG có đủ các dòng thông báo từ `RELEASE_NOTES_NEXT.md` và image `0.16.0` lên GHCR; (3) báo cáo chủ repo (tiếng Việt) kèm ảnh tab Thông báo.
+- Phiên bản đã phát hành gần nhất: **v0.16.0** (2026-11-25, thông báo: Telegram/Discord/ntfy/Gotify/Webhook). Trước đó v0.14.1 (gồm cả phần chống giới hạn API định làm 0.15.0 — chủ repo đồng ý bỏ qua số 0.15.0).
+- 0.16.0 đã test thật trên Docker trong sandbox: 15 bộ `tests/docker/` đều đạt (bộ 2 = 41/42, `P4` là điều kiện test đã biết).
 
 ### Lộ trình tiếp theo (đã thống nhất với chủ repo)
 - **0.17 — API token cho tự động hoá**: tạo token trong Cài đặt → Bảo mật (tên, quyền: chỉ đọc / cập nhật / toàn quyền, hạn dùng, giới hạn IP tuỳ chọn); token chỉ hiện 1 lần, server lưu mã băm; header `Authorization: Bearer amp_…`; ghi audit log; tài liệu API (`/docs` của FastAPI khi đã đăng nhập); dùng cho Home Assistant, script/CI, Uptime Kuma (`/api/health`).
