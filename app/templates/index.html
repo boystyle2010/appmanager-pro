@@ -345,7 +345,7 @@
                         <span x-text="t('upToDate')"></span>
                       </span>
                       <span x-show="!app.checked_at" class="text-[10px] text-subtle italic shrink-0" x-text="t('notChecked')"></span>
-                      <span x-show="app.checked_at && app.update_error && !app.is_skipped"
+                      <span x-show="app.checked_at && app.update_error && !app.is_skipped && !app.update_error.includes('rate limit')"
                             class="text-[10px] text-subtle truncate max-w-[45%]" :title="app.update_error" x-text="app.update_error"></span>
                     </div>
                   </template>
@@ -377,6 +377,13 @@
                           class="inline-flex items-center justify-center h-[18px] min-w-[38px] px-1.5 rounded-md text-[9px] leading-none font-bold tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-400/30">AUTO</span>
                   </div>
                 </div>
+
+                <!-- Nguồn cập nhật đang bị giới hạn: trạng thái trên thẻ là lần kiểm tra trước -->
+                <p x-show="(app.update_error || '').includes('rate limit')" x-cloak
+                   class="flex items-center gap-1.5 text-[10.5px] leading-snug text-amber-300/95 min-w-0" :title="app.update_error">
+                  <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M14.25 9v6m-4.5 0V9M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  <span class="truncate" x-text="t('apiCardPaused').replace('{t}', ((app.update_error || '').match(/until (\d{1,2}:\d{2})/) || [,'?'])[1])"></span>
+                </p>
 
                 <!-- Không dùng được compose: nói rõ lý do + cách khắc phục -->
                 <button x-show="!app.can_update && app.compose_issue && !app.is_self" type="button" @click.stop="openComposeHint(app)"
@@ -1711,6 +1718,76 @@
             </div>
             <button @click="saveSettings()" class="glass-btn-primary w-full py-3 rounded-2xl text-xs font-semibold"
                     x-text="t('saveSettings')"></button>
+
+            <!-- Nguồn cập nhật & giới hạn API -->
+            <div class="glass-inset rounded-2xl p-3.5 space-y-3">
+              <div class="flex items-center justify-between gap-2">
+                <div class="min-w-0">
+                  <p class="text-xs font-semibold" x-text="t('apiSourcesTitle')"></p>
+                  <p class="text-[10.5px] text-muted leading-snug" x-text="t('apiSourcesDesc')"></p>
+                </div>
+                <button @click="loadApiStatus()" :disabled="apiStatus.loading" :aria-label="t('recheck')"
+                        class="glass-btn w-8 h-8 rounded-xl flex items-center justify-center text-sky-400 shrink-0">
+                  <svg class="w-4 h-4" :class="apiStatus.loading ? 'animate-spin' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M20.49 9A9 9 0 005.64 5.64L4 9m16 6l-1.64 3.36A9 9 0 013.51 15"/></svg>
+                </button>
+              </div>
+              <template x-for="src in apiStatus.sources" :key="src.source">
+                <div class="rounded-xl border px-3 py-2.5 space-y-1"
+                     :class="src.blocked_until ? 'border-amber-400/45 bg-amber-500/10' : 'border-[var(--glass-border)]'">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-xs font-semibold truncate" x-text="src.label"></span>
+                    <span class="flex items-center gap-1 shrink-0">
+                      <span x-show="src.authenticated" class="text-[9.5px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-400/25 font-semibold" x-text="t('apiLoggedIn')"></span>
+                      <span class="text-[9.5px] px-1.5 py-0.5 rounded font-semibold border"
+                            :class="src.blocked_until ? 'bg-amber-500/15 text-amber-300 border-amber-400/35' : 'bg-sky-500/12 text-sky-300 border-sky-400/25'"
+                            x-text="src.blocked_until ? t('apiPausedUntil').replace('{t}', apiTime(src.blocked_until)) : t('apiOk')"></span>
+                    </span>
+                  </div>
+                  <p class="text-[10.5px] text-muted" x-text="t('apiCounts').replace('{r}', src.requests_1h).replace('{c}', src.cache_hits_1h)"></p>
+                  <p x-show="src.remaining !== null && src.remaining !== undefined" class="text-[10.5px] text-muted"
+                     x-text="t('apiRemaining').replace('{n}', src.remaining).replace('{l}', src.limit ?? '?') + (src.reset ? ' • ' + t('apiResetAt').replace('{t}', apiTime(src.reset)) : '')"></p>
+                  <p x-show="src.last_error" class="text-[10.5px] text-amber-300/90" x-text="src.last_error"></p>
+                  <div x-show="src.blocked_until" class="flex items-center justify-between gap-2 pt-0.5">
+                    <p class="text-[10.5px] text-amber-200/90 leading-snug" x-text="t('apiPausedHelp')"></p>
+                    <button @click="resumeSource(src)" class="glass-btn px-2.5 py-1 rounded-lg text-[10.5px] font-semibold shrink-0" x-text="t('apiResume')"></button>
+                  </div>
+                </div>
+              </template>
+              <button @click="clearApiCache()" class="glass-btn w-full py-2 rounded-xl text-[11px] font-semibold text-muted" x-text="t('apiClearCache')"></button>
+
+              <!-- Tài khoản registry -->
+              <div class="pt-1 space-y-2">
+                <p class="text-xs font-semibold" x-text="t('registryLoginsTitle')"></p>
+                <p class="text-[10.5px] text-muted leading-snug" x-text="t('registryLoginsDesc')"></p>
+                <template x-for="lg in apiStatus.logins" :key="lg.registry">
+                  <div class="flex items-center justify-between gap-2 rounded-xl border border-[var(--glass-border)] px-3 py-2">
+                    <span class="min-w-0">
+                      <span class="block text-xs font-mono-code truncate" x-text="lg.registry === 'docker.io' ? 'Docker Hub' : lg.registry"></span>
+                      <span class="block text-[10.5px] text-muted truncate" x-text="lg.username"></span>
+                    </span>
+                    <button @click="confirmDeleteLogin(lg)" class="glass-btn px-2.5 py-1 rounded-lg text-[10.5px] font-semibold text-rose-300 shrink-0" x-text="t('delete')"></button>
+                  </div>
+                </template>
+                <div class="grid grid-cols-2 gap-2">
+                  <select x-model="apiStatus.form.registry" class="glass-input rounded-xl px-2.5 py-2 text-xs col-span-2">
+                    <option value="docker.io">Docker Hub (docker.io)</option>
+                    <option value="ghcr.io">GitHub Container Registry (ghcr.io)</option>
+                    <option value="other" x-text="t('registryOther')"></option>
+                  </select>
+                  <input x-show="apiStatus.form.registry === 'other'" type="text" x-model="apiStatus.form.custom" placeholder="registry.example.com"
+                         autocapitalize="off" autocorrect="off" spellcheck="false" class="glass-input rounded-xl px-3 py-2 text-xs font-mono-code col-span-2" />
+                  <input type="text" x-model="apiStatus.form.username" :placeholder="t('registryUser')" autocapitalize="off" autocorrect="off" spellcheck="false"
+                         class="glass-input rounded-xl px-3 py-2 text-xs" />
+                  <input type="password" x-model="apiStatus.form.token" :placeholder="t('registryToken')" autocomplete="new-password"
+                         class="glass-input rounded-xl px-3 py-2 text-xs font-mono-code" />
+                </div>
+                <p class="text-[10px] text-subtle leading-snug" x-text="t('registryTokenHint')"></p>
+                <button @click="saveRegistryLogin()" :disabled="apiStatus.busy || !apiStatus.form.username.trim() || !apiStatus.form.token.trim()"
+                        class="glass-btn-primary w-full py-2.5 rounded-xl text-xs font-semibold disabled:opacity-50"
+                        x-text="apiStatus.busy ? '…' : t('registrySave')"></button>
+                <p x-show="apiStatus.msg" class="text-[11px]" :class="apiStatus.ok ? 'text-emerald-300' : 'text-rose-300'" x-text="apiStatus.msg"></p>
+              </div>
+            </div>
           </div>
         </template>
 

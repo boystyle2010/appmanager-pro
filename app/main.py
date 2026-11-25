@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import json
-import httpx
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -71,7 +70,7 @@ from app.core.database import (
     set_setting,
 )
 from app.core.database import get_setting
-from app.core import compose_convert, data_setup
+from app.core import compose_convert, data_setup, net
 from app.core.docker_client import (
     APP_VERSION,
     container_action,
@@ -103,6 +102,10 @@ logger = logging.getLogger("appmanager")
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
+    try:
+        net.apply_docker_logins()  # tài khoản registry cho docker pull / compose pull
+    except Exception:
+        logger.exception("Cannot apply registry logins")
     collect_self_update_result()
     # Cập nhật / sửa cấu hình bị cắt ngang (mất điện, Docker khởi động lại) -> trả container về như cũ
     try:
@@ -539,7 +542,7 @@ async def api_channel_preview(container_name: str, tag: str, _: str = Depends(re
     if not slug:
         out["error"] = "No GitHub repository known for this app."
         return out
-    async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+    async with net.client(timeout=20, follow_redirects=True) as client:
         gh = await fetch_github_release(
             client, slug, prefer_version=str(ch.get("version") or ""), prerelease=ch.get("kind") == "pre"
         )
@@ -887,6 +890,60 @@ async def api_compose_convert(
     res = await compose_convert.convert_stream(container_name, payload.folder.strip(), payload.yaml, collect)
     audit(request, user, "compose_convert", container_name, res.get("error") or res.get("compose_path") or "", bool(res.get("ok")))
     return {**res, "log": "".join(chunks)[-20000:]}
+
+
+# ---------------- Nguồn cập nhật & giới hạn API ----------------
+class RegistryLoginPayload(BaseModel):
+    registry: str
+    username: str = ""
+    token: str = ""
+
+
+class SourcePayload(BaseModel):
+    source: str = ""
+
+
+@app.get("/api/system/api-status")
+async def api_net_status(_: str = Depends(require_user)):
+    return {
+        "sources": await asyncio.to_thread(net.status),
+        "logins": [{"registry": d["registry"], "username": d["username"]} for d in net.registry_logins()],
+    }
+
+
+@app.post("/api/system/registry-logins")
+async def api_registry_login_save(payload: RegistryLoginPayload, request: Request, user: str = Depends(require_user)):
+    reg = payload.registry.strip().lower()
+    if not reg or "/" in reg or " " in reg or len(reg) > 200 or not payload.username.strip() or not payload.token.strip():
+        raise HTTPException(status_code=400, detail="Registry, username and token are required")
+    ok, msg = await net.test_login(reg, payload.username.strip(), payload.token.strip())
+    audit(request, user, "registry_login", reg, msg, ok)
+    if not ok:
+        raise HTTPException(status_code=400, detail=msg)
+    await asyncio.to_thread(net.save_login, reg, payload.username, payload.token)
+    return {"ok": True, "message": msg}
+
+
+@app.post("/api/system/registry-logins/delete")
+async def api_registry_login_delete(payload: RegistryLoginPayload, request: Request, user: str = Depends(require_user)):
+    await asyncio.to_thread(net.delete_login, payload.registry)
+    audit(request, user, "registry_logout", payload.registry.strip().lower())
+    return {"ok": True}
+
+
+@app.post("/api/system/api-status/resume")
+async def api_net_resume(payload: SourcePayload, request: Request, user: str = Depends(require_user)):
+    """Bỏ tạm dừng một nguồn (người dùng tự chịu: nguồn có thể vẫn đang giới hạn)."""
+    await asyncio.to_thread(net.clear_block, payload.source)
+    audit(request, user, "api_resume", payload.source)
+    return {"ok": True}
+
+
+@app.post("/api/system/api-cache/clear")
+async def api_net_cache_clear(request: Request, user: str = Depends(require_user)):
+    n = await asyncio.to_thread(net.clear_cache)
+    audit(request, user, "api_cache_clear", "", str(n))
+    return {"ok": True, "cleared": n}
 
 
 class DuplicateComposePayload(BaseModel):

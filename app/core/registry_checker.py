@@ -8,6 +8,8 @@ from typing import Any, Optional
 
 import httpx
 
+from app.core import net
+
 from app.core.database import (
     get_app_pref,
     get_setting,
@@ -190,6 +192,13 @@ async def _registry_request(
 
     req_fn = client.head if method == "HEAD" else client.get
     resp = await req_fn(url, headers=headers, follow_redirects=True)
+    if resp.status_code == 401 and resp.headers.get("www-authenticate", "").lower().startswith("basic"):
+        # Registry riêng dùng đăng nhập Basic (vd registry:2 + htpasswd): dùng tài khoản đã lưu nếu có
+        login = net._login_for_registry(httpx.URL(url).netloc.decode())
+        if login:
+            headers["Authorization"] = httpx.BasicAuth(login["username"], login["token"])._auth_header
+            resp = await req_fn(url, headers=headers, follow_redirects=True)
+        return resp
     if resp.status_code == 401 and "www-authenticate" in resp.headers:
         token = await _fetch_bearer_token(client, resp.headers["www-authenticate"])
         if token:
@@ -964,7 +973,7 @@ async def suggest_image_tags(image_ref: str, limit: int = 3) -> dict[str, Any]:
     word = re.sub(r"[#.]+", "", variant.strip("-")) if variant else ""
     token_cache: dict[str, str] = {}
     scope_key = f"{registry}/{repo}"
-    async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+    async with net.client(timeout=20, follow_redirects=True) as client:
         tags = await _list_repo_tags(client, registry, repo, token_cache, scope_key, ["", word, "latest"])
     names = {n for n, _ in tags}
     digest_of = {n: d for n, d in tags}
@@ -1092,14 +1101,42 @@ async def check_single_app(
     fetch_changelog_always: bool = False,
 ) -> dict[str, Any]:
     name = app_info["name"]
+    pref = get_app_pref(name)
+    prev_cache = get_update_cache_item(name)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    track = net.begin_track()
+    try:
+        result = await _check_single_app_inner(app_info, client, fetch_changelog_always, pref, prev_cache, now_iso)
+    finally:
+        limited = net.end_track(track)
+    if limited:
+        # Bị giới hạn lượt gọi: KHÔNG ghi đè trạng thái đã biết (vd app đang có bản mới) bằng kết quả dở dang
+        src, until = limited[-1]
+        msg = str(net.RateLimited(src, until))
+        if prev_cache:
+            keep = dict(prev_cache)
+            keep["error"] = msg
+            save_update_cache(keep)
+            return keep
+        result["error"] = msg
+    save_update_cache(result)
+    return result
+
+
+async def _check_single_app_inner(
+    app_info: dict[str, Any],
+    client: httpx.AsyncClient,
+    fetch_changelog_always: bool,
+    pref: dict[str, Any],
+    prev_cache: dict[str, Any],
+    now_iso: str,
+) -> dict[str, Any]:
+    name = app_info["name"]
     image_ref = app_info["image"]
     icon_url = app_info.get("icon") or ""
     local_digests: list[str] = app_info.get("local_digests") or []
     local_image_id: str = (app_info.get("image_id") or "").strip()
     current_version = app_info.get("version") or "latest"
-    pref = get_app_pref(name)
-    prev_cache = get_update_cache_item(name)
-    now_iso = datetime.now(timezone.utc).isoformat()
 
     custom_repo = (pref.get("custom_repo") or "").strip()
     source_url = custom_repo or app_info.get("source_url") or ""
@@ -1311,7 +1348,6 @@ async def check_single_app(
             if not result["error"]:
                 result["error"] = str(exc)[:180]
 
-    save_update_cache(result)
     return result
 
 
@@ -1327,7 +1363,7 @@ async def check_all_updates() -> dict[str, Any]:
             apps = apps_data["apps"]
             sem = asyncio.Semaphore(6)
 
-            async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=6.0)) as client:
+            async with net.client() as client:
                 async def _bounded(app_item):
                     async with sem:
                         return await check_single_app(app_item, client)
@@ -1352,5 +1388,5 @@ async def check_one_app_by_name(container_name: str) -> Optional[dict[str, Any]]
     target = next((a for a in apps_data["apps"] if a["name"] == container_name), None)
     if not target:
         return None
-    async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=6.0)) as client:
+    async with net.client() as client:
         return await check_single_app(target, client, fetch_changelog_always=True)

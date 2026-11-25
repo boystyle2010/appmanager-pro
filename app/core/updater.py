@@ -340,7 +340,9 @@ def _trigger_self_update_helper(
             image=own.image.id,  # image hiện tại: có Docker CLI + Compose + chính script phụ này
             command=["python", "-m", "app.self_update_helper"],
             working_dir="/app",
-            environment={"APP_DATA_DIR": str(DATA_DIR)},
+            environment={"APP_DATA_DIR": str(DATA_DIR),
+                         # tài khoản registry của AppManager (image riêng tư) cho docker pull trong container phụ
+                         **({"DOCKER_CONFIG": str(DATA_DIR / "docker-config")} if (DATA_DIR / "docker-config" / "config.json").exists() else {})},
             # Không tự xoá + on-failure: mất điện / Docker khởi động lại giữa chừng -> Docker chạy lại container phụ,
             # nó thấy việc dang dở và trả AppManager về trạng thái chạy được. Xong việc luôn thoát mã 0 (không lặp lại).
             restart_policy={"Name": "on-failure", "MaximumRetryCount": 5},

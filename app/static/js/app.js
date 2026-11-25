@@ -80,6 +80,7 @@
         versionPicker: { open: false, loading: false, error: '', items: [], selected: '' },
         dataSetup: { open: false, step: 'intro', status: null, manualPath: '', busy: false, error: '', candidates: [], selected: [], elapsed: 0, source: '' },
         composeHint: { open: false, app: null, loading: false, busy: false, preview: null, folder: '', yaml: '', log: '', error: '', done: false },
+        apiStatus: { loading: false, sources: [], logins: [], form: { registry: 'docker.io', custom: '', username: '', token: '' }, busy: false, msg: '', ok: true },
         runCmd: { open: false, app: null, text: '', loading: false, error: '' },
         dupPopup: { open: false, loading: false, busy: false, app: null, composePath: '', files: [] },
         updateAllExcluded: [],
@@ -1569,6 +1570,59 @@
             this.settingsForm = { ...data.settings, github_token: '' };
             this.updateHistory = data.history || [];
           } catch (err) { this.showToast(err.message); }
+          this.loadApiStatus();
+        },
+
+        // ---------------- Nguồn cập nhật & giới hạn API ----------------
+        async loadApiStatus() {
+          const a = this.apiStatus;
+          a.loading = true;
+          try {
+            const res = await fetch('/api/system/api-status');
+            if (res.ok) { const d = await res.json(); a.sources = d.sources || []; a.logins = d.logins || []; }
+          } catch (_) {}
+          finally { a.loading = false; }
+        },
+
+        apiTime(ts) {
+          if (!ts) return '';
+          return new Date(ts * 1000).toLocaleTimeString(this.lang === 'vi' ? 'vi-VN' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+        },
+
+        async saveRegistryLogin() {
+          const a = this.apiStatus, f = a.form;
+          const registry = f.registry === 'other' ? f.custom.trim() : f.registry;
+          a.busy = true; a.msg = '';
+          try {
+            const { res, data } = await this._postJson('/api/system/registry-logins', { registry, username: f.username, token: f.token });
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            a.ok = true; a.msg = `${registry}: ${data.message || 'OK'}`;
+            f.username = ''; f.token = ''; f.custom = '';
+            await this.loadApiStatus();
+          } catch (err) { a.ok = false; a.msg = err.message; }
+          finally { a.busy = false; }
+        },
+
+        confirmDeleteLogin(lg) {
+          this.askConfirm({
+            tone: 'danger', title: this.t('loginDeleteTitle').replace('{r}', lg.registry),
+            message: this.t('loginDeleteMsg'), confirmLabel: this.t('delete'),
+            onConfirm: async () => {
+              await this._postJson('/api/system/registry-logins/delete', { registry: lg.registry });
+              await this.loadApiStatus();
+            }
+          });
+        },
+
+        async resumeSource(src) {
+          await this._postJson('/api/system/api-status/resume', { source: src.source });
+          await this.loadApiStatus();
+        },
+
+        async clearApiCache() {
+          const { data } = await this._postJson('/api/system/api-cache/clear', {});
+          this.showToast(this.t('apiCacheCleared').replace('{n}', data.cleared ?? 0));
+          await this.loadApiStatus();
         },
 
         async saveSettings() {
