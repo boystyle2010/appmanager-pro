@@ -8,7 +8,6 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from app.core.compose_snapshot import snapshot_running_apps
 from app.core.database import add_resource_samples, add_update_history, get_all_update_cache, get_public_settings, set_setting
-from app.core.docker_client import list_all_apps
 from app.core.registry_checker import check_all_updates
 from app.core.updater import collect_self_update_result, update_app_stream
 
@@ -22,23 +21,40 @@ async def _silent_log(_: str) -> None:
 
 
 async def run_auto_update_job() -> None:
+    """Chạy mỗi 5 phút: app nào tới giờ tự cập nhật hôm nay (giờ chung hoặc giờ / ngày riêng của app) thì
+    kiểm tra bản mới rồi cập nhật nếu đúng quy tắc (mức phiên bản, đợi N ngày). Máy tắt lúc tới giờ -> chạy bù
+    khi bật lại trong ngày."""
+    from app.core import update_policy
+    from app.core.database import get_all_app_prefs, save_app_pref
+    from app.core.docker_client import get_app_by_name
+    from app.core.registry_checker import check_one_app_by_name
+
     cfg = get_public_settings()
     if not cfg["auto_update_enabled"]:
         return
-
-    logger.info("Running scheduled auto-update check...")
-    await check_all_updates()
-
-    data = await asyncio.to_thread(list_all_apps, True)
-    targets = [
-        a
-        for a in data["apps"]
-        if a["auto_update"] and a["has_update"] and a["can_update"] and not a["is_self"]
-    ]
-
-    for app in targets:
-        logger.info("Auto-updating %s (%s -> %s)", app["name"], app["version"], app["remote_version"])
-        await update_app_stream(app["name"], _silent_log, mode="auto")
+    now = datetime.now()  # giờ máy chủ (TZ của container)
+    today = now.strftime("%Y-%m-%d")
+    for name, pref in get_all_app_prefs().items():
+        if not pref.get("auto_update"):
+            continue
+        policy = update_policy.parse(pref.get("policy") or "")
+        if not update_policy.due_today(policy, cfg["auto_update_time"], pref.get("last_auto") or "", now):
+            continue
+        save_app_pref(name, last_auto=today)  # mỗi app tối đa 1 lần / ngày
+        try:
+            await check_one_app_by_name(name)
+            app = await asyncio.to_thread(get_app_by_name, name)
+        except Exception:
+            logger.exception("Auto-update check failed for %s", name)
+            continue
+        if not app or not app.get("has_update") or not app.get("can_update") or app.get("is_self"):
+            continue
+        hold = app.get("auto_hold")
+        if hold:
+            logger.info("Auto-update of %s held back by its rule: %s", name, hold)
+            continue
+        logger.info("Auto-updating %s (%s -> %s)", name, app.get("version"), app.get("remote_version"))
+        await update_app_stream(name, _silent_log, mode="auto")
 
 
 async def run_auto_prune_job() -> None:
@@ -145,15 +161,9 @@ def configure_jobs() -> None:
         scheduler.remove_job("auto_update_job")
 
     if cfg["auto_update_enabled"]:
-        try:
-            hour, minute = [int(x) for x in cfg["auto_update_time"].split(":", 1)]
-        except Exception:
-            hour, minute = 3, 30
-        try:
-            trig = CronTrigger(hour=hour, minute=minute)
-        except ValueError:
-            trig = CronTrigger(hour=3, minute=30)
-        scheduler.add_job(run_auto_update_job, trigger=trig, id="auto_update_job", replace_existing=True)
+        # Mỗi 5 phút xem app nào tới giờ (giờ chung hoặc giờ / ngày riêng theo quy tắc của từng app)
+        scheduler.add_job(run_auto_update_job, trigger=IntervalTrigger(minutes=5), id="auto_update_job",
+                          replace_existing=True, max_instances=1, coalesce=True)
 
 
     scheduler.add_job(

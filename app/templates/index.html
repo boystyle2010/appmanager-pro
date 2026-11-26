@@ -460,6 +460,11 @@
                   </div>
                 </div>
 
+                <!-- Quy tắc tự cập nhật đang giữ bản mới lại (0.20) -->
+                <p x-show="app.auto_hold" x-cloak class="flex items-center gap-1.5 text-[10.5px] leading-snug text-sky-300/95 min-w-0">
+                  <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  <span class="truncate" x-text="holdText(app.auto_hold)"></span>
+                </p>
                 <!-- Nguồn cập nhật đang bị giới hạn: trạng thái trên thẻ là lần kiểm tra trước -->
                 <p x-show="(app.update_error || '').includes('rate limit')" x-cloak
                    class="flex items-center gap-1.5 text-[10.5px] leading-snug text-amber-300/95 min-w-0" :title="app.update_error">
@@ -1102,6 +1107,60 @@
                 <div class="w-11 h-6 bg-slate-600/60 rounded-full peer peer-checked:bg-emerald-500 relative transition after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5"></div>
               </label>
             </div>
+
+            <!-- Quy tắc tự cập nhật của app (0.20): chỉ hiện khi bật tự cập nhật -->
+            <template x-if="updateModal.autoUpdate && updateModal.policy">
+            <div class="glass-inset rounded-2xl p-3.5 shrink-0 space-y-3 text-[11.5px]">
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-xs font-semibold" x-text="t('polTitle')"></p>
+                <span x-show="updateModal.policySaving" class="text-[10.5px] text-muted">…</span>
+              </div>
+              <div class="space-y-1.5">
+                <p class="text-[10.5px] text-subtle" x-text="t('polLevel')"></p>
+                <div class="glass-dock p-1 rounded-xl grid grid-cols-3 gap-1">
+                  <template x-for="lv in ['all', 'minor', 'patch']" :key="lv">
+                    <button type="button" @click="updateModal.policy.level = lv; saveAppPolicy()" class="py-1.5 rounded-lg text-[11px] font-semibold transition"
+                            :class="updateModal.policy?.level === lv ? 'glass-btn-primary' : 'text-muted'" x-text="t('pol_' + lv)"></button>
+                  </template>
+                </div>
+                <p class="text-[10.5px] text-muted leading-snug" x-text="t('pol_' + (updateModal.policy?.level || 'all') + '_desc')"></p>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span class="min-w-0">
+                  <span class="block font-semibold" x-text="t('polWait')"></span>
+                  <span class="block text-[10.5px] text-muted leading-snug" x-text="t('polWaitDesc')"></span>
+                </span>
+                <select x-model.number="updateModal.policy.min_age_days" @change="saveAppPolicy()" class="glass-input w-auto rounded-xl pl-3 py-2 text-xs shrink-0">
+                  <template x-for="d in [0, 1, 2, 3, 5, 7, 14, 30]" :key="d">
+                    <option :value="d" :selected="updateModal.policy?.min_age_days === d" x-text="d ? t('polDays').replace('{n}', d) : t('polNoWait')"></option>
+                  </template>
+                </select>
+              </div>
+              <div class="space-y-1.5">
+                <p class="text-[10.5px] text-subtle" x-text="t('polWeekdays')"></p>
+                <div class="grid grid-cols-7 gap-1">
+                  <template x-for="d in [0, 1, 2, 3, 4, 5, 6]" :key="d">
+                    <button type="button" @click="togglePolicyDay(d)" class="py-1.5 rounded-lg text-[10.5px] font-semibold border transition"
+                            :class="!(updateModal.policy?.days || []).length || updateModal.policy.days.includes(d) ? 'border-sky-400/60 bg-sky-500/15 text-sky-200' : 'border-[var(--glass-border)] text-muted'"
+                            x-text="t('wd' + d)"></button>
+                  </template>
+                </div>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span class="min-w-0">
+                  <span class="block font-semibold" x-text="t('polTime')"></span>
+                  <span class="block text-[10.5px] text-muted leading-snug" x-text="t('polTimeDesc').replace('{t}', autoCfg.time || '03:30')"></span>
+                </span>
+                <input type="time" x-model="updateModal.policy.time" @change="saveAppPolicy()" class="glass-input w-28 rounded-xl px-2 py-2 text-xs font-mono-code text-center shrink-0" />
+              </div>
+              <p x-show="updateModal.app?.auto_hold" class="flex items-start gap-1.5 text-[10.5px] text-sky-300 leading-snug">
+                <svg class="w-3.5 h-3.5 shrink-0 mt-px" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span x-text="holdText(updateModal.app?.auto_hold)"></span>
+              </p>
+              <p x-show="!autoCfg.enabled" class="rounded-xl px-2.5 py-2 bg-amber-500/10 border border-amber-400/30 text-[10.5px] text-amber-200 leading-snug" x-text="t('polGlobalOff')"></p>
+              <p class="text-[10.5px] text-subtle leading-snug" x-text="t('polNote')"></p>
+            </div>
+            </template>
 
             <div class="glass-inset rounded-2xl p-4 flex flex-col gap-3 min-w-0 min-h-[260px] shrink-0" :class="updateModal.changelogHtml ? 'flex-1' : ''" style="overflow:clip">
               <div class="flex items-center justify-between gap-2 flex-wrap">
