@@ -144,6 +144,24 @@ if ASSETS_DIR.exists():
 
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
+
+def _build_id() -> str:
+    """Mã build = băm nội dung giao diện (JS/CSS/template). Đổi mỗi lần build `latest` dù số phiên bản giữ nguyên
+    -> dùng cho ?v= của file tĩnh và để trang đang mở biết mình đã cũ (tự tải lại)."""
+    import hashlib
+    h = hashlib.sha1(APP_VERSION.encode())
+    for sub, pat in (("static/js", "*.js"), ("static/css", "*.css"), ("templates", "*.html")):
+        for f in sorted((BASE_DIR / sub).glob(pat)):
+            try:
+                h.update(f.name.encode()); h.update(f.read_bytes())
+            except OSError:
+                pass
+    return h.hexdigest()[:12]
+
+
+BUILD_ID = _build_id()
+templates.env.globals["build"] = BUILD_ID
+
 # ---------------- Security headers ----------------
 _CSP = (
     "default-src 'self'; "
@@ -169,6 +187,7 @@ async def security_headers(request: Request, call_next):
     h.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
     if response.headers.get("content-type", "").startswith("text/html"):
         h.setdefault("Content-Security-Policy", _CSP)
+        h.setdefault("Cache-Control", "no-cache")  # Safari không giữ giao diện cũ sau khi AppManager cập nhật
     if request.url.path.startswith("/api/"):
         h.setdefault("Cache-Control", "no-store")
     return response
@@ -509,6 +528,8 @@ async def api_list_apps(_: str = Depends(require_user)):
         data["update_all_excluded"] = get_update_all_excluded()
         cfg = get_public_settings()
         data["auto_update"] = {"enabled": cfg["auto_update_enabled"], "time": cfg["auto_update_time"]}
+        data["app_version"] = APP_VERSION
+        data["build"] = BUILD_ID
         return JSONResponse(content=data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Docker socket error: {e}")

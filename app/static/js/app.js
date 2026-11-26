@@ -482,6 +482,16 @@
             if (res.status === 401) { window.location.href = '/login'; return; }
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || 'Failed to load apps');
+            // Trang đang mở là của bản cũ (Safari giữ tab) -> tải lại 1 lần để có giao diện khớp với AppManager mới
+            const pageBuild = document.querySelector('meta[name="amp-build"]')?.content || '';
+            if (data.build && pageBuild && data.build !== pageBuild) {
+              let tried = '';
+              try { tried = sessionStorage.getItem('amp_reload_for') || ''; } catch (e) {}
+              if (tried !== data.build) {
+                try { sessionStorage.setItem('amp_reload_for', data.build); } catch (e) {}
+                window.location.reload(); return;
+              }
+            }
             this.envMode = data.environment;
             this.summary = data.summary;
             this.updateAllExcluded = data.update_all_excluded || [];

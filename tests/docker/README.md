@@ -108,6 +108,7 @@ Xem chi tiết lỗi một bộ: chạy đúng dòng đó nhưng bỏ `| grep ..
 | 26 | `t_policy.py` (`setup.sh`) | quy tắc tự cập nhật: mức phiên bản, đợi N ngày (mốc `first_seen`), ngày / giờ riêng, chạy bù, 1 lần / ngày, tắt chung; cập nhật thật bb-none 1.35 → 1.38 | 14/14 |
 | 27 | `e2e17.js` (uvicorn :8794) | giao diện quy tắc: phần quy tắc trong cửa sổ cập nhật, dòng "đang giữ lại" trên thẻ, cảnh báo khi tự cập nhật chung tắt | 5/5 |
 | 28 | `e2e18.js` (uvicorn :8795) | kênh theo biến thể: glances `latest-full` có thêm `latest` thường (không có `dev`), `latest` có `latest-full` + `dev`, cảnh báo đổi biến thể, nhãn changelog (container busybox gắn tag glances, kênh lấy từ Docker Hub thật) | 6/6 |
+| 29 | `e2e19.js` (uvicorn :8796) | trang cũ (Safari giữ tab sau khi AppManager cập nhật) tự tải lại đúng 1 lần theo mã build; HTML `Cache-Control: no-cache`; file tĩnh `?v=<mã build>` | 5/5 |
 
 Fixture: `setup.sh` — `web` (nginx 1.26, 2 mạng, IP tĩnh 172.30.0.50, alias, volume tên + ẩn danh, bind `$S/bind`
 chứa `hello-from-bind`, healthcheck), `bb-sidecar` (`--network container:web`), `bb-fail` (bản 1.36 sẽ chết → rollback),
