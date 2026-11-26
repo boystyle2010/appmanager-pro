@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.18.0
+
+*Released: 2026-11-26*
+
+### 📦 Component & Version Matrix
+
+- **App Release:** Bumped from `v0.17.0` ➡️ `v0.18.0`
+- **Supported Architectures:** `linux/amd64` (x86_64), `linux/arm64` (ARM64) & `linux/arm/v7` (ARMv7 32-bit) *(Multi-arch GHCR Image)*
+- **Python Base Image:** `python 3.15.2`
+- **Docker CLI:** `docker 29.10.1`
+- **Core Python Stack:** `FastAPI 0.165.0` • `Uvicorn 0.54.0` • `Docker SDK 7.2.0` • `ruamel.yaml 0.19.1` • `Argon2 25.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.28.1` • `APScheduler 3.11.3` • `segno 1.6.6`
+- **Frontend Libraries:** `Alpine.js 3.17.5` • `Tailwind CSS 4.3.5` • `marked 18.3.0` • `DOMPurify 3.5.0`
+
+### 🚀 What's Changed
+
+- API Docs now open inside AppManager (Settings → API Tokens → API Docs) instead of a new browser tab.
+- Wording: "Token", "Script" and "API Docs" are now capitalized in the interface.
+- Multiple servers (Settings → Servers): manage the AppManager of other machines from this one. This AppManager calls the other one's REST API over HTTP or HTTPS with an API Token (Bearer) — no Docker socket on the network, no extra agent; requirements and security advice are explained in the app. Requires AppManager 0.17.0 or newer on the other machine.
+- A server switcher above the app list (update counts, offline indicator). For another server: list apps, check for updates, update one app or all apps (live log, health check and rollback done by that server), start / stop / restart.
+- Connection test before saving (version, app count, Token permission, latency) with clear messages for a wrong or deleted Token, read-only Token, unreachable address, self-signed HTTPS certificate (optional certificate check), AppManager older than 0.17.0 and redirects (never followed). Tokens of other servers are stored only on this machine and never sent to the browser.
+- API health (`GET /api/health` with a Token) now also reports the Token permission.
+
 ## 0.17.0
 
 *Released: 2026-11-26*
