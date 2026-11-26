@@ -49,21 +49,32 @@ bash scripts/verify.sh amp-test smoke    # cần Docker: build image, chạy uvi
 Test kịch bản trên Docker thật (25 bộ, ~2,5 giờ): làm đúng theo **`tests/docker/README.md`** (dựng dockerd, image mirror, registry/ntfy/Gotify, build image test, chạy `run_everything.sh`, chụp ảnh). Thay đổi lớn ở cập nhật/rollback/docker run/thông báo → chạy lại các bộ liên quan trước khi phát hành; thêm kịch bản mới vào `tests/docker/` (không để chỉ trong scratchpad).
 
 ## CI (`.github/workflows/release.yml`)
-- Chạy hằng ngày, khi push `main` (bỏ qua thay đổi chỉ `*.md`/LICENSE), hoặc bấm tay (`force_release`, `version`).
+- Chạy hằng ngày, khi push `main` (bỏ qua thay đổi chỉ `*.md`/LICENSE), hoặc bấm tay (`force_release`, `version`). Chỉ bấm tay mới phát hành (xem dưới).
 - Bot nâng **mọi** thành phần lên bản mới nhất (kể cả major) → build & chạy thử thật (uvicorn + smoke test + build arm64) → hỏng thì lùi về nâng cùng major → commit qua GitHub API (có chữ ký) → build multi-arch, ký attestation, quét Trivy → tạo Release.
 - Image đẩy lên **GHCR** (nguồn chính) và **Docker Hub** (`<DOCKERHUB_USERNAME>/appmanager-pro`, khi có secret `DOCKERHUB_USERNAME` + `DOCKERHUB_TOKEN`), cùng tag `latest`/`X.Y.Z`/`build-<sha>`; mô tả Docker Hub đồng bộ từ README khi có bản phát hành.
 - Bot nâng cả action trong `.github/workflows/` (lên major mới nhất, bỏ qua nếu bản mới mất input đang dùng) khi có secret `WORKFLOW_TOKEN` (fine-grained PAT: Contents + Workflows Read/Write, chỉ repo này). Không có secret thì phải nâng tay. Commit của bot có `[skip ci]`. Trivy ghim theo commit SHA (không tự nâng).
 
-### Phát hành — lưu ý quan trọng
-- Push lên `main` có thể **tự phát hành** nếu bot thấy thành phần nền có bản mới (đã xảy ra: 0.14.1 lấy hết ghi chú của bản định làm 0.15.0). Muốn tự đặt số phiên bản: push với `[skip ci]` trong commit message, rồi chạy workflow `release.yml` (workflow_dispatch) với `force_release=true`, `version=X.Y.Z`. Đề xuất (chưa làm, cần chủ repo đồng ý): lần build khi push chỉ nâng thành phần, không tự tạo Release.
+### Phát hành — lưu ý quan trọng (từ 0.19)
+- Push lên `main` và lịch hằng ngày: bot chỉ nâng thành phần (commit "chore(deps): update components (no release)") + build image `latest` / `build-<sha>`. **KHÔNG** tăng `APP_VERSION`, không viết CHANGELOG, không đụng `RELEASE_NOTES_NEXT.md`, không tạo Release (`NO_RELEASE` trong `auto_update.py`, output `release` trong `release.yml`).
+- Phát hành chỉ khi bấm tay workflow `release.yml` (workflow_dispatch) với `force_release=true`, `version=X.Y.Z`. Vẫn nên push kèm `[skip ci]` để khỏi build thừa.
 - Ghi chú phát hành viết **tiếng Anh** vào `RELEASE_NOTES_NEXT.md` (bot gom vào CHANGELOG khi phát hành rồi xoá).
+- Test tự động: `.github/workflows/tests.yml` (kiểm tra mã + `tests/docker/run_ci.sh` sau `ci_setup.sh`) chạy mỗi push / PR. Thêm bộ test mới chạy được không cần proxy / trình duyệt → thêm vào `run_ci.sh`.
 
 ## Việc còn mở
 - Trivy: `golang.org/x/net` v0.60.0 trong `docker-compose` (CVE-2026-78661, tạm bỏ qua trong `.trivyignore` tới 2027-02-28) — chờ Docker Compose phát hành bản dùng x/net ≥ 0.62.0 (v5.8.0 và nhánh main ngày 2026-11-18 vẫn là v0.60.0).
 - Phiên bản đã phát hành gần nhất: **v0.18.4** (2026-11-26: kiểm tra bản mới cho 1 app — menu ⋯, nút làm mới trong cửa sổ cập nhật, `POST /api/apps/{name}/check`). Trước đó **v0.18.3** (2026-11-26: icon vector thay emoji, mũi tên ô chọn sát chữ). Trước đó **v0.18.2** (2026-11-26: mã hoá nội dung tin Bark AES-CBC / Webhook AES-256-GCM + chế độ riêng tư cho mọi kênh). Trước đó **v0.18.1** (2026-11-26: 16 kênh thông báo — thêm Slack, Teams, Google Chat, Mattermost, Matrix, Signal, Bark, Pushover, Pushbullet, Email, Apprise; ô chọn kênh có icon từng app (Simple Icons CC0 + icon tự vẽ cho app không có logo dùng tự do: KHÔNG vẽ nhái logo hãng); biểu tượng nền tảng iOS/Android/Windows/macOS/Linux/Web). Trước đó v0.18.0 (quản lý nhiều máy chủ qua REST API + API Token, API Docs mở trong app, viết hoa Token / Script / API Docs). Trước đó v0.17.0 (API token, `/api/health`, `/docs`, Cài đặt dạng danh sách, thư mục dữ liệu), v0.16.0 (thông báo), v0.14.1 (gồm phần chống giới hạn API định làm 0.15.0 — bỏ qua số 0.15.0).
 - 0.18.0 đã test thật trên Docker trong sandbox: 20 bộ `tests/docker/` (0.18 chạy lại bộ 7, 13–20; bộ 1–6, 8–12 không đổi từ 0.17.0, bộ 2 = 41/42 với `P4` là điều kiện test đã biết). Chưa thử: Home Assistant / Uptime Kuma thật, hai máy thật khác nhau / Tailscale / reverse proxy thật, máy CasaOS của chủ repo.
 
-### Lộ trình tiếp theo (đã thống nhất với chủ repo)
-- ~~0.17 — API token~~: đã xong (v0.17.0).
-- ~~0.18 — quản lý nhiều máy chủ~~: đã xong (v0.18.0). Có thể mở rộng sau: thông báo khi máy phụ mất kết nối, xem log / khôi phục từ xa, gộp tất cả máy vào một danh sách.
-- Ý tưởng khác: sao lưu/khôi phục cấu hình AppManager; tìm & tải log container; Podman/GPU/ARM thật/Docker cũ chưa test được trong sandbox (cần chủ repo thử trên máy thật).
+### Lộ trình tiếp theo (chủ repo đã đồng ý 2026-11-26 — làm TẤT CẢ, theo đúng thứ tự)
+- ~~0.17 API token~~ (xong) · ~~0.18 nhiều máy chủ~~ (xong, 0.18.1–0.18.4: 16 kênh thông báo, mã hoá, icon vector, kiểm tra 1 app).
+- **0.19 — Nền tảng dự án:** `CONTRIBUTING.md`, `SECURITY.md`, mẫu issue / PR; test chạy tự động trên GitHub Actions (kiểm tra mã + bộ test Docker chính); push lên `main` chỉ build image `latest`, **không tự phát hành** (phát hành chỉ khi bấm tay `release.yml`).
+- **0.20 — Quy tắc cập nhật theo từng app:** chỉ bản vá / bản nhỏ / mọi bản, đợi N ngày sau khi phát hành, khung giờ cập nhật.
+- **0.21 — Log & nhiều máy chủ mở rộng:** tìm / lọc / tải log container; báo khi máy phụ mất kết nối; gộp app mọi máy vào một danh sách; xem log / khôi phục từ xa.
+- **0.22 — Nhiều tài khoản + phân quyền** (Quản trị / Cập nhật / Chỉ xem), nhật ký theo người. (Phải trước SSO.)
+- **0.23 — SSO / OIDC** (Authentik, Authelia, Keycloak, Google…), gán quyền theo nhóm.
+- **0.24 — Sao lưu / khôi phục cấu hình AppManager** (tài khoản, quyền, SSO, Token, kênh thông báo, máy chủ, quy tắc cập nhật) ra 1 file mã hoá bằng mật khẩu. (Để sau 0.20–0.23 để gồm đủ mọi cấu hình.)
+- **0.25 — Web Push** (iPhone / Android / máy tính, thêm vào màn hình chính). BẮT BUỘC HTTPS → kèm hướng dẫn Tailscale HTTPS / reverse proxy / Cloudflare Tunnel.
+- **0.26 — Quét lỗ hổng image** từng app (Trivy, tuỳ chọn bật / tắt), báo qua thông báo.
+- **0.27 — Thêm ngôn ngữ** (Trung, Tây Ban Nha, Đức, Pháp, Nhật…) + cách cộng đồng góp bản dịch.
+- **1.0 — Phát hành cộng đồng:** trang tài liệu (GitHub Pages) có ảnh, so sánh với Watchtower / What's Up Docker / Dockge; template CasaOS AppStore, Unraid, Portainer, TrueNAS SCALE. Video 1 phút: Claude viết kịch bản + ảnh, chủ repo quay. Gửi CasaOS AppStore: Claude chuẩn bị file, chủ repo mở PR.
+- Song song mọi bản: ghi rõ "cần chủ repo thử trên máy thật" (Home Assistant, Uptime Kuma, nhiều máy qua Tailscale, Raspberry Pi, Podman, Docker cũ).

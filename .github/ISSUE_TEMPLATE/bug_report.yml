@@ -1,0 +1,53 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Thanks for the report! Security problems: please use **Security → Report a vulnerability** instead of a public issue."
+  - type: input
+    id: version
+    attributes:
+      label: AppManager Pro version
+      description: Settings → About
+      placeholder: "0.19.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How does AppManager run?
+      options:
+        - CasaOS
+        - Docker Compose
+        - docker run
+        - Portainer stack
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Host
+      description: OS, CPU architecture, Docker version (docker version)
+      placeholder: "Debian 12, arm64, Docker 27.3"
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected and what happened instead. Screenshots help.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Tap …
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: "Update log (History → tap an entry) or `docker logs appmanager-pro --tail 100`. Remove tokens and passwords."
+      render: text

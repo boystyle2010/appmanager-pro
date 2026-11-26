@@ -416,7 +416,22 @@ def cmd_check(args) -> int:
     # Ghi chú tự viết KHÔNG tự tạo bản phát hành; chỉ được dùng khi có bản phát hành (cập nhật thành phần / chạy tay)
     if not bumped and not force and not wanted:
         set_output("changed", "false")
+        set_output("release", "false")
         set_output("python_version", f"{PY_TARGET[0]}.{PY_TARGET[1]}")
+        return 0
+    # Push / lịch hằng ngày (NO_RELEASE=true): chỉ nâng thành phần + build image `latest`.
+    # KHÔNG tăng số phiên bản, không viết CHANGELOG, không đụng RELEASE_NOTES_NEXT.md, không tạo Release.
+    # Phát hành chỉ khi chủ repo bấm tay workflow (FORCE_RELEASE / RELEASE_VERSION).
+    if os.environ.get("NO_RELEASE", "").lower() == "true" and not force and not wanted:
+        files = [REQ, DOCKERFILE, VENDOR, *HTML_FILES]
+        files += [c["file"] for c in action_changes if c["file"] not in files]
+        (OUT_DIR / "changed_files.txt").write_text("\n".join(str(f.relative_to(ROOT)) for f in files) + "\n", encoding="utf-8")
+        set_output("changed", "true")
+        set_output("release", "false")
+        set_output("python_version", f"{PY_TARGET[0]}.{PY_TARGET[1]}")
+        set_output("version", "")
+        set_output("prev_version", read_app_version())
+        set_output("summary", "; ".join(f"{c['name']} {c['old']} -> {c['new']}" for c in bumped)[:900] or "maintenance")
         return 0
     prev = read_app_version()
     if wanted:
@@ -440,6 +455,7 @@ def cmd_check(args) -> int:
         files.append(NEXT_NOTES)
     (OUT_DIR / "changed_files.txt").write_text("\n".join(str(f.relative_to(ROOT)) for f in files) + "\n", encoding="utf-8")
     set_output("changed", "true")
+    set_output("release", "true")
     set_output("python_version", f"{PY_TARGET[0]}.{PY_TARGET[1]}")
     set_output("version", version)
     set_output("prev_version", prev)

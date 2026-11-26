@@ -367,7 +367,7 @@ One GitHub Actions workflow ([`release.yml`](.github/workflows/release.yml)) run
 3. **Verifies** the result by building the real image (amd64 + arm64 + armv7, with build cache) and starting the app inside it with a smoke test ([`scripts/verify.sh`](scripts/verify.sh)). If the newest versions fail, it retries with same-major updates only and notes the held-back upgrades. The result is **committed via the GitHub API**, so commits are signed by GitHub (*Verified*).
 4. **Builds** the multi-arch image (`linux/amd64`, `linux/arm64`, `linux/arm/v7`), pushes it to **GHCR** and **Docker Hub**, and **signs** both with a GitHub build-provenance attestation.
 5. **Scans the image with Trivy** (critical/high, fixable only).
-6. **Publishes a GitHub Release** whose notes come from `CHANGELOG.md` (Component & Version Matrix, Package Integrity with the Trivy result, What's Changed), and syncs this README to Docker Hub.
+6. **Publishes a GitHub Release** — **only when run by hand** — whose notes come from `CHANGELOG.md` (Component & Version Matrix, Package Integrity with the Trivy result, What's Changed), and syncs this README to Docker Hub. Daily runs and pushes only update components and rebuild `latest`; they never bump the version or create a release.
 
 Image tags (same on both registries): `latest`, `X.Y.Z` (on release) and `build-<commit>`.
 
@@ -381,6 +381,12 @@ gh attestation verify oci://ghcr.io/boystyle2010/appmanager-pro:latest -R boysty
 The changelog lists **component updates** plus your own notes: write bullet lines in `RELEASE_NOTES_NEXT.md`; they are moved into the changelog on the next release and the file is cleared.
 
 **Repository secrets (optional):** `WORKFLOW_TOKEN` (fine-grained token, Contents + Workflows read/write, this repo only) lets the bot upgrade workflow actions; `DOCKERHUB_USERNAME` + `DOCKERHUB_TOKEN` (Read, Write, Delete) publish to Docker Hub and sync its description.
+
+**Tests:** [`tests.yml`](.github/workflows/tests.yml) runs the code checks and the real-Docker scenarios ([`tests/docker/run_ci.sh`](tests/docker/run_ci.sh)) on every push and pull request.
+
+## 🤝 Contributing
+
+Bug reports, ideas, translations and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Security problems: please report them privately as described in [SECURITY.md](SECURITY.md).
 
 ## 🗂️ Project structure
 

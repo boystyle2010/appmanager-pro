@@ -1,6 +1,8 @@
 name: Auto Update, Build & Release
 
 # Chạy: mỗi ngày (kiểm tra bản mới của base image/thư viện), mỗi lần bạn push lên main, hoặc bấm tay.
+# Push / lịch hằng ngày: chỉ nâng thành phần + build image `latest` (KHÔNG tăng số phiên bản, không tạo Release).
+# Phát hành (CHANGELOG + Release + tag X.Y.Z) chỉ khi bấm tay: force_release=true, version=X.Y.Z.
 on:
   schedule:
     - cron: "0 10 * * *"
@@ -37,6 +39,7 @@ jobs:
       contents: write
     outputs:
       changed: ${{ steps.final.outputs.changed }}
+      release: ${{ steps.final.outputs.release }}
       version: ${{ steps.final.outputs.version }}
       head_sha: ${{ steps.head.outputs.sha }}
       short_sha: ${{ steps.head.outputs.short }}
@@ -78,6 +81,7 @@ jobs:
           BUMP_ACTIONS: ${{ secrets.WORKFLOW_TOKEN != '' }}
           FORCE_RELEASE: ${{ github.event.inputs.force_release }}
           RELEASE_VERSION: ${{ github.event.inputs.version }}
+          NO_RELEASE: ${{ github.event_name != 'workflow_dispatch' }}
         run: python scripts/auto_update.py check
 
       - name: Verify latest versions (build image + start app)
@@ -96,6 +100,7 @@ jobs:
           BUMP_ACTIONS: ${{ secrets.WORKFLOW_TOKEN != '' }}
           FORCE_RELEASE: ${{ github.event.inputs.force_release }}
           RELEASE_VERSION: ${{ github.event.inputs.version }}
+          NO_RELEASE: ${{ github.event_name != 'workflow_dispatch' }}
         run: |
           git checkout -- .
           rm -rf release
@@ -110,6 +115,8 @@ jobs:
         env:
           USE_SAFE: ${{ steps.verify.outcome == 'failure' }}
           U_CHANGED: ${{ steps.upd.outputs.changed }}
+          U_RELEASE: ${{ steps.upd.outputs.release }}
+          S_RELEASE: ${{ steps.safe.outputs.release }}
           U_VERSION: ${{ steps.upd.outputs.version }}
           U_SUMMARY: ${{ steps.upd.outputs.summary }}
           S_CHANGED: ${{ steps.safe.outputs.changed }}
@@ -117,12 +124,13 @@ jobs:
           S_SUMMARY: ${{ steps.safe.outputs.summary }}
         run: |
           if [ "$USE_SAFE" = "true" ]; then
-            CHANGED="${S_CHANGED:-false}"; VERSION="$S_VERSION"; SUMMARY="$S_SUMMARY (major upgrades held back)"
+            CHANGED="${S_CHANGED:-false}"; VERSION="$S_VERSION"; SUMMARY="$S_SUMMARY (major upgrades held back)"; RELEASE="${S_RELEASE:-false}"
           else
-            CHANGED="${U_CHANGED:-false}"; VERSION="$U_VERSION"; SUMMARY="$U_SUMMARY"
+            CHANGED="${U_CHANGED:-false}"; VERSION="$U_VERSION"; SUMMARY="$U_SUMMARY"; RELEASE="${U_RELEASE:-false}"
           fi
           {
             echo "changed=$CHANGED"
+            echo "release=$RELEASE"
             echo "version=$VERSION"
             echo "summary=$SUMMARY"
           } >> "$GITHUB_OUTPUT"
@@ -143,8 +151,9 @@ jobs:
           VERSION: ${{ steps.final.outputs.version }}
           SUMMARY: ${{ steps.final.outputs.summary }}
         run: |
+          if [ -n "$VERSION" ]; then MSG="chore(deps): update components to v${VERSION} [skip ci]"; else MSG="chore(deps): update components (no release) [skip ci]"; fi
           python scripts/signed_commit.py --branch main \
-            --message "chore(deps): update components to v${VERSION} [skip ci]"$'\n\n'"${SUMMARY}" \
+            --message "$MSG"$'\n\n'"${SUMMARY}" \
             --files-from release/changed_files.txt > new_sha.txt
 
       # Chỉ có action trong workflow được nâng (không có bản phát hành): commit riêng, không build lại image
@@ -219,7 +228,7 @@ jobs:
         env:
           IMAGE: ${{ needs.update.outputs.image }}
           SHORT: ${{ needs.update.outputs.short_sha }}
-          CHANGED: ${{ needs.update.outputs.changed }}
+          CHANGED: ${{ needs.update.outputs.release }}
           VERSION: ${{ needs.update.outputs.version }}
         run: |
           IMAGES="$IMAGE"
@@ -271,7 +280,7 @@ jobs:
       # Mô tả trang Docker Hub lấy từ README (token cần quyền Read, Write, Delete; thiếu quyền thì chỉ bỏ qua bước này)
       # Docker Hub giới hạn 25 000 byte: bỏ các mục dành cho người phát triển, đổi link tương đối thành link GitHub
       - name: Prepare Docker Hub README
-        if: env.DOCKERHUB_ENABLED == 'true' && (needs.update.outputs.changed == 'true' || github.event_name == 'workflow_dispatch')
+        if: env.DOCKERHUB_ENABLED == 'true' && (needs.update.outputs.release == 'true' || github.event_name == 'workflow_dispatch')
         run: |
           python3 - <<'PY'
           import re
@@ -294,7 +303,7 @@ jobs:
           PY
 
       - name: Sync Docker Hub description
-        if: env.DOCKERHUB_ENABLED == 'true' && (needs.update.outputs.changed == 'true' || github.event_name == 'workflow_dispatch')
+        if: env.DOCKERHUB_ENABLED == 'true' && (needs.update.outputs.release == 'true' || github.event_name == 'workflow_dispatch')
         continue-on-error: true
         uses: peter-evans/dockerhub-description@v5
         with:
@@ -364,7 +373,7 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: [update, build]
-    if: needs.update.outputs.changed == 'true'
+    if: needs.update.outputs.release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/boystyle2010/appmanager-pro/security/advisories/new
+    about: Report security problems privately.
+  - name: Setup help & troubleshooting
+    url: https://github.com/boystyle2010/appmanager-pro#-troubleshooting
+    about: Common problems and how to fix them.
