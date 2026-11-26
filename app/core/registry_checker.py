@@ -615,6 +615,10 @@ PRE_CHANNELS = ("beta", "next", "rc", "preview", "testing", "edge", "unstable", 
 _CHANNEL_WORDS = STABLE_CHANNELS + PRE_CHANNELS
 
 
+class ChannelLookupFailed(Exception):
+    """Không đọc được danh sách tag (mạng, giới hạn API…): giữ kênh đã biết, không coi là "không có kênh"."""
+
+
 def channel_format(tag: str) -> Optional[tuple[str, str]]:
     """
     Tag kênh -> (mẫu, kênh). Vd "latest" -> ("{}", "latest"), "latest-full" -> ("{}-full", "latest"),
@@ -649,6 +653,7 @@ async def _detect_channels(
     wanted = {pattern.format(w): w for w in _CHANNEL_WORDS}
     found: dict[str, dict[str, Any]] = {}
     digest_versions: dict[str, tuple[tuple, str]] = {}
+    failed = False  # không hỏi được registry -> giữ danh sách kênh lần trước thay vì xoá mất
 
     if registry == "registry-1.docker.io":
         base = f"https://hub.docker.com/v2/repositories/{repo}/tags"
@@ -657,6 +662,7 @@ async def _detect_channels(
             for _page in range(2):
                 r = await client.get(url)
                 if r.status_code != 200:
+                    failed = failed or _page == 0
                     break
                 body = r.json()
                 for t in body.get("results") or []:
@@ -681,6 +687,7 @@ async def _detect_channels(
                         found[name] = {"digest": str(t.get("digest") or ""), "updated": str(t.get("last_updated") or "")[:19],
                                        "archs": {i.get("architecture") for i in t.get("images") or [] if i.get("architecture")}}
         except Exception as exc:
+            failed = True
             logger.warning("Channel detection for %s failed: %s", repo, exc)
     else:
         try:
@@ -688,6 +695,7 @@ async def _detect_channels(
             for _page in range(10):
                 r = await _registry_request(client, t_url, "application/json", token_cache, scope_key)
                 if r.status_code != 200:
+                    failed = failed or _page == 0
                     break
                 for name in r.json().get("tags") or []:
                     if name in wanted:
@@ -720,7 +728,10 @@ async def _detect_channels(
                 if dg and ver:
                     digest_versions[dg] = (p["nums"] if p else (), ver)
         except Exception as exc:
+            failed = True
             logger.warning("Channel detection for %s/%s failed: %s", registry, repo, exc)
+    if failed:
+        raise ChannelLookupFailed(repo)
 
     if tag not in found:
         found[tag] = {"digest": "", "updated": ""}
@@ -1249,7 +1260,16 @@ async def _check_single_app_inner(
         elif pinned_info or _parse_pre_tag(tag):
             channels = await _detect_pinned_channels(client, registry, repo, tag, token_cache, scope_key, pinned_guard)
     except Exception as exc:
-        logger.warning("Channel detection for %s failed: %s", name, exc)
+        # Lỗi tạm thời (mạng, Docker Hub giới hạn lượt gọi ngay sau khi cập nhật…) -> giữ danh sách kênh lần trước,
+        # nếu không kênh beta / dev sẽ "biến mất" cho tới lần kiểm tra sau
+        logger.warning("Channel detection for %s failed, keeping the previous channels: %s", name, exc)
+        try:
+            prev = json.loads((get_update_cache_item(name) or {}).get("channels") or "[]")
+            channels = [{**c, "current": c.get("tag") == tag} for c in prev if isinstance(c, dict)]
+            if not any(c["current"] for c in channels):
+                channels = []  # đã đổi sang tag khác -> kênh cũ không còn đúng
+        except Exception:
+            channels = []
     result["channels"] = json.dumps(channels)
     cur_channel = next((c for c in channels if c.get("current")), None)
     on_pre = bool(cur_channel and cur_channel.get("kind") == "pre") or bool(_parse_pre_tag(tag))

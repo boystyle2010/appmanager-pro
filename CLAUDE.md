@@ -46,7 +46,7 @@ python scripts/check_project.py          # import nội bộ, Jinja, file tĩnh 
 node --check app/static/js/app.js && node --check app/static/js/i18n.js
 bash scripts/verify.sh amp-test smoke    # cần Docker: build image, chạy uvicorn, smoke test
 ```
-Test kịch bản trên Docker thật (24 bộ, ~2,5 giờ): làm đúng theo **`tests/docker/README.md`** (dựng dockerd, image mirror, registry/ntfy/Gotify, build image test, chạy `run_everything.sh`, chụp ảnh). Thay đổi lớn ở cập nhật/rollback/docker run/thông báo → chạy lại các bộ liên quan trước khi phát hành; thêm kịch bản mới vào `tests/docker/` (không để chỉ trong scratchpad).
+Test kịch bản trên Docker thật (25 bộ, ~2,5 giờ): làm đúng theo **`tests/docker/README.md`** (dựng dockerd, image mirror, registry/ntfy/Gotify, build image test, chạy `run_everything.sh`, chụp ảnh). Thay đổi lớn ở cập nhật/rollback/docker run/thông báo → chạy lại các bộ liên quan trước khi phát hành; thêm kịch bản mới vào `tests/docker/` (không để chỉ trong scratchpad).
 
 ## CI (`.github/workflows/release.yml`)
 - Chạy hằng ngày, khi push `main` (bỏ qua thay đổi chỉ `*.md`/LICENSE), hoặc bấm tay (`force_release`, `version`).
