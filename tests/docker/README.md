@@ -112,7 +112,7 @@ curl -s -X POST localhost:8797/api/auth/setup -H 'Content-Type: application/json
 node $S/e2e9.js $S/shots
 ```
 Cổng cố định trong từng script: `e2e7.js` (gỡ app) :8798, `e2e9.js`/`e2e10.js` (giới hạn API) :8797,
-`e2e12.js` (thư mục dữ liệu; chạy phần đầu `t_datafolders.py` tới trước `D3` rồi `node $S/e2e12.js $S/shots http://localhost:8770 $S/OtherData`), `e2e11.js` (tab Thông báo) :8796 — cần `python $S/hook_srv.py $S/hook.log &` (webhook :8094) và chạy `node $S/e2e11.js $S/shots $S/hook.log` (tham số 2 = file log webhook).
+`e2e12.js` (9 kiểm tra + ảnh: Cài đặt dạng danh sách, Thiết lập = menu cũ, bấm ô / Nhập tay = popup mới, thêm thật 1 thư mục, ô dung lượng sao lưu; chạy `$S/df_setup.py` = phần đầu `t_datafolders.py` tới trước `D3`, rồi `node $S/e2e12.js $S/shots http://localhost:8770 $S/OtherData`), `e2e11.js` (tab Thông báo) :8796 — cần `python $S/hook_srv.py $S/hook.log &` (webhook :8094) và chạy `node $S/e2e11.js $S/shots $S/hook.log` (tham số 2 = file log webhook).
 Ảnh mới: viết `e2eN.js` theo mẫu `e2e9.js` (login bằng `ctx.request.post`, `D(...)` để mở popup/tab, `p.screenshot`).
 Gửi ảnh bằng SendUserFile; dừng uvicorn sau khi xong (`pkill -f "uvicorn app.main:app --port 879"`).
 

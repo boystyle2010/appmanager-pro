@@ -1606,9 +1606,15 @@
          style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
       <div class="sheet-handle sm:hidden"></div>
       <div class="flex items-center justify-between pb-3.5 border-b border-[var(--glass-border)]">
-        <h3 class="font-bold text-base" x-text="settingsModal.tab === 'about' ? t('tabAbout') : t('settingsTitle')"></h3>
+        <div class="flex items-center gap-2 min-w-0">
+          <button x-show="settingsModal.tab !== 'home'" @click="settingsModal.tab = 'home'" :aria-label="t('back')"
+                  class="glass-btn w-8 h-8 rounded-full flex items-center justify-center text-muted hover:text-[var(--text-primary)] shrink-0">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
+          </button>
+          <h3 class="font-bold text-base truncate" x-text="settingsSectionTitle()"></h3>
+        </div>
         <div class="flex items-center gap-2 shrink-0">
-        <button @click="settingsModal.tab = (settingsModal.tab === 'about' ? 'schedule' : 'about')" :aria-label="t('tabAbout')" :title="t('tabAbout')"
+        <button x-show="settingsModal.tab === 'home'" @click="openSettingsSection('about')" :aria-label="t('tabAbout')" :title="t('tabAbout')"
                 class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition"
                 :class="settingsModal.tab === 'about' ? 'glass-btn-primary' : 'glass-btn text-muted hover:text-[var(--text-primary)]'">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -1624,21 +1630,30 @@
         </div>
       </div>
 
-      <!-- 5 Tabs: General | Storage (Prune SSD) | Notifications | Security | History; Giới thiệu mở bằng nút ⓘ trên tiêu đề -->
-      <div class="glass-dock p-1 rounded-2xl grid grid-cols-5 gap-1 mt-4 mb-4">
-        <button @click="settingsModal.tab = 'schedule'" class="py-2 rounded-xl text-[11.5px] font-semibold transition"
-                :class="settingsModal.tab === 'schedule' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabScheduleShort')"></button>
-        <button @click="settingsModal.tab = 'storage'; loadStorage(); loadBackups()" class="py-2 rounded-xl text-xs font-semibold transition"
-                :class="settingsModal.tab === 'storage' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabStorage')"></button>
-        <button @click="settingsModal.tab = 'notify'; loadNotify()" class="py-2 rounded-xl text-xs font-semibold transition"
-                :class="settingsModal.tab === 'notify' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabNotify')"></button>
-        <button @click="settingsModal.tab = 'security'; loadSecurity()" class="py-2 rounded-xl text-xs font-semibold transition"
-                :class="settingsModal.tab === 'security' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabSecurity')"></button>
-        <button @click="settingsModal.tab = 'history'" class="py-2 rounded-xl text-xs font-semibold transition"
-                :class="settingsModal.tab === 'history' ? 'glass-btn-primary' : 'text-muted'" x-text="t('tabHistory')"></button>
-      </div>
+      <div class="flex-1 overflow-y-auto space-y-3.5 pt-4">
+        <!-- TRANG ĐẦU: danh sách mục (kiểu Cài đặt của iPhone) — mỗi mục mở trang con có nút quay lại -->
+        <template x-if="settingsModal.tab === 'home'">
+          <div class="space-y-3.5">
+            <template x-for="group in settingsMenu()" :key="group.id">
+              <div class="glass-inset rounded-2xl overflow-hidden divide-y divide-[var(--glass-border)]">
+                <template x-for="item in group.items" :key="item.tab">
+                  <button type="button" @click="openSettingsSection(item.tab)"
+                          class="w-full flex items-center gap-3 px-3.5 py-3 text-left hover:bg-white/[0.03] active:bg-white/[0.06] transition">
+                    <span class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border" :class="item.color">
+                      <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" :d="item.icon"/></svg>
+                    </span>
+                    <span class="min-w-0 flex-1">
+                      <span class="block text-[13px] font-semibold" x-text="item.title"></span>
+                      <span class="block text-[11px] truncate" :class="item.warn ? 'text-amber-300' : 'text-muted'" x-text="item.desc"></span>
+                    </span>
+                    <svg class="w-4 h-4 text-subtle shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+                  </button>
+                </template>
+              </div>
+            </template>
+          </div>
+        </template>
 
-      <div class="flex-1 overflow-y-auto space-y-3.5">
         <!-- TAB 1: PREFERENCES & SCHEDULE -->
         <template x-if="settingsModal.tab === 'schedule'">
           <div class="space-y-3.5">
@@ -1796,7 +1811,7 @@
         <!-- TAB 2: DOCKER STORAGE & PRUNE SSD -->
         <template x-if="settingsModal.tab === 'storage'">
           <div class="space-y-3.5">
-            <button type="button" @click="openDataFolders()" class="glass-inset rounded-2xl p-3.5 w-full flex items-center gap-3 text-left active:scale-[0.99] transition-transform">
+            <div role="button" tabindex="0" @click="openDataFolders()" @keydown.enter="openDataFolders()" class="glass-inset rounded-2xl p-3.5 w-full flex items-center gap-3 text-left cursor-pointer active:scale-[0.99] transition-transform">
               <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border bg-sky-500/15 border-sky-400/35 text-sky-400">
                 <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>
               </div>
@@ -1804,8 +1819,8 @@
                 <p class="text-xs font-semibold" x-text="t('dataFoldersTitle')"></p>
                 <p class="text-[11px] truncate" :class="dataSetup.status?.missing_count ? 'text-amber-300' : 'text-muted'" x-text="dataFolderSummary()"></p>
               </div>
-              <svg class="w-4 h-4 text-subtle shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
-            </button>
+              <button type="button" @click.stop="openDataSetup()" class="glass-btn px-3 py-2 rounded-xl text-[11.5px] font-semibold text-sky-400 shrink-0" x-text="t('dataSetupBtn')"></button>
+            </div>
             <div x-show="storageState.loading && !storageState.data" class="py-10 text-center text-xs text-muted" x-text="t('scanningStorage')"></div>
 
             <template x-if="storageState.data">
@@ -1993,14 +2008,14 @@
                     <label class="space-y-1">
                       <span class="block truncate text-center text-[11px] text-muted" x-text="t('bkFileMax')"></span>
                       <span class="relative block">
-                        <input type="number" min="1" max="10240" x-model.number="settingsForm.backup_file_max_mb" class="glass-input w-full rounded-xl px-8 py-2 text-xs font-mono-code text-center" />
+                        <input type="number" min="1" max="10240" x-model.number="settingsForm.backup_file_max_mb" class="glass-input w-full rounded-xl pl-2 pr-8 py-2 text-xs font-mono-code text-center" />
                         <span class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-subtle font-mono-code">MB</span>
                       </span>
                     </label>
                     <label class="space-y-1">
                       <span class="block truncate text-center text-[11px] text-muted" x-text="t('bkMax')"></span>
                       <span class="relative block">
-                        <input type="number" min="50" max="102400" x-model.number="settingsForm.backup_max_mb" class="glass-input w-full rounded-xl px-8 py-2 text-xs font-mono-code text-center" />
+                        <input type="number" min="50" max="102400" x-model.number="settingsForm.backup_max_mb" class="glass-input w-full rounded-xl pl-2 pr-8 py-2 text-xs font-mono-code text-center" />
                         <span class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-subtle font-mono-code">MB</span>
                       </span>
                     </label>
@@ -2816,7 +2831,7 @@
               <span x-text="t('dataMountedNow') + ': '"></span><span class="font-mono-code" x-text="(dataSetup.status?.mounted || []).join(', ')"></span>
             </div>
             <div class="grid grid-cols-2 gap-2.5">
-              <button type="button" @click="dataSetup.step = 'manual'; dataSetup.error = ''"
+              <button type="button" @click="dataSetup.open = false; openDataFolders('add')"
                       class="glass-inset rounded-2xl p-3.5 text-left border border-[var(--glass-border)] hover:border-sky-400/50 transition space-y-1.5">
                 <svg class="w-5 h-5 text-sky-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>
                 <span class="block text-xs font-semibold" x-text="t('dataManual')"></span>
@@ -2914,7 +2929,7 @@
         </div>
         <div class="min-w-0">
           <h3 class="font-bold text-[15px] leading-tight"
-              x-text="dataFolders.mode === 'edit' ? t('dfEdit') : dataFolders.mode === 'remove' ? t('dfRemoveTitle') : t('dataFoldersTitle')"></h3>
+              x-text="dataFolders.mode === 'edit' ? t('dfEdit') : dataFolders.mode === 'add' ? t('dfAddFolder') : dataFolders.mode === 'remove' ? t('dfRemoveTitle') : t('dataFoldersTitle')"></h3>
           <p class="text-[11px] text-muted" x-show="dataFolders.mode === 'list'" x-text="dataFolderSummary()"></p>
         </div>
       </div>
@@ -2953,16 +2968,17 @@
         </template>
 
         <!-- Sửa đường dẫn -->
-        <template x-if="dataFolders.mode === 'edit'">
+        <template x-if="dataFolders.mode === 'edit' || dataFolders.mode === 'add'">
           <div class="space-y-2.5">
-            <div>
+            <p x-show="dataFolders.mode === 'add'" class="text-muted leading-relaxed" x-text="t('dfAddIntro')"></p>
+            <div x-show="dataFolders.mode === 'edit'">
               <p class="text-[10.5px] text-subtle mb-1" x-text="t('dfCurrent')"></p>
               <p class="font-mono-code break-all text-muted" x-text="dataFolders.folder?.path"></p>
             </div>
             <div>
-              <p class="text-[10.5px] text-subtle mb-1" x-text="t('dfNewPath')"></p>
+              <p class="text-[10.5px] text-subtle mb-1" x-text="dataFolders.mode === 'add' ? t('dfFolderPath') : t('dfNewPath')"></p>
               <div class="flex gap-2">
-                <input type="text" x-model="dataFolders.newPath" @input="dataFolders.check = null" @keydown.enter="dataFolderCheck()"
+                <input type="text" x-model="dataFolders.newPath" @input="dataFolders.check = null" @keydown.enter="dataFolderCheck()" placeholder="/DATA/AppData"
                        autocapitalize="off" autocorrect="off" spellcheck="false"
                        class="glass-input flex-1 min-w-0 rounded-xl px-3 py-2 text-xs font-mono-code" />
                 <button type="button" @click="dataFolderCheck()" :disabled="dataFolders.busy || !dataFolders.newPath.trim()"
@@ -2975,7 +2991,7 @@
         </template>
 
         <!-- Sẽ thực hiện (sửa / gỡ) -->
-        <div x-show="dataFolders.mode === 'remove' || (dataFolders.mode === 'edit' && dataFolders.check)"
+        <div x-show="dataFolders.mode === 'remove' || (dataFolders.mode !== 'list' && dataFolders.check)"
              class="rounded-2xl border border-[var(--glass-border)] p-3 space-y-1.5 text-[11px]">
           <p x-show="dataFolders.mode === 'remove'" class="font-mono-code break-all text-[11.5px] pb-1" x-text="dataFolders.folder?.path"></p>
           <p class="text-[10.5px] font-semibold uppercase tracking-wider text-muted" x-text="t('dfPlanTitle')"></p>
@@ -2999,12 +3015,12 @@
           <button @click="dataFolderAdd()" class="glass-btn-primary py-2.5 px-3 rounded-xl text-xs font-semibold" x-text="t('dfAddFolder')"></button>
         </template>
         <template x-if="dataFolders.mode !== 'list'">
-          <button @click="dataFolders.mode = 'list'; dataFolders.error = ''" :disabled="dataFolders.busy"
+          <button @click="dataFolders.mode = 'list'; dataFolders.error = ''; dataFolders.check = null" :disabled="dataFolders.busy"
                   class="glass-btn py-2.5 px-3 rounded-xl text-xs font-semibold disabled:opacity-50" x-text="t('back')"></button>
         </template>
-        <template x-if="dataFolders.mode === 'edit'">
+        <template x-if="dataFolders.mode === 'edit' || dataFolders.mode === 'add'">
           <button @click="confirmDataFolderChange()" :disabled="dataFolders.busy || !dataFolders.check"
-                  class="glass-btn-update py-2.5 px-3 rounded-xl text-xs font-semibold disabled:opacity-50" x-text="dataFolders.busy && dataFolders.check ? '…' : t('dfSaveBtn')"></button>
+                  class="glass-btn-update py-2.5 px-3 rounded-xl text-xs font-semibold disabled:opacity-50" x-text="dataFolders.busy && dataFolders.check ? '…' : t(dataFolders.mode === 'add' ? 'dfAddBtn' : 'dfSaveBtn')"></button>
         </template>
         <template x-if="dataFolders.mode === 'remove'">
           <button @click="confirmDataFolderChange()" :disabled="dataFolders.busy"

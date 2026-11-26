@@ -56,7 +56,7 @@
         },
         taskModal: { open: false, connected: false, data: null, ws: null },
         taskSort: 'cpu',
-        settingsModal: { open: false, tab: 'schedule' },
+        settingsModal: { open: false, tab: 'home' },
         settingsForm: {
           check_interval_hours: 6, auto_update_enabled: false,
           auto_update_time: '03:30', prune_old_images: true, auto_rollback: true, health_wait_seconds: 25,
@@ -1160,8 +1160,8 @@
           try { const res = await fetch('/api/setup/data-status'); if (res.ok) this.dataSetup.status = await res.json(); } catch (_) {}
         },
 
-        async openDataFolders() {
-          Object.assign(this.dataFolders, { open: true, mode: 'list', folder: null, newPath: '', check: null, busy: true, error: '' });
+        async openDataFolders(mode = 'list') {
+          Object.assign(this.dataFolders, { open: true, mode, folder: null, newPath: '', check: null, busy: true, error: '' });
           await this.refreshDataStatus();
           this.dataFolders.busy = false;
         },
@@ -1175,8 +1175,7 @@
         },
 
         dataFolderAdd() {
-          this.dataFolders.open = false;
-          this.openDataSetup();
+          Object.assign(this.dataFolders, { mode: 'add', folder: null, newPath: '', check: null, error: '' });
         },
 
         async dataFolderCheck() {
@@ -1185,7 +1184,8 @@
           try {
             const { res, data } = await this._postJson('/api/setup/data-check', { path: d.newPath });
             if (!res.ok) throw new Error(data.detail || 'Failed');
-            if (data.path === d.folder.path) throw new Error(this.t('dataFolderSame'));
+            if (d.mode === 'edit' && data.path === d.folder.path) throw new Error(this.t('dataFolderSame'));
+            if (d.mode === 'add' && data.mounted) throw new Error(this.t('dfAlreadyAdded'));
             d.check = data;
           } catch (err) { d.error = err.message; }
           finally { d.busy = false; }
@@ -1201,6 +1201,17 @@
 
         dataFolderPlan() {
           const d = this.dataFolders, f = d.folder;
+          if (d.mode === 'add') {
+            if (!d.check) return [];
+            const n = (d.check.covers_apps || []).length;
+            return [
+              { tone: 'ok', text: this.t('dfPlanAdd').replace('{p}', d.check.path) },
+              { tone: 'info', text: this.t('dfPlanFound').replace('{n}', d.check.count ?? 0) },
+              ...(n ? [{ tone: 'ok', text: this.t('dfPlanGain').replace('{n}', n).replace('{apps}', d.check.covers_apps.slice(0, 8).join(', ') + (n > 8 ? '…' : '')) }] : []),
+              { tone: 'info', text: this.t('dfPlanNoDelete') },
+              { tone: 'warn', text: this.t('dfPlanRestart') },
+            ];
+          }
           if (!f) return [];
           const plan = [];
           if (d.mode === 'edit') {
@@ -1218,6 +1229,10 @@
 
         confirmDataFolderChange() {
           const d = this.dataFolders;
+          if (d.mode === 'add') {
+            this.askConfirm({ tone: 'update', title: this.t('dfAddTitle'), message: d.check.path, confirmLabel: this.t('dfAddBtn'), onConfirm: () => this.applyDataFolderChange() });
+            return;
+          }
           const edit = d.mode === 'edit';
           this.askConfirm({
             tone: edit ? 'update' : 'danger',
@@ -1231,7 +1246,7 @@
         async applyDataFolderChange() {
           const d = this.dataFolders;
           d.busy = true; d.error = '';
-          const body = { remove: [d.folder.path], add: d.mode === 'edit' ? [d.check.path] : [] };
+          const body = d.mode === 'add' ? { remove: [], add: [d.check.path] } : { remove: [d.folder.path], add: d.mode === 'edit' ? [d.check.path] : [] };
           try {
             const { res, data } = await this._postJson('/api/setup/data-update', body);
             if (!res.ok) throw new Error(data.detail || 'Failed');
@@ -1657,7 +1672,8 @@
 
         // ---------------- Settings ----------------
         async openSettings() {
-          this.settingsModal = { open: true, tab: 'schedule' };
+          this.settingsModal = { open: true, tab: 'home' };
+          this.refreshDataStatus();
           try {
             const res = await fetch('/api/settings');
             if (res.status === 401) { window.location.href = '/login'; return; }
@@ -1667,6 +1683,52 @@
             this.updateHistory = data.history || [];
           } catch (err) { this.showToast(err.message); }
           this.loadApiStatus();
+        },
+
+        openSettingsSection(tab) {
+          this.settingsModal.tab = tab;
+          if (tab === 'storage') { this.loadStorage(); this.loadBackups(); this.refreshDataStatus(); }
+          else if (tab === 'notify') this.loadNotify();
+          else if (tab === 'security') this.loadSecurity();
+        },
+
+        settingsSectionTitle() {
+          return {
+            home: this.t('settingsTitle'), schedule: this.t('setGeneral'), storage: this.t('setStorage'),
+            notify: this.t('setNotify'), security: this.t('tabSecurity'), history: this.t('tabHistory'), about: this.t('tabAbout'),
+          }[this.settingsModal.tab] || this.t('settingsTitle');
+        },
+
+        // Trang đầu Cài đặt: nhóm mục (thêm mục mới cho 0.17+ ở đây: API token, máy chủ…)
+        settingsMenu() {
+          const st = this.dataSetup.status;
+          const I = {
+            gear: 'M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28zM15 12a3 3 0 11-6 0 3 3 0 016 0z',
+            disk: 'M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 5.625c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125',
+            bell: 'M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0',
+            lock: 'M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z',
+            clock: 'M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z',
+            info: 'M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z',
+          };
+          // tên class viết đầy đủ để Tailwind biên dịch được
+          const C = { sky: 'bg-sky-500/15 border-sky-400/35 text-sky-400', emerald: 'bg-emerald-500/15 border-emerald-400/35 text-emerald-400',
+            amber: 'bg-amber-500/15 border-amber-400/35 text-amber-400', rose: 'bg-rose-500/15 border-rose-400/35 text-rose-400',
+            violet: 'bg-violet-500/15 border-violet-400/35 text-violet-400', slate: 'bg-slate-500/15 border-slate-400/35 text-slate-300' };
+          const c = (x) => C[x];
+          return [
+            { id: 'main', items: [
+              { tab: 'schedule', title: this.t('setGeneral'), desc: this.t('setGeneralDesc'), icon: I.gear, color: c('sky') },
+              { tab: 'storage', title: this.t('setStorage'), desc: st?.missing_count ? this.t('dataFoldersMissing').replace('{n}', st.missing_count) : this.t('setStorageDesc'), warn: !!st?.missing_count, icon: I.disk, color: c('emerald') },
+              { tab: 'notify', title: this.t('setNotify'), desc: this.t('setNotifyDesc'), icon: I.bell, color: c('amber') },
+            ] },
+            { id: 'safety', items: [
+              { tab: 'security', title: this.t('tabSecurity'), desc: this.t('setSecurityDesc'), icon: I.lock, color: c('rose') },
+              { tab: 'history', title: this.t('tabHistory'), desc: this.t('setHistoryDesc'), icon: I.clock, color: c('violet') },
+            ] },
+            { id: 'about', items: [
+              { tab: 'about', title: this.t('tabAbout'), desc: this.t('setAboutDesc'), icon: I.info, color: c('slate') },
+            ] },
+          ];
         },
 
         // ---------------- Thông báo ----------------
