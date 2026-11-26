@@ -133,6 +133,7 @@ Cổng cố định trong từng script: `e2e7.js` (gỡ app) :8798, `e2e9.js`/`
 Gửi ảnh bằng SendUserFile; dừng uvicorn sau khi xong (`pkill -f "uvicorn app.main:app --port 879"`).
 
 ## 4. Lưu ý môi trường sandbox (đã gặp)
+- Gotify trả 401 ở bộ 15 sau khi dockerd khởi động lại (container không có ổ lưu → mất token): chạy lại 3 dòng `APPTOK=` / `CLITOK=` / `echo … > $S/gotify.tok` ở mục 1.
 - `dockerd` chết khi khởi động không có `setsid` → mọi test lỗi "Cannot connect to the Docker daemon": chạy lại lệnh ở mục 1.
 - Bộ 9/10 tắt/bật dockerd: container không có `--restart` sẽ dừng (đã gặp: ntfy/Gotify dừng làm bộ 15 lỗi).
 - Cổng proxy (`HTTPS_PROXY`) có thể đổi giữa các lần: `start_amp.sh` đọc lúc chạy; AppManager cũ trong container dùng proxy cũ → chạy lại `start_amp.sh`.
