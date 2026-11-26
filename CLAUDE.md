@@ -44,7 +44,7 @@ python scripts/check_project.py          # import nội bộ, Jinja, file tĩnh 
 node --check app/static/js/app.js && node --check app/static/js/i18n.js
 bash scripts/verify.sh amp-test smoke    # cần Docker: build image, chạy uvicorn, smoke test
 ```
-Test kịch bản trên Docker thật (15 bộ, ~2 giờ): làm đúng theo **`tests/docker/README.md`** (dựng dockerd, image mirror, registry/ntfy/Gotify, build image test, chạy `run_everything.sh`, chụp ảnh). Thay đổi lớn ở cập nhật/rollback/docker run/thông báo → chạy lại các bộ liên quan trước khi phát hành; thêm kịch bản mới vào `tests/docker/` (không để chỉ trong scratchpad).
+Test kịch bản trên Docker thật (18 bộ, ~2 giờ): làm đúng theo **`tests/docker/README.md`** (dựng dockerd, image mirror, registry/ntfy/Gotify, build image test, chạy `run_everything.sh`, chụp ảnh). Thay đổi lớn ở cập nhật/rollback/docker run/thông báo → chạy lại các bộ liên quan trước khi phát hành; thêm kịch bản mới vào `tests/docker/` (không để chỉ trong scratchpad).
 
 ## CI (`.github/workflows/release.yml`)
 - Chạy hằng ngày, khi push `main` (bỏ qua thay đổi chỉ `*.md`/LICENSE), hoặc bấm tay (`force_release`, `version`).
@@ -58,10 +58,10 @@ Test kịch bản trên Docker thật (15 bộ, ~2 giờ): làm đúng theo **`t
 
 ## Việc còn mở
 - Trivy: `golang.org/x/net` v0.60.0 trong `docker-compose` (CVE-2026-78661, tạm bỏ qua trong `.trivyignore` tới 2027-02-28) — chờ Docker Compose phát hành bản dùng x/net ≥ 0.62.0 (v5.8.0 và nhánh main ngày 2026-11-18 vẫn là v0.60.0).
-- Phiên bản đã phát hành gần nhất: **v0.16.0** (2026-11-25, thông báo: Telegram/Discord/ntfy/Gotify/Webhook). Trước đó v0.14.1 (gồm cả phần chống giới hạn API định làm 0.15.0 — chủ repo đồng ý bỏ qua số 0.15.0).
-- 0.16.0 đã test thật trên Docker trong sandbox: 15 bộ `tests/docker/` đều đạt (bộ 2 = 41/42, `P4` là điều kiện test đã biết).
+- Phiên bản đã phát hành gần nhất: **v0.17.0** (2026-11-26: API token, API cập nhật chạy nền, `/api/health`, trang `/docs`, Cài đặt dạng danh sách, quản lý thư mục dữ liệu). Trước đó v0.16.0 (thông báo), v0.14.1 (gồm phần chống giới hạn API định làm 0.15.0 — bỏ qua số 0.15.0).
+- 0.17.0 đã test thật trên Docker trong sandbox: 18 bộ `tests/docker/` đều đạt (bộ 2 = 41/42, `P4` là điều kiện test đã biết). Chưa thử với Home Assistant / Uptime Kuma thật và máy CasaOS của chủ repo.
 
 ### Lộ trình tiếp theo (đã thống nhất với chủ repo)
-- **0.17 — API token cho tự động hoá**: tạo token trong Cài đặt → Bảo mật (tên, quyền: chỉ đọc / cập nhật / toàn quyền, hạn dùng, giới hạn IP tuỳ chọn); token chỉ hiện 1 lần, server lưu mã băm; header `Authorization: Bearer amp_…`; ghi audit log; tài liệu API (`/docs` của FastAPI khi đã đăng nhập); dùng cho Home Assistant, script/CI, Uptime Kuma (`/api/health`).
+- ~~0.17 — API token~~: đã xong (v0.17.0).
 - **0.18+ — quản lý nhiều máy chủ** (mô hình agent): mỗi máy chạy AppManager; một máy "chính" thêm máy khác bằng địa chỉ + API token, gộp danh sách app, bấm cập nhật/khôi phục từ xa; việc thật vẫn do AppManager từng máy làm; KHÔNG mở Docker socket ra mạng.
 - Ý tưởng khác: sao lưu/khôi phục cấu hình AppManager; tìm & tải log container; Podman/GPU/ARM thật/Docker cũ chưa test được trong sandbox (cần chủ repo thử trên máy thật).
