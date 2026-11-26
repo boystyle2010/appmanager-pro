@@ -15,7 +15,7 @@ const results = []; const check = (n, c, d = '') => { results.push(!!c); console
   await p.goto(B + '/'); await sleep(2500); await D("d.lang = 'vi'; d.dataSetup.open = false");
   await D('d.openSettings()'); await sleep(1500);
   await p.screenshot({ path: OUT + '/s0-settings-home.png' });
-  check('Settings opens on the section list', await D("return d.settingsModal.tab === 'home' && document.querySelectorAll('[x-text=\"item.title\"]').length === 6"));
+  check('Settings opens on the section list', await D("return d.settingsModal.tab === 'home' && document.querySelectorAll('[x-text=\"item.title\"]').length === 7"));
   await p.getByText('Bộ nhớ & SSD', { exact: true }).click(); await sleep(1500);
   check('Tapping a row opens the section with a back button', await D("return d.settingsModal.tab === 'storage'"));
   await p.screenshot({ path: OUT + '/s1-storage.png' });
