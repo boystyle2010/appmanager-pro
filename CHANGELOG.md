@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.18.4
+
+*Released: 2026-11-26*
+
+### 📦 Component & Version Matrix
+
+- **App Release:** Bumped from `v0.18.3` ➡️ `v0.18.4`
+- **Supported Architectures:** `linux/amd64` (x86_64), `linux/arm64` (ARM64) & `linux/arm/v7` (ARMv7 32-bit) *(Multi-arch GHCR Image)*
+- **Python Base Image:** `python 3.15.2`
+- **Docker CLI:** `docker 29.10.1`
+- **Core Python Stack:** `FastAPI 0.165.0` • `Uvicorn 0.54.0` • `Docker SDK 7.2.0` • `ruamel.yaml 0.19.1` • `Argon2 25.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.28.1` • `APScheduler 3.11.3` • `segno 1.6.6`
+- **Frontend Libraries:** `Alpine.js 3.17.5` • `Tailwind CSS 4.3.5` • `marked 18.3.0` • `DOMPurify 3.5.0`
+
+### 🚀 What's Changed
+
+- Check one app for updates: "Check for updates" in each app's ⋯ menu and a refresh button in the update window re-check only that app right away; also `POST /api/apps/{name}/check` for API Tokens with the Update permission.
+
 ## 0.18.3
 
 *Released: 2026-11-26*
