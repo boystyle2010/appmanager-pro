@@ -1,1 +1,3 @@
 # Ghi chú cho bản phát hành kế tiếp — mỗi dòng bắt đầu bằng "- "
+- 11 new notification channels — 16 in total: Slack, Microsoft Teams (Workflows webhook, Adaptive Card), Google Chat, Mattermost (also Rocket.Chat webhooks), Matrix, Signal (signal-cli-rest-api), Bark (iPhone), Pushover, Pushbullet, Email (SMTP with STARTTLS / SSL / none) and Apprise API (100+ more services such as WhatsApp, LINE and SMS).
+- The channel picker is grouped (chat apps / push to your phone / other), marks the channels that have an iPhone app and says on which devices each one works; Gotify is marked as Android / web only and the ntfy hint explains `upstream-base-url` for iPhones with a self-hosted ntfy server.

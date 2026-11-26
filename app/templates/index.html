@@ -2294,19 +2294,33 @@
               <template x-if="notifyState.edit">
                 <div class="rounded-xl border border-sky-400/40 bg-sky-500/5 p-3 space-y-2.5">
                   <p class="text-xs font-semibold" x-text="notifyState.edit.id ? t('notifyEditTitle') : t('notifyAddTitle')"></p>
-                  <div class="grid grid-cols-5 gap-1">
-                    <template x-for="tp in ['telegram', 'discord', 'ntfy', 'gotify', 'webhook']" :key="tp">
-                      <button type="button" @click="notifyState.edit.type = tp" :disabled="!!notifyState.edit.id"
-                              class="py-1.5 rounded-lg text-[10px] font-semibold border transition disabled:opacity-60"
-                              :class="notifyState.edit.type === tp ? 'border-sky-400/60 bg-sky-500/15 text-sky-200' : 'border-[var(--glass-border)] text-muted'"
-                              x-text="notifyTypeLabel(tp)"></button>
-                    </template>
-                  </div>
+                  <p x-show="!notifyState.edit.id" class="text-[10px] text-subtle flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span><span x-text="t('npLegend')"></span></p>
+                  <template x-for="g in notifyGroups()" :key="g.id">
+                    <div x-show="!notifyState.edit.id || g.types.includes(notifyState.edit.type)" class="space-y-1">
+                      <p class="text-[10px] font-semibold uppercase tracking-wider text-subtle" x-text="t('ng_' + g.id)"></p>
+                      <div class="grid grid-cols-4 gap-1">
+                        <template x-for="tp in g.types" :key="tp">
+                          <button type="button" @click="notifyState.edit.type = tp; if (tp === 'email' && !notifyState.edit.config.security) notifyState.edit.config.security = 'starttls'"
+                                  :disabled="!!notifyState.edit.id && notifyState.edit.type !== tp"
+                                  class="relative py-1.5 px-1 rounded-lg text-[10px] font-semibold border transition disabled:opacity-40 truncate"
+                                  :class="notifyState.edit.type === tp ? 'border-sky-400/60 bg-sky-500/15 text-sky-200' : 'border-[var(--glass-border)] text-muted'">
+                            <span x-text="notifyTypeLabel(tp)"></span>
+                            <span x-show="notifyPlatforms(tp).includes('ios')" class="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-400" :title="t('npIos')"></span>
+                          </button>
+                        </template>
+                      </div>
+                    </div>
+                  </template>
+                  <p class="text-[10.5px] leading-snug" :class="notifyPlatforms(notifyState.edit.type).includes('ios') || notifyState.edit.type === 'webhook' ? 'text-emerald-300' : 'text-amber-300'"
+                     x-text="notifyState.edit.type === 'webhook' ? t('npWebhook') : t('npOn') + ' ' + notifyPlatforms(notifyState.edit.type).map(x => t('np_' + x)).join(' · ') + (notifyPlatforms(notifyState.edit.type).includes('ios') ? '' : ' — ' + t('npNoIos'))"></p>
                   <input type="text" x-model="notifyState.edit.name" :placeholder="t('notifyName')" class="glass-input w-full rounded-xl px-3 py-2 text-xs" />
                   <template x-for="f in notifyFields(notifyState.edit.type)" :key="notifyState.edit.type + f.k">
                     <label class="block space-y-1">
                       <span class="text-[10.5px] font-semibold text-muted" x-text="t('nf_' + f.k) + (f.optional ? ' (' + t('optional') + ')' : '')"></span>
-                      <input :type="f.secret ? 'password' : 'text'" x-model="notifyState.edit.config[f.k]" autocomplete="new-password"
+                      <select x-show="f.options" x-model="notifyState.edit.config[f.k]" class="glass-input w-full rounded-xl px-3 py-2 text-xs">
+                        <template x-for="o in (f.options || [])" :key="o"><option :value="o" x-text="t('nopt_' + o)"></option></template>
+                      </select>
+                      <input x-show="!f.options" :type="f.secret ? 'password' : 'text'" x-model="notifyState.edit.config[f.k]" autocomplete="new-password"
                              autocapitalize="off" autocorrect="off" spellcheck="false"
                              :placeholder="f.secret && notifyState.edit.config['has_' + f.k] ? '•••••••• (' + t('notifySaved') + ')' : f.ph"
                              class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />

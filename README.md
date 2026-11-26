@@ -260,7 +260,17 @@ docker compose pull && docker compose up -d
 
 ### Notifications
 
-*Settings → Notify*: add **Telegram**, **Discord**, **ntfy**, **Gotify** or a generic **Webhook** (JSON, optional HMAC signature in `X-AppManager-Signature`) and choose the events per channel:
+*Settings → Notifications*: add one or more channels and choose the events per channel. 16 channel types:
+
+| Group | Channels | iPhone |
+|---|---|---|
+| Chat apps | **Telegram**, **Discord**, **Slack**, **Microsoft Teams** (Workflows webhook), **Google Chat**, **Mattermost** (also Rocket.Chat webhooks), **Matrix**, **Signal** (via signal-cli-rest-api) | ✅ all |
+| Push to your phone | **ntfy**, **Bark** (iPhone only), **Pushover**, **Pushbullet**, **Gotify** | ✅ ntfy, Bark, Pushover — ❌ Gotify (Android / web only), Pushbullet (mainly Android / browser) |
+| Other | **Email** (SMTP: STARTTLS / SSL / none), **Apprise API** (100+ more services: WhatsApp, LINE, SMS…), generic **Webhook** (JSON, optional HMAC signature in `X-AppManager-Signature`) | ✅ Email, Apprise |
+
+Self-hosted ntfy + iPhone: add `upstream-base-url: "https://ntfy.sh"` to the ntfy `server.yml` so iPhones are woken up instantly (only a wake-up signal goes through ntfy.sh; the message stays on your server).
+
+Events:
 
 | Event | When |
 |---|---|

@@ -44,6 +44,7 @@ pgrep -x dockerd || (setsid nohup dockerd > $S/dockerd.log 2>&1 < /dev/null &); 
 for i in nginx:1.26-alpine nginx:1.27-alpine busybox:1.35 busybox:1.36 busybox:1.38 redis:7.2-alpine registry:2 httpd:2 \
          postgres:16.4-alpine postgres:16.6-alpine python:3.15.2-slim docker:29.10.0-cli; do docker pull -q mirror.gcr.io/library/$i; done
 docker pull -q mirror.gcr.io/binwiederhier/ntfy:latest; docker pull -q mirror.gcr.io/gotify/server:latest
+docker pull -q mirror.gcr.io/axllent/mailpit:latest; docker pull -q mirror.gcr.io/caronc/apprise:latest   # bộ 21 (mirror có thể báo 'Quota exceeded': đợi ~1 phút rồi tải lại)
 
 # test servers — BẮT BUỘC --restart unless-stopped (bộ 9/10 tắt/bật dockerd)
 docker run -d --name registry --restart unless-stopped -p 5000:5000 mirror.gcr.io/library/registry:2
@@ -99,6 +100,8 @@ Xem chi tiết lỗi một bộ: chạy đúng dòng đó nhưng bỏ `| grep ..
 | 18 | `e2e12.js` + `e2e13.js` | giao diện 0.17: Cài đặt dạng danh sách, thư mục dữ liệu (AppManager compose :8770), API token + trang tài liệu (uvicorn :8794) | 9/9 + 8/8 |
 | 19 | `t_servers.py` (`setup.sh`) | 0.18 nhiều máy chủ: máy chính :8793 + máy phụ HTTP :8792 + HTTPS tự ký :8791 (uvicorn từ repo, cùng Docker), máy giả bản cũ / chuyển hướng :8790, địa chỉ chết :8799; Token sai / chỉ đọc / bị xoá, cập nhật + start/stop/restart thật từ xa, audit 2 máy, bảo mật | 26/26 |
 | 20 | `e2e14.js` (+`srv_setup.sh`) | giao diện nhiều máy chủ: Cài đặt → Máy chủ (giải thích giao thức), thêm máy, thanh chọn máy, cập nhật thật từ xa | 7/7 |
+| 21 | `t_notify2.py` | 11 kênh thông báo mới: Email qua Mailpit thật (SMTP :1025, xem :8025), Apprise API thật (:8095, cần `-e IPV4_ONLY=yes` vì sandbox không có IPv6) chuyển tiếp tới ntfy thật, Slack/Teams/Google Chat/Mattermost/Matrix/Signal/Bark/Pushover/Pushbullet đúng định dạng API (giả lập `httpx.MockTransport`); tự dựng và xoá Mailpit/Apprise | 18/18 |
+| 22 | `e2e15.js` | giao diện chọn kênh (3 nhóm, dấu iPhone, "Nhận được trên", form Email) | 5/5 |
 
 Fixture: `setup.sh` — `web` (nginx 1.26, 2 mạng, IP tĩnh 172.30.0.50, alias, volume tên + ẩn danh, bind `$S/bind`
 chứa `hello-from-bind`, healthcheck), `bb-sidecar` (`--network container:web`), `bb-fail` (bản 1.36 sẽ chết → rollback),

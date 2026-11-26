@@ -1994,14 +1994,55 @@
           return {
             telegram: [{ k: 'bot_token', secret: true, ph: '123456789:AA…' }, { k: 'chat_id', ph: '123456789' }],
             discord: [{ k: 'webhook_url', secret: true, ph: 'https://discord.com/api/webhooks/…' }],
+            slack: [{ k: 'webhook_url', secret: true, ph: 'https://hooks.slack.com/services/…' }],
+            teams: [{ k: 'webhook_url', secret: true, ph: 'https://….logic.azure.com/workflows/…' }],
+            googlechat: [{ k: 'webhook_url', secret: true, ph: 'https://chat.googleapis.com/v1/spaces/…' }],
+            mattermost: [{ k: 'webhook_url', secret: true, ph: 'https://mattermost.example.com/hooks/…' }],
+            matrix: [{ k: 'server', ph: 'https://matrix.org' }, { k: 'access_token', secret: true, ph: 'syt_…' }, { k: 'room_id', ph: '!abc123:matrix.org' }],
+            signal: [{ k: 'server', ph: 'http://192.168.1.10:8080' }, { k: 'number', ph: '+84901234567' }, { k: 'recipients', ph: '+84912345678, group.abc…' }],
             ntfy: [{ k: 'server', ph: 'https://ntfy.sh', optional: true }, { k: 'topic', ph: 'appmanager-…' }, { k: 'token', secret: true, ph: 'tk_…', optional: true }],
             gotify: [{ k: 'server', ph: 'https://gotify.example.com' }, { k: 'app_token', secret: true, ph: 'A…' }],
+            bark: [{ k: 'server', ph: 'https://api.day.app', optional: true }, { k: 'device_key', secret: true, ph: 'xxxxxxxxxxxxxxxxxxxx' }],
+            pushover: [{ k: 'app_token', secret: true, ph: 'azGDORePK8gMaC0QOYAMyEEuzJnyUi' }, { k: 'user_key', secret: true, ph: 'uQiRzpo4DXghDmr9QzzfQu27cmVRsG' }],
+            pushbullet: [{ k: 'access_token', secret: true, ph: 'o.xxxxxxxx' }],
+            email: [{ k: 'host', ph: 'smtp.gmail.com' }, { k: 'security', options: ['starttls', 'ssl', 'none'] }, { k: 'port', ph: '587', optional: true },
+                    { k: 'username', ph: 'you@gmail.com', optional: true }, { k: 'password', secret: true, ph: '…', optional: true },
+                    { k: 'sender', ph: 'AppManager <you@gmail.com>' }, { k: 'to', ph: 'you@example.com, …' }],
+            apprise: [{ k: 'server', ph: 'http://192.168.1.10:8000' }, { k: 'key', ph: 'appmanager', optional: true }, { k: 'urls', secret: true, ph: 'whatsapp://…, line://…', optional: true }],
             webhook: [{ k: 'url', ph: 'https://example.com/hook' }, { k: 'secret', secret: true, ph: '…', optional: true }],
           }[type] || [];
         },
-        notifyTypeLabel(t) { return { telegram: 'Telegram', discord: 'Discord', ntfy: 'ntfy', gotify: 'Gotify', webhook: 'Webhook' }[t] || t; },
-        notifyTypeShort(t) { return { telegram: 'TG', discord: 'DC', ntfy: 'NT', gotify: 'GO', webhook: 'WH' }[t] || '?'; },
-        notifyColor(t) { return { telegram: 'bg-sky-500', discord: 'bg-indigo-500', ntfy: 'bg-emerald-600', gotify: 'bg-cyan-600', webhook: 'bg-slate-600' }[t] || 'bg-slate-600'; },
+        notifyGroups() {
+          return [
+            { id: 'chat', types: ['telegram', 'discord', 'slack', 'teams', 'googlechat', 'mattermost', 'matrix', 'signal'] },
+            { id: 'push', types: ['ntfy', 'bark', 'pushover', 'pushbullet', 'gotify'] },
+            { id: 'other', types: ['email', 'apprise', 'webhook'] },
+          ];
+        },
+        // Thiết bị nhận được (để người dùng iPhone biết chọn kênh nào)
+        notifyPlatforms(t) {
+          return {
+            telegram: 'ios,android,web', discord: 'ios,android,web', slack: 'ios,android,web', teams: 'ios,android,web',
+            googlechat: 'ios,android,web', mattermost: 'ios,android,web', matrix: 'ios,android,web', signal: 'ios,android',
+            ntfy: 'ios,android,web', bark: 'ios', pushover: 'ios,android,web', pushbullet: 'android,web', gotify: 'android,web',
+            email: 'ios,android,web', apprise: 'ios,android,web', webhook: '',
+          }[t].split(',').filter(Boolean);
+        },
+        notifyTypeLabel(t) {
+          return { telegram: 'Telegram', discord: 'Discord', slack: 'Slack', teams: 'Teams', googlechat: 'Google Chat', mattermost: 'Mattermost',
+                   matrix: 'Matrix', signal: 'Signal', ntfy: 'ntfy', gotify: 'Gotify', bark: 'Bark', pushover: 'Pushover', pushbullet: 'Pushbullet',
+                   email: 'Email', apprise: 'Apprise', webhook: 'Webhook' }[t] || t;
+        },
+        notifyTypeShort(t) {
+          return { telegram: 'TG', discord: 'DC', slack: 'SL', teams: 'MT', googlechat: 'GC', mattermost: 'MM', matrix: 'MX', signal: 'SG',
+                   ntfy: 'NT', gotify: 'GO', bark: 'BK', pushover: 'PO', pushbullet: 'PB', email: '@', apprise: 'AP', webhook: 'WH' }[t] || '?';
+        },
+        notifyColor(t) {
+          return { telegram: 'bg-sky-500', discord: 'bg-indigo-500', slack: 'bg-fuchsia-700', teams: 'bg-violet-600', googlechat: 'bg-green-600',
+                   mattermost: 'bg-blue-700', matrix: 'bg-zinc-700', signal: 'bg-blue-500', ntfy: 'bg-emerald-600', gotify: 'bg-cyan-600',
+                   bark: 'bg-orange-500', pushover: 'bg-sky-700', pushbullet: 'bg-teal-600', email: 'bg-rose-600', apprise: 'bg-amber-600',
+                   webhook: 'bg-slate-600' }[t] || 'bg-slate-600';
+        },
 
         async loadNotify() {
           const n = this.notifyState;
@@ -2020,7 +2061,7 @@
         newNotifyChannel() {
           const n = this.notifyState;
           n.msg = '';
-          n.edit = { id: '', type: 'telegram', name: '', enabled: true, events: [...n.events], config: { server: '' } };
+          n.edit = { id: '', type: 'telegram', name: '', enabled: true, events: [...n.events], config: { server: '', security: 'starttls' } };
         },
         editNotifyChannel(ch) {
           this.notifyState.msg = '';

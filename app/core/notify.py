@@ -1,5 +1,6 @@
 """
-Thông báo: Telegram, Discord, ntfy, Gotify, Webhook.
+Thông báo: Telegram, Discord, Slack, Microsoft Teams, Google Chat, Mattermost, Matrix, Signal, ntfy, Gotify,
+Bark (iPhone), Pushover, Pushbullet, Email (SMTP), Apprise (cổng tới hơn 100 dịch vụ khác) và Webhook.
 
 - Mỗi kênh chọn sự kiện riêng; gửi trong luồng nền (không làm chậm cập nhật), thử lại khi lỗi mạng.
 - Giờ im lặng: tin QUAN TRỌNG (lỗi cập nhật, app gặp sự cố, bảo mật, ổ đĩa) vẫn gửi ngay; tin thường
@@ -25,13 +26,21 @@ from app.core.database import get_setting, set_setting
 
 logger = logging.getLogger(__name__)
 
-CHANNEL_TYPES = ("telegram", "discord", "ntfy", "gotify", "webhook")
+CHANNEL_TYPES = ("telegram", "discord", "slack", "teams", "googlechat", "mattermost", "matrix", "signal",
+                 "ntfy", "gotify", "bark", "pushover", "pushbullet", "email", "apprise", "webhook")
 EVENTS = ("update_available", "update_success", "update_failed", "self_update", "app_unhealthy", "disk_low", "security")
 CRITICAL = {"update_failed", "app_unhealthy", "disk_low", "security"}
 SECRET_FIELDS = {"telegram": ("bot_token",), "discord": ("webhook_url",), "ntfy": ("token",), "gotify": ("app_token",),
-                 "webhook": ("secret",)}
+                 "webhook": ("secret",), "slack": ("webhook_url",), "teams": ("webhook_url",), "googlechat": ("webhook_url",),
+                 "mattermost": ("webhook_url",), "matrix": ("access_token",), "signal": (), "bark": ("device_key",),
+                 "pushover": ("app_token", "user_key"), "pushbullet": ("access_token",), "email": ("password",),
+                 "apprise": ("urls",)}
 REQUIRED = {"telegram": ("bot_token", "chat_id"), "discord": ("webhook_url",), "ntfy": ("topic",),
-            "gotify": ("server", "app_token"), "webhook": ("url",)}
+            "gotify": ("server", "app_token"), "webhook": ("url",), "slack": ("webhook_url",), "teams": ("webhook_url",),
+            "googlechat": ("webhook_url",), "mattermost": ("webhook_url",), "matrix": ("server", "access_token", "room_id"),
+            "signal": ("server", "number", "recipients"), "bark": ("device_key",), "pushover": ("app_token", "user_key"),
+            "pushbullet": ("access_token",), "email": ("host", "sender", "to"), "apprise": ("server",)}
+EMAIL_SECURITY = ("starttls", "ssl", "none")
 
 T = {
     "en": {
@@ -104,6 +113,18 @@ def upsert_channel(data: dict[str, Any]) -> dict[str, Any]:
     for key in ("server", "url", "webhook_url"):
         if cfg.get(key) and not cfg[key].startswith(("http://", "https://")):
             raise ValueError(f"{key} must start with http:// or https://")
+    if ctype == "email":
+        cfg["security"] = cfg.get("security") or "starttls"
+        if cfg["security"] not in EMAIL_SECURITY:
+            raise ValueError("security must be starttls, ssl or none")
+        port = cfg.get("port") or ("465" if cfg["security"] == "ssl" else "587")
+        if not port.isdigit() or not 0 < int(port) < 65536:
+            raise ValueError("Invalid SMTP port")
+        cfg["port"] = port
+        if "@" not in cfg["sender"] or not all("@" in x for x in _split(cfg["to"])):
+            raise ValueError("Enter valid e-mail addresses")
+    if ctype == "apprise" and not (cfg.get("urls") or cfg.get("key")):
+        raise ValueError("Enter Apprise URLs or a configuration key")
     ch = {
         "id": cid, "type": ctype, "name": (data.get("name") or ctype.title()).strip()[:60],
         "enabled": bool(data.get("enabled", True)),
@@ -162,12 +183,52 @@ def in_quiet_hours(now: Optional[datetime] = None) -> bool:
 
 
 # ---------------------------------------------------------------- gửi
+def _split(v: str) -> list[str]:
+    return [x.strip() for x in str(v or "").replace(";", ",").replace("\n", ",").split(",") if x.strip()]
+
+
+def _send_email(cfg: dict[str, Any], title: str, body: str) -> tuple[bool, str]:
+    """Email qua SMTP (không phải HTTP nên không đi qua net.client)."""
+    import smtplib
+    import ssl
+    from email.message import EmailMessage
+    from email.utils import formatdate, make_msgid
+
+    msg = EmailMessage()
+    msg["Subject"] = title.replace("\n", " ")[:200]
+    msg["From"] = cfg["sender"]
+    msg["To"] = ", ".join(_split(cfg["to"]))
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain="appmanager-pro")
+    msg.set_content(f"{title}\n\n{body}\n\n— AppManager Pro")
+    sec, port, ctx = cfg.get("security") or "starttls", int(cfg.get("port") or 587), ssl.create_default_context()
+    smtp = smtplib.SMTP_SSL(cfg["host"], port, timeout=20, context=ctx) if sec == "ssl" else smtplib.SMTP(cfg["host"], port, timeout=20)
+    try:
+        if sec == "starttls":
+            smtp.starttls(context=ctx)
+        if cfg.get("username"):
+            smtp.login(cfg["username"], cfg.get("password", ""))
+        refused = smtp.send_message(msg)
+    finally:
+        try:
+            smtp.quit()
+        except Exception:
+            pass
+    return (not refused), ("SMTP OK" if not refused else f"refused: {', '.join(refused)}")
+
+
 async def _send(ch: dict[str, Any], title: str, body: str, event: str, data: dict[str, Any]) -> tuple[bool, str]:
     from app.core import net
 
     cfg = ch.get("config") or {}
     t = ch["type"]
     text = f"{title}\n{body}".strip()
+    if t == "email":
+        try:
+            return await asyncio.to_thread(_send_email, cfg, title, body)
+        except Exception as exc:
+            return False, f"SMTP: {str(exc)[:180]}"
+    crit = event in CRITICAL
     async with net.client(timeout=15) as c:
         if t == "telegram":
             r = await c.post(f"https://api.telegram.org/bot{cfg['bot_token']}/sendMessage",
@@ -185,6 +246,49 @@ async def _send(ch: dict[str, Any], title: str, body: str, event: str, data: dic
         elif t == "gotify":
             r = await c.post(f"{cfg['server'].rstrip('/')}/message", params={"token": cfg["app_token"]},
                              json={"title": title, "message": body or title, "priority": 8 if event in CRITICAL else 4})
+        elif t in ("slack", "mattermost"):
+            mark = "*" if t == "slack" else "**"
+            r = await c.post(cfg["webhook_url"], json={"text": f"{mark}{title}{mark}\n{body}".strip(), "username": "AppManager Pro"})
+        elif t == "googlechat":
+            r = await c.post(cfg["webhook_url"], json={"text": f"*{title}*\n{body}".strip()})
+        elif t == "teams":  # Teams Workflows ("Post to a channel when a webhook request is received"): Adaptive Card
+            card = {"$schema": "http://adaptivecards.io/schemas/adaptive-card.json", "type": "AdaptiveCard", "version": "1.4",
+                    "body": [{"type": "TextBlock", "text": title, "weight": "Bolder", "size": "Medium", "wrap": True,
+                              "color": "Attention" if crit else "Default"},
+                             {"type": "TextBlock", "text": body or " ", "wrap": True}]}
+            r = await c.post(cfg["webhook_url"], json={"type": "message", "attachments": [
+                {"contentType": "application/vnd.microsoft.card.adaptive", "contentUrl": None, "content": card}]})
+        elif t == "matrix":
+            from html import escape
+            from urllib.parse import quote
+
+            url = (f"{cfg['server'].rstrip('/')}/_matrix/client/v3/rooms/{quote(cfg['room_id'], safe='')}"
+                   f"/send/m.room.message/amp{int(time.time() * 1000)}{secrets.token_hex(3)}")
+            r = await c.put(url, headers={"Authorization": f"Bearer {cfg['access_token']}"},
+                            json={"msgtype": "m.text", "body": text, "format": "org.matrix.custom.html",
+                                  "formatted_body": f"<b>{escape(title)}</b><br>{escape(body).replace(chr(10), '<br>')}"})
+        elif t == "signal":  # signal-cli-rest-api (bbernhard/signal-cli-rest-api)
+            r = await c.post(f"{cfg['server'].rstrip('/')}/v2/send",
+                             json={"message": text, "number": cfg["number"], "recipients": _split(cfg["recipients"])})
+        elif t == "bark":
+            server = (cfg.get("server") or "https://api.day.app").rstrip("/")
+            r = await c.post(f"{server}/push", json={"device_key": cfg["device_key"], "title": title, "body": body or title,
+                                                    "group": "AppManager Pro", "level": "timeSensitive" if crit else "active"})
+        elif t == "pushover":
+            r = await c.post("https://api.pushover.net/1/messages.json",
+                             data={"token": cfg["app_token"], "user": cfg["user_key"], "title": title[:250],
+                                   "message": (body or title)[:1024], "priority": "1" if crit else "0"})
+        elif t == "pushbullet":
+            r = await c.post("https://api.pushbullet.com/v2/pushes", headers={"Access-Token": cfg["access_token"]},
+                             json={"type": "note", "title": title, "body": body})
+        elif t == "apprise":  # Apprise API (caronc/apprise): URL đã lưu theo key, hoặc gửi kèm danh sách URL
+            server = cfg["server"].rstrip("/")
+            kind = "failure" if crit else "success" if event == "update_success" else "info"
+            payload = {"title": title, "body": body or title, "type": kind}
+            if cfg.get("key"):
+                r = await c.post(f"{server}/notify/{cfg['key']}", json=payload)
+            else:
+                r = await c.post(f"{server}/notify", json={**payload, "urls": cfg["urls"]})
         else:  # webhook
             payload = {"event": event, "title": title, "message": body, "data": data, "time": int(time.time()), "source": "appmanager-pro"}
             raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
