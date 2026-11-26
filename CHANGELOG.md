@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.19.0
+
+*Released: 2026-11-26*
+
+### 📦 Component & Version Matrix
+
+- **App Release:** Bumped from `v0.18.4` ➡️ `v0.19.0`
+- **Supported Architectures:** `linux/amd64` (x86_64), `linux/arm64` (ARM64) & `linux/arm/v7` (ARMv7 32-bit) *(Multi-arch GHCR Image)*
+- **Python Base Image:** `python 3.15.2`
+- **Docker CLI:** `docker 29.10.1`
+- **Core Python Stack:** `FastAPI 0.165.0` • `Uvicorn 0.54.0` • `Docker SDK 7.2.0` • `ruamel.yaml 0.19.1` • `Argon2 25.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • HTTPX `0.28.1` ➡️ `0.29.0` • `APScheduler 3.11.3` • `segno 1.6.6`
+- **Frontend Libraries:** `Alpine.js 3.17.5` • `Tailwind CSS 4.3.5` • `marked 18.3.0` • `DOMPurify 3.5.0`
+
+### 🚀 What's Changed
+
+- Upgraded **HTTPX** to `0.29.0`.
+- Fixed: release channels (beta / dev…) could disappear after an update when Docker Hub or the registry briefly refused the channel lookup (e.g. rate limit right after pulling); the last known channels are now kept until a successful check says otherwise.
+- Releases are now made only by hand: pushes and the daily run still update components and rebuild the `latest` image, but no longer bump the version or publish a release on their own.
+- Automated tests on GitHub Actions for every push and pull request: code checks plus real-Docker scenarios (updates and rollback, docker run, Edit Config, uninstall, rate limits, registry accounts, notifications, API Tokens, multiple servers, release channels).
+- Community files: CONTRIBUTING.md, SECURITY.md (private vulnerability reporting), bug / feature issue forms and a pull request template.
+
 ## 0.18.4
 
 *Released: 2026-11-26*
