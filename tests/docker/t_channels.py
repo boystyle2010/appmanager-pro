@@ -19,8 +19,35 @@ async def detect(tag, client=None):
 # C1 dữ liệu thật: glances:latest có kênh dev (đẩy sau bản ổn định); latest-full không có dev-full
 ch = asyncio.run(detect("latest"))
 check("C1 real Docker Hub: glances:latest offers the dev channel", any(c["tag"] == "dev" and c["kind"] == "pre" for c in ch), ch)
+check("C1 real Docker Hub: glances:latest also offers the latest-full variant",
+      any(c["tag"] == "latest-full" and c.get("variant") and c["label"] == "latest-full" for c in ch), ch)
 ch2 = asyncio.run(detect("latest-full"))
-check("C1 real Docker Hub: glances:latest-full has no dev-full -> no channel to switch to", ch2 == [], ch2)
+check("C1 real Docker Hub: glances:latest-full offers plain latest but no dev (no dev-full)",
+      [c["tag"] for c in ch2] == ["latest-full", "latest"] and not any(c["kind"] == "pre" for c in ch2), ch2)
+
+# C1b dữ liệu giả lập: biến thể cùng tiền tố, không lấy latest-dev / bản ghim / tiền tố khác, tối đa 2 biến thể
+def hub(names):
+    res = [{"name": n, "digest": "sha256:" + n, "last_updated": "2026-11-0%dT00:00:00" % (1 + i % 9), "images": []}
+           for i, n in enumerate(names)]
+    def h(req):
+        u = str(req.url)
+        if "/tags?" in u:
+            return httpx.Response(200, json={"results": res, "next": None})
+        n = u.rsplit("/", 1)[-1]
+        return httpx.Response(200, json=next(r for r in res if r["name"] == n)) if n in names else httpx.Response(404, json={})
+    return net.GuardedClient(transport=httpx.MockTransport(h))
+net.clear_cache()
+names = ["latest", "latest-full", "latest-alpine", "latest-slim", "latest-dev", "1.2.3", "ubuntu-latest", "dev", "beta-full"]
+c3 = asyncio.run(detect("latest-full", hub(names)))
+net.clear_cache()
+check("C1b variant of latest-full: plain latest + same-variant beta-full, no latest-dev / ubuntu-latest",
+      [c["tag"] for c in c3][:2] == ["latest-full", "latest"] and "beta-full" in [c["tag"] for c in c3]
+      and not {"latest-dev", "ubuntu-latest", "dev", "1.2.3"} & {c["tag"] for c in c3}, c3)
+c4 = asyncio.run(detect("latest", hub(names)))
+net.clear_cache()
+check("C1b plain latest: at most 2 other variants, dev shown, labels are full tag names",
+      len([c for c in c4 if c.get("variant")]) == 2 and any(c["tag"] == "dev" for c in c4)
+      and all(c["label"] == c["tag"] for c in c4), c4)
 
 # C2 registry lỗi (503 / 429) -> báo lỗi, không trả "không có kênh" (xoá bộ đệm để thật sự hỏi lại)
 net.clear_cache()

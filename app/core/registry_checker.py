@@ -651,6 +651,18 @@ async def _detect_channels(
         return []
     pattern = fmt[0]
     wanted = {pattern.format(w): w for w in _CHANNEL_WORDS}
+    # Biến thể khác của kênh ổn định cùng tiền tố (vd đang dùng latest-full -> thêm latest thường, và ngược lại).
+    # Chỉ kênh "latest": kênh thử nghiệm vẫn theo đúng biến thể đang dùng (latest-full không có dev-full -> không có dev).
+    prefix = pattern.split("{}")[0]
+    sib_re = re.compile(r"^" + re.escape(prefix) + r"latest(-[a-z0-9][a-z0-9._]*)?$", re.I)
+
+    def _is_sibling(name: str) -> bool:
+        m = sib_re.match(name)
+        if not m or name in wanted or _parse_pinned_tag(name):
+            return False
+        parts = (m.group(1) or "").lower().strip("-").split("-")
+        return not any(p in _CHANNEL_WORDS for p in parts)  # latest-dev, latest-beta… không phải biến thể ổn định
+
     found: dict[str, dict[str, Any]] = {}
     digest_versions: dict[str, tuple[tuple, str]] = {}
     failed = False  # không hỏi được registry -> giữ danh sách kênh lần trước thay vì xoá mất
@@ -667,7 +679,7 @@ async def _detect_channels(
                 body = r.json()
                 for t in body.get("results") or []:
                     name, dg = str(t.get("name") or ""), str(t.get("digest") or "")
-                    if name in wanted:
+                    if name in wanted or _is_sibling(name):
                         found[name] = {"digest": dg, "updated": str(t.get("last_updated") or "")[:19],
                                        "archs": {i.get("architecture") for i in t.get("images") or [] if i.get("architecture")}}
                     p = _parse_pinned_tag(name)
@@ -679,8 +691,8 @@ async def _detect_channels(
                 if not url:
                     break
             # Tag đang dùng / tag ổn định có thể không nằm trong các tag mới cập nhật -> hỏi trực tiếp
-            for name in dict.fromkeys([tag, pattern.format("latest")]):
-                if name in wanted and name not in found:
+            for name in dict.fromkeys([tag, pattern.format("latest"), prefix + "latest"]):
+                if (name in wanted or _is_sibling(name)) and name not in found:
                     r = await client.get(f"{base}/{name}")
                     if r.status_code == 200:
                         t = r.json()
@@ -698,7 +710,7 @@ async def _detect_channels(
                     failed = failed or _page == 0
                     break
                 for name in r.json().get("tags") or []:
-                    if name in wanted:
+                    if name in wanted or _is_sibling(name):
                         found[name] = {"digest": "", "updated": ""}
                 m = re.search(r"<([^>]+)>\s*;\s*rel=\"?next\"?", r.headers.get("link") or "")
                 if not m:
@@ -737,16 +749,17 @@ async def _detect_channels(
         found[tag] = {"digest": "", "updated": ""}
     channels: list[dict[str, Any]] = []
     for name, info in found.items():
-        word = wanted.get(name, "")
+        sibling = name not in wanted
+        word = "latest" if sibling else wanted.get(name, "")
         ver = digest_versions.get(info["digest"]) if info["digest"] else None
         channels.append({
-            "tag": name, "channel": word, "kind": _channel_kind(word),
+            "tag": name, "channel": word, "kind": _channel_kind(word), "variant": sibling,
             "version": ver[1] if ver else "", "nums": list(ver[0]) if ver else [],
             "digest": info["digest"], "updated": info["updated"],
         })
 
-    stable = next((c for c in channels if c["channel"] == "latest"), None) \
-        or next((c for c in channels if c["kind"] == "stable"), None)
+    stable = next((c for c in channels if c["channel"] == "latest" and not c["variant"]), None) \
+        or next((c for c in channels if c["kind"] == "stable" and not c["variant"]), None)
     cur = next((c for c in channels if c["tag"] == tag), None)
     host = _host_arch()
     kept: list[dict[str, Any]] = []
@@ -754,6 +767,9 @@ async def _detect_channels(
         archs = (found.get(c["tag"]) or {}).get("archs") or set()
         if c["tag"] != tag and archs and host not in archs:
             continue  # kênh không có bản cho kiến trúc CPU của máy chủ (vd beszel:dev chỉ có amd64)
+        if c["variant"]:
+            kept.append(c)  # biến thể khác (vd latest thường <-> latest-full): luôn là một lựa chọn riêng
+            continue
         if c["kind"] == "stable" and c["tag"] != tag and cur and c["digest"]:
             # Kênh ổn định khác (vd lts) trùng hẳn với bản đang dùng / latest -> không phải lựa chọn mới
             if c["digest"] == cur["digest"] or (stable and c is not stable and c["digest"] == stable["digest"]):
@@ -767,12 +783,16 @@ async def _detect_channels(
                 continue  # tag thử nghiệm bỏ quên
         kept.append(c)
     order = {w: i for i, w in enumerate(_CHANNEL_WORDS)}
-    kept.sort(key=lambda c: (c["kind"] != "stable", order.get(c["channel"], 99)))
+    kept.sort(key=lambda c: (c["kind"] != "stable", c["variant"], order.get(c["channel"], 99), len(c["tag"])))
     pre = [c for c in kept if c["kind"] == "pre"][:3]  # tối đa 3 kênh thử nghiệm
-    stables = [c for c in kept if c["kind"] == "stable"]
+    variants = [c for c in kept if c["variant"]][:2]  # tối đa 2 biến thể khác
+    stables = [c for c in kept if c["kind"] == "stable" and not c["variant"]] + variants
     if not pre and len(stables) <= 1:
         return []  # chỉ có một kênh -> không có gì để chuyển
-    return [{**{k: c[k] for k in ("tag", "channel", "kind", "version", "updated")}, "current": c["tag"] == tag}
+    # Có biến thể khác -> tên kênh phải ghi rõ (LATEST-FULL / LATEST), không chỉ "latest"
+    label = bool(variants)
+    return [{**{k: c[k] for k in ("tag", "channel", "kind", "version", "updated", "variant")}, "current": c["tag"] == tag,
+             "label": c["tag"][len(prefix):] if label else c["channel"]}
             for c in stables + pre]
 
 

@@ -859,10 +859,12 @@
           if (ch.current || ch.tag === app.image_tag) { if (this.updateModal.preview) this.cancelChannelPreview(); return; }
           if (this.updateModal.preview?.tag === ch.tag) return;
           const toPre = ch.kind === 'pre';
+          const curCh = (app.channels || []).find(c => c.current || c.tag === app.image_tag);
+          const variantMsg = (ch.variant || curCh?.variant) ? this.t('switchVariantMsg') + ' ' : '';
           this.askConfirm({
             tone: toPre ? 'danger' : 'update',
-            title: `${this.t('switchChannelTitle')} ${ch.channel.toUpperCase()}${ch.version ? ' (' + ch.version + ')' : ''}?`,
-            message: `${app.image_tag} → ${ch.tag}. ${toPre ? this.t('switchToPreMsg') : this.t('switchToStableMsg')} ${this.t('switchChannelMsg')}`,
+            title: `${this.t('switchChannelTitle')} ${(ch.label || ch.channel).toUpperCase()}${ch.version ? ' (' + ch.version + ')' : ''}?`,
+            message: `${app.image_tag} → ${ch.tag}. ${variantMsg}${toPre ? this.t('switchToPreMsg') : this.t('switchToStableMsg')} ${this.t('switchChannelMsg')}`,
             confirmLabel: this.t('switchChannel'), onConfirm: () => this.previewChannel(ch)
           });
         },
