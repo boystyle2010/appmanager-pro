@@ -13,6 +13,13 @@
 - **Core Python Stack:** `FastAPI 0.165.0` • `Uvicorn 0.54.0` • `Docker SDK 7.2.0` • `ruamel.yaml 0.19.1` • `Argon2 25.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.29.0` • `APScheduler 3.11.3` • `segno 1.6.6`
 - **Frontend Libraries:** `Alpine.js 3.17.5` • `Tailwind CSS 4.3.5` • `marked 18.3.0` • `DOMPurify 3.5.0`
 
+### 🔐 Package Integrity (GHCR Multi-Arch)
+
+- **Image:** `boystyle2010/appmanager-pro:0.20.0`
+- **Digest:** `sha256:fbb97047ae2d…`
+- **Provenance:** ✅ Signed by GitHub · [View attestation](https://github.com/boystyle2010/appmanager-pro/attestations)
+- **Vulnerability Scan (Trivy):** 0 critical • 0 high (fixable only)
+
 ### 🚀 What's Changed
 
 - Auto-update rules per app (update window → Auto-Update this app): install every version, only minor versions or only patches (larger upgrades wait for you), wait N days after AppManager first sees a new version, and pick the weekdays and time (empty = the shared auto-update time). Updates missed while the server was off run later the same day; each app updates at most once a day.
