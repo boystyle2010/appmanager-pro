@@ -788,6 +788,11 @@ class DataApplyPayload(BaseModel):
     paths: list[str]
 
 
+class DataUpdatePayload(BaseModel):
+    add: list[str] = []
+    remove: list[str] = []
+
+
 class DataDismissPayload(BaseModel):
     dismissed: bool = True
 
@@ -847,6 +852,22 @@ async def api_data_apply(payload: DataApplyPayload, request: Request, user: str 
         raise HTTPException(status_code=500, detail=f"Cannot update AppManager: {str(exc)[:200]}")
     audit(request, user, "data_mount_add", ",".join(res["added"])[:300])
     set_setting(data_setup.dismissed_key(), "")
+    return {**res, "self_update": True}
+
+
+@app.post("/api/setup/data-update")
+async def api_data_update(payload: DataUpdatePayload, request: Request, user: str = Depends(require_user)):
+    """Sửa đường dẫn / gỡ thư mục dữ liệu đã thêm vào AppManager (tạo lại AppManager bằng container phụ)."""
+    detail = f"remove={','.join(payload.remove)} add={','.join(payload.add)}"[:300]
+    try:
+        res = await asyncio.to_thread(data_setup.update_paths, payload.add, payload.remove)
+    except ValueError as exc:
+        audit(request, user, "data_mount_change", detail, str(exc), False)
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        audit(request, user, "data_mount_change", detail, str(exc), False)
+        raise HTTPException(status_code=500, detail=f"Cannot update AppManager: {str(exc)[:200]}")
+    audit(request, user, "data_mount_change", detail)
     return {**res, "self_update": True}
 
 

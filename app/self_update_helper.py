@@ -161,7 +161,7 @@ def restore_db(client, job: dict[str, Any]) -> None:
 
 
 def edit_compose(job: dict[str, Any], service: str) -> None:
-    """Thêm volume (cùng đường dẫn host:container) và biến môi trường vào service của AppManager."""
+    """Thêm / gỡ volume (cùng đường dẫn host:container) và đặt biến môi trường cho service của AppManager."""
     from ruamel.yaml import YAML  # có sẵn trong image
 
     path = Path(job["compose_path"])
@@ -189,6 +189,14 @@ def edit_compose(job: dict[str, Any], service: str) -> None:
             existing.add(v.split(":")[0])
         elif isinstance(v, dict):
             existing.add(str(v.get("source") or ""))
+    remove = set(job.get("remove_volumes") or [])
+    if remove:
+        for v in list(vols):
+            src = v.split(":")[0] if isinstance(v, str) else (str(v.get("source") or "") if isinstance(v, dict) else "")
+            if src in remove:
+                vols.remove(v)
+                existing.discard(src)
+                log(f"==> Removed volume {src}")
     for p in job.get("add_volumes") or []:
         if p not in existing:
             vols.append(f"{p}:{p}")
@@ -408,7 +416,7 @@ def main() -> int:
     svc_args = [service] if service else []
     time.sleep(2)  # để AppManager kịp trả lời trình duyệt
 
-    if job.get("add_volumes") or job.get("set_env"):
+    if job.get("add_volumes") or job.get("remove_volumes") or job.get("set_env"):
         try:
             edit_compose(job, service)
         except Exception as exc:

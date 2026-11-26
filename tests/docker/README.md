@@ -1,7 +1,7 @@
 # Bộ test trên Docker thật (cho phiên Claude Code)
 
 Tài liệu này đủ để một phiên mới **dựng lại môi trường và chạy lại toàn bộ test trong ~10 phút chuẩn bị**,
-không cần đọc lại lịch sử. Không chạy trong CI. Kết quả lần gần nhất (0.16.0, 2026-11-25): mọi bộ đạt,
+không cần đọc lại lịch sử. Không chạy trong CI. Kết quả lần gần nhất (0.16.0, 2026-11-25; bộ 16 thêm 2026-11-26): mọi bộ đạt,
 trừ dòng `P4` của bộ 2 (điều kiện test đã biết, xem bảng).
 
 ## 0. Cách các test hoạt động (đọc trước)
@@ -94,6 +94,7 @@ Xem chi tiết lỗi một bộ: chạy đúng dòng đó nhưng bỏ `| grep ..
 | 13 | `t_net.py` | giới hạn API (Docker Hub/GitHub giả lập bằng `httpx.MockTransport`) | 12/12 |
 | 14 | `t_net_real.py` | tài khoản registry thật (`privreg` :5001, registry:2 + htpasswd, user `tester`/`s3cret`) | 8/8 |
 | 15 | `t_notify.py` (`setup.sh`) | thông báo: ntfy/Gotify thật, webhook thật (:8093, HMAC), Telegram/Discord giả lập, cập nhật thật, giờ im lặng, crash-loop, ổ đĩa | 21/21 |
+| 16 | `t_datafolders.py` (`setup2.sh`, cần `build_amp.sh`) | thư mục dữ liệu: ẩn docker.sock, kiểm tra, đổi đường dẫn, gỡ, chặn gỡ thư mục chứa compose của AppManager, mở rộng sang thư mục cha | 21/21 |
 
 Fixture: `setup.sh` — `web` (nginx 1.26, 2 mạng, IP tĩnh 172.30.0.50, alias, volume tên + ẩn danh, bind `$S/bind`
 chứa `hello-from-bind`, healthcheck), `bb-sidecar` (`--network container:web`), `bb-fail` (bản 1.36 sẽ chết → rollback),
@@ -111,7 +112,7 @@ curl -s -X POST localhost:8797/api/auth/setup -H 'Content-Type: application/json
 node $S/e2e9.js $S/shots
 ```
 Cổng cố định trong từng script: `e2e7.js` (gỡ app) :8798, `e2e9.js`/`e2e10.js` (giới hạn API) :8797,
-`e2e11.js` (tab Thông báo) :8796 — cần `python $S/hook_srv.py $S/hook.log &` (webhook :8094) và chạy `node $S/e2e11.js $S/shots $S/hook.log` (tham số 2 = file log webhook).
+`e2e12.js` (thư mục dữ liệu; chạy phần đầu `t_datafolders.py` tới trước `D3` rồi `node $S/e2e12.js $S/shots http://localhost:8770 $S/OtherData`), `e2e11.js` (tab Thông báo) :8796 — cần `python $S/hook_srv.py $S/hook.log &` (webhook :8094) và chạy `node $S/e2e11.js $S/shots $S/hook.log` (tham số 2 = file log webhook).
 Ảnh mới: viết `e2eN.js` theo mẫu `e2e9.js` (login bằng `ctx.request.post`, `D(...)` để mở popup/tab, `p.screenshot`).
 Gửi ảnh bằng SendUserFile; dừng uvicorn sau khi xong (`pkill -f "uvicorn app.main:app --port 879"`).
 

@@ -78,6 +78,7 @@
         backupsState: { loading: false, items: [], busyFile: '' },
         restorePicker: { open: false, app: null, items: [], selected: '' },
         versionPicker: { open: false, loading: false, error: '', items: [], selected: '' },
+        dataFolders: { open: false, mode: 'list', folder: null, newPath: '', check: null, busy: false, error: '' },
         dataSetup: { open: false, step: 'intro', status: null, manualPath: '', busy: false, error: '', candidates: [], selected: [], elapsed: 0, source: '' },
         composeHint: { open: false, app: null, loading: false, busy: false, preview: null, folder: '', yaml: '', log: '', error: '', done: false },
         notifyState: { loading: false, channels: [], settings: { quiet_enabled: false, quiet_start: '22:00', quiet_end: '07:00', disk_pct: 90, lang: 'vi' }, events: [], critical: [], edit: null, busy: false, msg: '', ok: true, testing: '' },
@@ -370,7 +371,7 @@
 
         async init() {
           this.$watch(() => [this.confirmModal, this.actionSheet, this.logModal, this.batchModal, this.deployModal, this.updateModal,
-                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker, this.restoreRun, this.updateAllPicker, this.versionPicker, this.dupPopup, this.dataSetup, this.composeHint, this.runCmd].some(m => m && m.open), (open) => {
+                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker, this.restoreRun, this.updateAllPicker, this.versionPicker, this.dupPopup, this.dataSetup, this.dataFolders, this.composeHint, this.runCmd].some(m => m && m.open), (open) => {
             const b = document.body, h = document.documentElement;
             if (open) {
               this._lockY = window.scrollY || 0;
@@ -1139,6 +1140,100 @@
           d.busy = true; d.error = '';
           try {
             const { res, data } = await this._postJson('/api/setup/data-apply', { paths: d.selected });
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            d.open = false;
+            this._waitAndReload();
+          } catch (err) { d.error = err.message; d.busy = false; }
+        },
+
+        // ---------------- Quản lý thư mục dữ liệu đã thêm (Cài đặt → Bộ nhớ) ----------------
+        dataFolderSummary() {
+          const st = this.dataSetup.status;
+          const f = st?.folders || [];
+          if (!f.length) return this.t('dataNoneMounted');
+          let txt = this.t('dataFoldersCount').replace('{n}', f.length).replace('{a}', st.total_apps || 0);
+          if (st.missing_count) txt += ' · ' + this.t('dataFoldersMissing').replace('{n}', st.missing_count);
+          return txt;
+        },
+
+        async refreshDataStatus() {
+          try { const res = await fetch('/api/setup/data-status'); if (res.ok) this.dataSetup.status = await res.json(); } catch (_) {}
+        },
+
+        async openDataFolders() {
+          Object.assign(this.dataFolders, { open: true, mode: 'list', folder: null, newPath: '', check: null, busy: true, error: '' });
+          await this.refreshDataStatus();
+          this.dataFolders.busy = false;
+        },
+
+        dataFolderEdit(f) {
+          Object.assign(this.dataFolders, { mode: 'edit', folder: f, newPath: f.path, check: null, error: '' });
+        },
+
+        dataFolderRemove(f) {
+          Object.assign(this.dataFolders, { mode: 'remove', folder: f, check: null, error: '' });
+        },
+
+        dataFolderAdd() {
+          this.dataFolders.open = false;
+          this.openDataSetup();
+        },
+
+        async dataFolderCheck() {
+          const d = this.dataFolders;
+          d.busy = true; d.error = ''; d.check = null;
+          try {
+            const { res, data } = await this._postJson('/api/setup/data-check', { path: d.newPath });
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            if (data.path === d.folder.path) throw new Error(this.t('dataFolderSame'));
+            d.check = data;
+          } catch (err) { d.error = err.message; }
+          finally { d.busy = false; }
+        },
+
+        // Các app nằm trong thư mục cũ mà thư mục mới không chứa -> AppManager không đọc được compose nữa
+        dataFolderLostApps() {
+          const d = this.dataFolders;
+          if (!d.folder) return [];
+          const kept = new Set(d.mode === 'edit' && d.check ? (d.check.covers_apps || []) : []);
+          return (d.folder.apps || []).filter(n => !kept.has(n));
+        },
+
+        dataFolderPlan() {
+          const d = this.dataFolders, f = d.folder;
+          if (!f) return [];
+          const plan = [];
+          if (d.mode === 'edit') {
+            plan.push({ tone: 'ok', text: this.t('dfPlanAdd').replace('{p}', d.check?.path || d.newPath) });
+            plan.push({ tone: 'info', text: this.t('dfPlanFound').replace('{n}', d.check?.count ?? 0) });
+          }
+          plan.push({ tone: 'danger', text: this.t('dfPlanRemove').replace('{p}', f.path) });
+          const lost = this.dataFolderLostApps();
+          if (lost.length) plan.push({ tone: 'warn', text: this.t('dfPlanLost').replace('{n}', lost.length).replace('{apps}', lost.slice(0, 8).join(', ') + (lost.length > 8 ? '…' : '')) });
+          if (f.backup_root) plan.push({ tone: 'warn', text: this.t('dfPlanBackup') });
+          plan.push({ tone: 'info', text: this.t('dfPlanNoDelete') });
+          plan.push({ tone: 'warn', text: this.t('dfPlanRestart') });
+          return plan;
+        },
+
+        confirmDataFolderChange() {
+          const d = this.dataFolders;
+          const edit = d.mode === 'edit';
+          this.askConfirm({
+            tone: edit ? 'update' : 'danger',
+            title: this.t(edit ? 'dfEditTitle' : 'dfRemoveTitle'),
+            message: edit ? `${d.folder.path} → ${d.check.path}` : d.folder.path,
+            confirmLabel: this.t(edit ? 'dfSaveBtn' : 'dfRemoveBtn'),
+            onConfirm: () => this.applyDataFolderChange()
+          });
+        },
+
+        async applyDataFolderChange() {
+          const d = this.dataFolders;
+          d.busy = true; d.error = '';
+          const body = { remove: [d.folder.path], add: d.mode === 'edit' ? [d.check.path] : [] };
+          try {
+            const { res, data } = await this._postJson('/api/setup/data-update', body);
             if (!res.ok) throw new Error(data.detail || 'Failed');
             d.open = false;
             this._waitAndReload();

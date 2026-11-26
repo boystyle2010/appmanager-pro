@@ -1,1 +1,2 @@
 # Ghi chú cho bản phát hành kế tiếp — mỗi dòng bắt đầu bằng "- "
+- Settings → Storage: the data folder card now shows only how many folders and apps are covered; tap it to see every folder in full (apps inside, backup / AppManager badges) and change its path, remove it or add another at any time. AppManager restarts safely to apply it (the previous docker-compose.yml is put back if it fails), and the folder holding AppManager's own docker-compose.yml cannot be removed.

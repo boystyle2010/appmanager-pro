@@ -10,4 +10,5 @@ echo "=== 12. Gỡ app + image dùng chung"; bash $S/setup2.sh >/dev/null 2>&1; 
 echo "=== 13. Giới hạn API (giả lập Docker Hub / GitHub)"; rm -rf $S/ampnet && mkdir -p $S/ampnet; APP_DATA_DIR=$S/ampnet timeout 300 python -u $S/t_net.py 2>&1 | grep -E "^(FAIL|SUMMARY)|Traceback"
 echo "=== 14. Tài khoản registry thật"; rm -rf $S/ampnet2 && mkdir -p $S/ampnet2; APP_DATA_DIR=$S/ampnet2 S=$S timeout 600 python -u $S/t_net_real.py 2>&1 | grep -E "^(FAIL|SUMMARY)|Traceback"
 echo "=== 15. Thông báo (ntfy, Gotify thật, webhook, Telegram/Discord giả lập, sự kiện thật)"; bash $S/setup.sh >/dev/null 2>&1; rm -rf $S/ampnotify && mkdir -p $S/ampnotify; APP_DATA_DIR=$S/ampnotify S=$S timeout 900 python -u $S/t_notify.py 2>&1 | grep -E "^(FAIL|SUMMARY)|Traceback"
+echo "=== 16. Thư mục dữ liệu (liệt kê, đổi đường dẫn, gỡ — AppManager compose)"; bash $S/setup2.sh >/dev/null 2>&1; S=$S timeout 1200 python -u $S/t_datafolders.py 2>&1 | grep -E "^(FAIL|SUMMARY)|Traceback"
 echo FINALDONE

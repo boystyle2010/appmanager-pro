@@ -1796,13 +1796,16 @@
         <!-- TAB 2: DOCKER STORAGE & PRUNE SSD -->
         <template x-if="settingsModal.tab === 'storage'">
           <div class="space-y-3.5">
-            <div class="glass-inset rounded-2xl p-3.5 flex items-center justify-between gap-3">
-              <div class="min-w-0">
-                <p class="text-xs font-semibold" x-text="t('dataSetupTitle')"></p>
-                <p class="text-[11px] text-muted truncate" x-text="(dataSetup.status?.mounted || []).join(', ') || t('dataNoneMounted')"></p>
+            <button type="button" @click="openDataFolders()" class="glass-inset rounded-2xl p-3.5 w-full flex items-center gap-3 text-left active:scale-[0.99] transition-transform">
+              <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border bg-sky-500/15 border-sky-400/35 text-sky-400">
+                <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>
               </div>
-              <button type="button" @click="openDataSetup()" class="glass-btn px-3 py-2 rounded-xl text-[11.5px] font-semibold text-sky-400 shrink-0" x-text="t('dataSetupBtn')"></button>
-            </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-xs font-semibold" x-text="t('dataFoldersTitle')"></p>
+                <p class="text-[11px] truncate" :class="dataSetup.status?.missing_count ? 'text-amber-300' : 'text-muted'" x-text="dataFolderSummary()"></p>
+              </div>
+              <svg class="w-4 h-4 text-subtle shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+            </button>
             <div x-show="storageState.loading && !storageState.data" class="py-10 text-center text-xs text-muted" x-text="t('scanningStorage')"></div>
 
             <template x-if="storageState.data">
@@ -2896,6 +2899,117 @@
                 :disabled="dataSetup.busy || !dataSetup.selected.length || (dataSetup.status && !dataSetup.status.can_apply)"
                 class="glass-btn-update py-2.5 px-3 rounded-xl text-xs font-semibold disabled:opacity-50"
                 x-text="dataSetup.busy ? '…' : t('dataApplyBtn')"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- POPUP: thư mục dữ liệu đã thêm — xem đầy đủ, sửa đường dẫn, gỡ, thêm -->
+  <div x-show="dataFolders.open" x-cloak x-transition.opacity
+       class="fixed inset-0 z-[57] flex items-center justify-center p-4 sm:p-5 bg-black/70 backdrop-blur-md">
+    <div class="glass-panel w-full max-w-md rounded-[26px] p-5 space-y-4 shadow-2xl max-h-[88dvh] flex flex-col">
+      <div class="flex items-center gap-2.5 shrink-0">
+        <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border"
+             :class="dataFolders.mode === 'remove' ? 'bg-rose-500/15 border-rose-400/35 text-rose-400' : 'bg-sky-500/15 border-sky-400/35 text-sky-400'">
+          <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>
+        </div>
+        <div class="min-w-0">
+          <h3 class="font-bold text-[15px] leading-tight"
+              x-text="dataFolders.mode === 'edit' ? t('dfEdit') : dataFolders.mode === 'remove' ? t('dfRemoveTitle') : t('dataFoldersTitle')"></h3>
+          <p class="text-[11px] text-muted" x-show="dataFolders.mode === 'list'" x-text="dataFolderSummary()"></p>
+        </div>
+      </div>
+
+      <div class="overflow-y-auto min-h-0 space-y-3 text-[11.5px]">
+        <!-- Danh sách -->
+        <template x-if="dataFolders.mode === 'list'">
+          <div class="space-y-2.5">
+            <p class="text-muted leading-relaxed" x-text="t('dataFoldersIntro')"></p>
+            <div x-show="dataFolders.busy && !dataSetup.status" class="py-6 text-center text-muted">…</div>
+            <div x-show="dataSetup.status && !dataSetup.status.can_apply" class="rounded-xl px-3 py-2 bg-amber-500/10 border border-amber-400/30 text-amber-200 leading-snug" x-text="t('dfNoCompose')"></div>
+            <template x-for="f in (dataSetup.status?.folders || [])" :key="f.path">
+              <div class="glass-inset rounded-2xl p-3 space-y-2">
+                <p class="font-mono-code text-[11.5px] break-all leading-snug" x-text="f.path"></p>
+                <div class="flex flex-wrap items-center gap-1.5 text-[10.5px]">
+                  <span class="text-muted" x-text="f.app_count ? t('dataFolderApps').replace('{n}', f.app_count) : t('dataFolderNoApps')"></span>
+                  <span x-show="f.casaos" class="px-1.5 py-0.5 rounded-md bg-sky-500/15 text-sky-300 font-semibold" x-text="t('dfBadgeCasa')"></span>
+                  <span x-show="f.backup_root" class="px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 font-semibold" x-text="t('dfBadgeBackup')"></span>
+                  <span x-show="f.has_self" class="px-1.5 py-0.5 rounded-md bg-violet-500/15 text-violet-300 font-semibold">AppManager</span>
+                </div>
+                <div x-show="f.apps.length" class="flex flex-wrap gap-1">
+                  <template x-for="n in f.apps.slice(0, 12)" :key="n">
+                    <span class="px-1.5 py-0.5 rounded-md bg-white/5 text-[10px] text-muted" x-text="n"></span>
+                  </template>
+                  <span x-show="f.apps.length > 12" class="text-[10px] text-subtle self-center" x-text="`+${f.app_count - 12}`"></span>
+                </div>
+                <div class="grid gap-2 pt-0.5" :class="f.has_self ? 'grid-cols-1' : 'grid-cols-2'" x-show="dataSetup.status?.can_apply">
+                  <button type="button" @click="dataFolderEdit(f)" class="glass-btn py-2 rounded-xl text-[11px] font-semibold text-sky-400" x-text="t('dfEdit')"></button>
+                  <button type="button" x-show="!f.has_self" @click="dataFolderRemove(f)" class="glass-btn py-2 rounded-xl text-[11px] font-semibold text-rose-400" x-text="t('dfRemove')"></button>
+                </div>
+                <p x-show="f.has_self" class="text-[10.5px] text-subtle leading-snug" x-text="t('dfSelfNote')"></p>
+              </div>
+            </template>
+            <p x-show="dataSetup.status && !(dataSetup.status.folders || []).length" class="text-muted" x-text="t('dataNoneMounted')"></p>
+          </div>
+        </template>
+
+        <!-- Sửa đường dẫn -->
+        <template x-if="dataFolders.mode === 'edit'">
+          <div class="space-y-2.5">
+            <div>
+              <p class="text-[10.5px] text-subtle mb-1" x-text="t('dfCurrent')"></p>
+              <p class="font-mono-code break-all text-muted" x-text="dataFolders.folder?.path"></p>
+            </div>
+            <div>
+              <p class="text-[10.5px] text-subtle mb-1" x-text="t('dfNewPath')"></p>
+              <div class="flex gap-2">
+                <input type="text" x-model="dataFolders.newPath" @input="dataFolders.check = null" @keydown.enter="dataFolderCheck()"
+                       autocapitalize="off" autocorrect="off" spellcheck="false"
+                       class="glass-input flex-1 min-w-0 rounded-xl px-3 py-2 text-xs font-mono-code" />
+                <button type="button" @click="dataFolderCheck()" :disabled="dataFolders.busy || !dataFolders.newPath.trim()"
+                        class="glass-btn-primary px-3 rounded-xl text-[11px] font-semibold shrink-0 disabled:opacity-50"
+                        x-text="dataFolders.busy && !dataFolders.check ? '…' : t('dfCheckShort')"></button>
+              </div>
+            </div>
+            <p x-show="dataFolders.check" class="text-emerald-300" x-text="t('dfFound').replace('{n}', dataFolders.check?.count ?? 0)"></p>
+          </div>
+        </template>
+
+        <!-- Sẽ thực hiện (sửa / gỡ) -->
+        <div x-show="dataFolders.mode === 'remove' || (dataFolders.mode === 'edit' && dataFolders.check)"
+             class="rounded-2xl border border-[var(--glass-border)] p-3 space-y-1.5 text-[11px]">
+          <p x-show="dataFolders.mode === 'remove'" class="font-mono-code break-all text-[11.5px] pb-1" x-text="dataFolders.folder?.path"></p>
+          <p class="text-[10.5px] font-semibold uppercase tracking-wider text-muted" x-text="t('dfPlanTitle')"></p>
+          <template x-for="(step, i) in dataFolderPlan()" :key="i">
+            <p class="flex items-start gap-2 leading-snug"
+               :class="{ 'text-rose-300': step.tone === 'danger', 'text-amber-200': step.tone === 'warn', 'text-emerald-300': step.tone === 'ok', 'text-muted': step.tone === 'info' }">
+              <span class="shrink-0" x-text="{ danger: '✕', warn: '!', ok: '✓', info: 'ⓘ' }[step.tone]"></span>
+              <span x-text="step.text"></span>
+            </p>
+          </template>
+        </div>
+
+        <div x-show="dataFolders.error" class="rounded-xl px-3 py-2 bg-rose-500/12 border border-rose-500/30 text-[11px] text-rose-300 break-words" x-text="dataFolders.error"></div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2.5 pt-1 shrink-0">
+        <template x-if="dataFolders.mode === 'list'">
+          <button @click="dataFolders.open = false" class="glass-btn py-2.5 px-3 rounded-xl text-xs font-semibold" x-text="t('close')"></button>
+        </template>
+        <template x-if="dataFolders.mode === 'list'">
+          <button @click="dataFolderAdd()" class="glass-btn-primary py-2.5 px-3 rounded-xl text-xs font-semibold" x-text="t('dfAddFolder')"></button>
+        </template>
+        <template x-if="dataFolders.mode !== 'list'">
+          <button @click="dataFolders.mode = 'list'; dataFolders.error = ''" :disabled="dataFolders.busy"
+                  class="glass-btn py-2.5 px-3 rounded-xl text-xs font-semibold disabled:opacity-50" x-text="t('back')"></button>
+        </template>
+        <template x-if="dataFolders.mode === 'edit'">
+          <button @click="confirmDataFolderChange()" :disabled="dataFolders.busy || !dataFolders.check"
+                  class="glass-btn-update py-2.5 px-3 rounded-xl text-xs font-semibold disabled:opacity-50" x-text="dataFolders.busy && dataFolders.check ? '…' : t('dfSaveBtn')"></button>
+        </template>
+        <template x-if="dataFolders.mode === 'remove'">
+          <button @click="confirmDataFolderChange()" :disabled="dataFolders.busy"
+                  class="glass-btn-danger py-2.5 px-3 rounded-xl text-xs font-semibold disabled:opacity-50" x-text="dataFolders.busy ? '…' : t('dfRemoveBtn')"></button>
+        </template>
       </div>
     </div>
   </div>

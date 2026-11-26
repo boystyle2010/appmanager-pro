@@ -165,16 +165,45 @@ def data_status() -> dict[str, Any]:
     own_cfg = (labels.get("com.docker.compose.project.config_files") or "").split(",")[0].strip()
     apps = _compose_apps(client, own.id)
     missing = [a for a in apps if not _readable(a)]
+    folders = data_folders(own, apps)
     return {
         "available": True,
         "needs_setup": bool(missing),
-        "mounted": _own_mount_paths(own),
+        "mounted": [f["path"] for f in folders],
+        "folders": folders,
         "missing_apps": [a["name"] for a in missing][:50],
         "missing_count": len(missing),
         "total_apps": len(apps),
         "own_compose": own_cfg,
         "can_apply": bool(own_cfg),
     }
+
+
+def _is_data_mount(path: str) -> bool:
+    """Thư mục dữ liệu = mount cùng đường dẫn, là thư mục (bỏ docker.sock, file lẻ) và không phải thư mục hệ thống."""
+    if "docker.sock" in path or not Path(path).is_dir():
+        return False
+    return path_allowed(path)[0] or path.startswith("/var/lib/casaos")
+
+
+def data_folders(own, apps: list[dict[str, str]] | None = None) -> list[dict[str, Any]]:
+    """Các thư mục dữ liệu đang mount vào AppManager + app (compose) nằm trong mỗi thư mục."""
+    labels = (own.attrs.get("Config") or {}).get("Labels") or {}
+    own_cfg = (labels.get("com.docker.compose.project.config_files") or "").split(",")[0].strip()
+    out = []
+    for p in _own_mount_paths(own):
+        if not _is_data_mount(p):
+            continue
+        names = sorted({a["name"] for a in (apps or []) if _covers(p, a["working_dir"])})
+        out.append({
+            "path": p,
+            "apps": names[:50],
+            "app_count": len(names),
+            "casaos": p.startswith("/var/lib/casaos"),
+            "backup_root": _covers(p, str(APPDATA_DIR)) or _covers(str(APPDATA_DIR), p),
+            "has_self": bool(own_cfg) and _covers(p, own_cfg),
+        })
+    return out
 
 
 def _suggest_roots(compose_dirs: list[str], mounted: list[str]) -> list[dict[str, Any]]:
@@ -344,8 +373,9 @@ def check_path(path: str) -> dict[str, Any]:
     if not info.get("exists"):
         return {"ok": False, "error": f"{p} does not exist on the host"}
     mounted = _own_mount_paths(own)
+    covers = sorted({a["name"] for a in _compose_apps(client, own.id) if _covers(p, a["working_dir"])})
     return {"ok": True, "path": p, "count": info.get("compose", 0), "apps": info.get("apps", []),
-            "mounted": any(_covers(m, p) for m in mounted)}
+            "mounted": any(_covers(m, p) for m in mounted), "covers_apps": covers}
 
 
 # ---------------------------------------------------------------- thêm vào compose của AppManager
@@ -378,6 +408,55 @@ def apply_paths(paths: list[str]) -> dict[str, Any]:
         compose_original=None, extra_job={"add_volumes": new, "set_env": env},
     )
     return {"ok": True, "added": new, "env": env}
+
+
+def update_paths(add: list[str], remove: list[str]) -> dict[str, Any]:
+    """Sửa / gỡ thư mục dữ liệu đã thêm: bỏ volume <p>:<p> cũ, thêm volume mới, tạo lại AppManager (container phụ)."""
+    from app.core.updater import _trigger_self_update_helper
+
+    st = data_status()
+    if not st.get("available"):
+        raise ValueError(st.get("reason") or "AppManager is not running in Docker")
+    if not st.get("can_apply"):
+        raise ValueError("AppManager was not started with Docker Compose; change the volume in its run command manually")
+    current = [f["path"] for f in st.get("folders") or []]
+    rem: list[str] = []
+    for raw in remove or []:
+        p = normalize_host_path(raw)
+        if p not in current:
+            raise ValueError(f"{raw} is not a data folder of AppManager")
+        if p not in rem:
+            rem.append(p)
+    new: list[str] = []
+    for raw in add or []:
+        ok, p = path_allowed(raw)
+        if not ok:
+            raise ValueError(p)
+        if p not in new and p not in rem:
+            new.append(p)
+    keep = [p for p in current if p not in rem]
+    new = [p for p in new if not any(_covers(m, p) for m in keep)]
+    if not rem and not new:
+        raise ValueError("Nothing to change")
+    if len(new) > 10:
+        raise ValueError("Choose 1 to 10 folders")
+    # AppManager phải luôn đọc được docker-compose.yml của chính nó (để sửa / cập nhật / trả lại khi lỗi)
+    own_cfg = st.get("own_compose") or ""
+    if any(_covers(p, own_cfg) for p in rem) and not any(_covers(p, own_cfg) for p in keep + new):
+        raise ValueError(f"AppManager's own docker-compose.yml ({own_cfg}) is in this folder; the new folder must still contain it")
+    env: dict[str, str] = {}
+    appdata = str(APPDATA_DIR)
+    # Thư mục dùng cho sao lưu app (APPDATA_DIR) không còn được mount -> trỏ sang thư mục mới
+    if any(_covers(p, appdata) for p in rem) and not any(_covers(p, appdata) for p in keep + new):
+        target = new[0] if new else (keep[0] if keep else "")
+        if target:
+            env["APPDATA_DIR"] = target
+    lost = sorted({a for f in st.get("folders") or [] if f["path"] in rem for a in f["apps"]})
+    _trigger_self_update_helper(
+        st["own_compose"], mode="recreate", title="AppManager Pro", history_mode="data_setup",
+        compose_original=None, extra_job={"add_volumes": new, "remove_volumes": rem, "set_env": env},
+    )
+    return {"ok": True, "added": new, "removed": rem, "env": env, "apps": lost}
 
 
 def dismissed_key() -> str:
