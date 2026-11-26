@@ -2,7 +2,6 @@ import os
 import secrets
 import sqlite3
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -134,16 +133,6 @@ def init_db() -> None:
             conn.execute("ALTER TABLE update_cache ADD COLUMN target_tag TEXT DEFAULT ''")
         if "channels" not in cols:  # JSON: các kênh phát hành (latest / beta...) của image
             conn.execute("ALTER TABLE update_cache ADD COLUMN channels TEXT DEFAULT ''")
-        # 0.20: lúc AppManager phát hiện bản mới lần đầu (cho quy tắc "đợi N ngày")
-        if "first_seen" not in cols:
-            conn.execute("ALTER TABLE update_cache ADD COLUMN first_seen TEXT DEFAULT ''")
-        if "first_seen_key" not in cols:
-            conn.execute("ALTER TABLE update_cache ADD COLUMN first_seen_key TEXT DEFAULT ''")
-        pcols = {r["name"] for r in conn.execute("PRAGMA table_info(app_prefs)").fetchall()}
-        if "policy" not in pcols:  # 0.20: JSON quy tắc tự cập nhật (mức, đợi N ngày, ngày, giờ)
-            conn.execute("ALTER TABLE app_prefs ADD COLUMN policy TEXT DEFAULT ''")
-        if "last_auto" not in pcols:  # ngày (YYYY-MM-DD) đã chạy tự cập nhật cho app
-            conn.execute("ALTER TABLE app_prefs ADD COLUMN last_auto TEXT DEFAULT ''")
 
         # Nhật ký đầy đủ của mỗi lần cập nhật (để xem lại vì sao hỏng sau khi container đã bị tạo lại)
         hcols = {r["name"] for r in conn.execute("PRAGMA table_info(update_history)").fetchall()}
@@ -401,29 +390,16 @@ def save_update_cache(item: dict[str, Any]) -> None:
     item.setdefault("channels", "")
     conn = get_connection()
     try:
-        # Mốc phát hiện bản mới: giữ nguyên khi vẫn là cùng bản mới (cùng digest / tag / phiên bản)
-        key = (f"{item.get('remote_digest') or ''}|{item.get('target_tag') or ''}|{item.get('remote_version') or ''}"
-               if item.get("has_update") else "")
-        prev = conn.execute("SELECT first_seen, first_seen_key FROM update_cache WHERE container_name = ?",
-                            (item["container_name"],)).fetchone()
-        if not key:
-            item["first_seen"], item["first_seen_key"] = "", ""
-        elif prev and prev["first_seen_key"] == key and prev["first_seen"]:
-            item["first_seen"], item["first_seen_key"] = prev["first_seen"], key
-        else:
-            item["first_seen"], item["first_seen_key"] = datetime.now(timezone.utc).isoformat(timespec="seconds"), key
         conn.execute(
             """
             INSERT INTO update_cache (
                 container_name, image, local_digest, remote_digest,
                 current_version, remote_version, target_tag, has_update, source_url,
-                changelog, release_tag, release_url, published_at, checked_at, error, channels,
-                first_seen, first_seen_key
+                changelog, release_tag, release_url, published_at, checked_at, error, channels
             ) VALUES (
                 :container_name, :image, :local_digest, :remote_digest,
                 :current_version, :remote_version, :target_tag, :has_update, :source_url,
-                :changelog, :release_tag, :release_url, :published_at, :checked_at, :error, :channels,
-                :first_seen, :first_seen_key
+                :changelog, :release_tag, :release_url, :published_at, :checked_at, :error, :channels
             )
             ON CONFLICT(container_name) DO UPDATE SET
                 image = excluded.image,
@@ -440,9 +416,7 @@ def save_update_cache(item: dict[str, Any]) -> None:
                 published_at = excluded.published_at,
                 checked_at = excluded.checked_at,
                 error = excluded.error,
-                channels = excluded.channels,
-                first_seen = excluded.first_seen,
-                first_seen_key = excluded.first_seen_key
+                channels = excluded.channels
             """,
             item,
         )
@@ -473,8 +447,6 @@ def get_app_pref(container_name: str) -> dict[str, Any]:
             "auto_update": 0,
             "custom_repo": "",
             "skipped_digest": "",
-            "policy": "",
-            "last_auto": "",
         }
     finally:
         conn.close()
@@ -485,30 +457,24 @@ def save_app_pref(
     auto_update: bool | None = None,
     custom_repo: str | None = None,
     skipped_digest: str | None = None,
-    policy: str | None = None,
-    last_auto: str | None = None,
 ) -> dict[str, Any]:
     current = get_app_pref(container_name)
     new_auto = int(auto_update) if auto_update is not None else current["auto_update"]
     new_repo = custom_repo.strip() if custom_repo is not None else current["custom_repo"]
     new_skip = skipped_digest.strip() if skipped_digest is not None else current["skipped_digest"]
-    new_policy = policy if policy is not None else (current.get("policy") or "")
-    new_last = last_auto if last_auto is not None else (current.get("last_auto") or "")
 
     conn = get_connection()
     try:
         conn.execute(
             """
-            INSERT INTO app_prefs (container_name, auto_update, custom_repo, skipped_digest, policy, last_auto)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO app_prefs (container_name, auto_update, custom_repo, skipped_digest)
+            VALUES (?, ?, ?, ?)
             ON CONFLICT(container_name) DO UPDATE SET
                 auto_update = excluded.auto_update,
                 custom_repo = excluded.custom_repo,
-                skipped_digest = excluded.skipped_digest,
-                policy = excluded.policy,
-                last_auto = excluded.last_auto
+                skipped_digest = excluded.skipped_digest
             """,
-            (container_name, new_auto, new_repo, new_skip, new_policy, new_last),
+            (container_name, new_auto, new_repo, new_skip),
         )
         conn.commit()
     finally:

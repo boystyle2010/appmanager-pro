@@ -105,8 +105,6 @@ Xem chi tiết lỗi một bộ: chạy đúng dòng đó nhưng bỏ `| grep ..
 | 23 | `t_notify3.py` (cần `pip install cryptography` để đối chiếu) | mã hoá Bark AES-128/192/256-CBC và Webhook AES-256-GCM (giải mã lại bằng thư viện `cryptography`), chế độ riêng tư, kiểm tra khoá / IV | 12/12 |
 | 24 | `e2e16.js` (`setup.sh`, uvicorn :8794) | kiểm tra bản mới cho 1 app: dòng trong menu ⋯, nút làm mới trong cửa sổ cập nhật, `POST /api/apps/{tên}/check` với Token Cập nhật / Chỉ đọc | 5/5 |
 | 25 | `t_channels.py` | kênh phát hành: dữ liệu Docker Hub thật (glances `latest` có `dev`, `latest-full` không có `dev-full`), registry 503/429 không xoá kênh đã biết, container thật `bb-latest` | 8/8 |
-| 26 | `t_policy.py` (`setup.sh`) | quy tắc tự cập nhật: mức phiên bản, đợi N ngày (mốc `first_seen`), ngày / giờ riêng, chạy bù, 1 lần / ngày, tắt chung; cập nhật thật bb-none 1.35 → 1.38 | 14/14 |
-| 27 | `e2e17.js` (uvicorn :8794) | giao diện quy tắc: phần quy tắc trong cửa sổ cập nhật, dòng "đang giữ lại" trên thẻ, cảnh báo khi tự cập nhật chung tắt | 5/5 |
 
 Fixture: `setup.sh` — `web` (nginx 1.26, 2 mạng, IP tĩnh 172.30.0.50, alias, volume tên + ẩn danh, bind `$S/bind`
 chứa `hello-from-bind`, healthcheck), `bb-sidecar` (`--network container:web`), `bb-fail` (bản 1.36 sẽ chết → rollback),

@@ -41,7 +41,7 @@
         updateModal: {
           open: false, loading: false, updating: false, checking: false, app: null,
           changelogHtml: '', changelogError: '', releaseTag: '', releaseUrl: '',
-          autoUpdate: false, policy: null, policySaving: false, customRepo: '', showRepoInput: false, updateLogs: '', ws: null, preview: null
+          autoUpdate: false, customRepo: '', showRepoInput: false, updateLogs: '', ws: null, preview: null
         },
         editModal: {
           open: false, loading: false, saving: false, tab: 'ui',
@@ -80,7 +80,6 @@
         versionPicker: { open: false, loading: false, error: '', items: [], selected: '' },
         apiDocs: { open: false },
         checkingOne: {},
-        autoCfg: { enabled: false, time: '03:30' },
         srv: { list: [], loaded: false, statusBusy: false, form: { open: false, id: '', name: '', url: '', token: '', verify_tls: true }, test: null, busy: false, error: '' },
         remote: { id: '', loading: false, data: null, error: '', busy: '', checking: false },
         remoteJob: { open: false, server: null, app: '', id: '', status: '', log: '', result: {}, error: '' },
@@ -485,7 +484,6 @@
             this.envMode = data.environment;
             this.summary = data.summary;
             this.updateAllExcluded = data.update_all_excluded || [];
-            if (data.auto_update) this.autoCfg = data.auto_update;
             this.apps = data.apps;
             this.lastChecked = data.last_checked || '';
             this.checkingUpdates = !!data.checking_updates;
@@ -585,7 +583,6 @@
             this.updateModal.releaseUrl = data.release_url || '';
             this.updateModal.changelogError = data.changelog_error || '';
             this.updateModal.autoUpdate = !!data.pref?.auto_update;
-            this.updateModal.policy = JSON.parse(JSON.stringify(data.app?.policy || { level: 'all', min_age_days: 0, days: [], time: '' }));
             this.updateModal.customRepo = data.pref?.custom_repo || data.app?.source_url || '';
             const cleaned = data.changelog ? this._cleanChangelog(data.changelog) : '';
             if (cleaned) {
@@ -636,38 +633,6 @@
           });
           this.showToast(this.lang === 'vi' ? 'Đã lưu Auto-Update' : 'Auto-Update saved');
           await this.loadApps();
-        },
-
-        // Quy tắc tự cập nhật (0.20)
-        togglePolicyDay(d) {
-          const p = this.updateModal.policy;
-          let days = (p.days || []).length ? [...p.days] : [0, 1, 2, 3, 4, 5, 6];
-          days = days.includes(d) ? days.filter(x => x !== d) : [...days, d].sort();
-          if (!days.length) return;  // ít nhất 1 ngày
-          p.days = days.length === 7 ? [] : days;
-          this.saveAppPolicy();
-        },
-
-        async saveAppPolicy() {
-          const m = this.updateModal;
-          if (!m.app || !m.policy) return;
-          m.policySaving = true;
-          try {
-            const { res, data } = await this._postJson(`/api/apps/${encodeURIComponent(m.app.name)}/prefs`, { policy: m.policy });
-            if (!res.ok) throw new Error(data.detail || 'Failed');
-            await this.loadApps();
-            const fresh = this.apps.find(a => a.name === m.app.name);
-            if (fresh) m.app = { ...m.app, auto_hold: fresh.auto_hold, policy: fresh.policy };
-          } catch (err) { this.showToast(err.message); }
-          finally { m.policySaving = false; }
-        },
-
-        holdText(h) {
-          if (!h) return '';
-          if (h.code === 'wait') return this.t('holdWait').replace('{n}', h.days_left);
-          if (h.code === 'level') return this.t('holdLevel').replace('{to}', h.to || '?').replace('{kind}', this.t('chg_' + h.change));
-          if (h.code === 'unknown_version') return this.t('holdUnknown');
-          return '';
         },
 
         async toggleSkipUpdate() {
