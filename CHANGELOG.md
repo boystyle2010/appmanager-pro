@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.18.1
+
+*Released: 2026-11-26*
+
+### 📦 Component & Version Matrix
+
+- **App Release:** Bumped from `v0.18.0` ➡️ `v0.18.1`
+- **Supported Architectures:** `linux/amd64` (x86_64), `linux/arm64` (ARM64) & `linux/arm/v7` (ARMv7 32-bit) *(Multi-arch GHCR Image)*
+- **Python Base Image:** `python 3.15.2`
+- **Docker CLI:** `docker 29.10.1`
+- **Core Python Stack:** `FastAPI 0.165.0` • `Uvicorn 0.54.0` • `Docker SDK 7.2.0` • `ruamel.yaml 0.19.1` • `Argon2 25.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.28.1` • `APScheduler 3.11.3` • `segno 1.6.6`
+- **Frontend Libraries:** `Alpine.js 3.17.5` • `Tailwind CSS 4.3.5` • `marked 18.3.0` • `DOMPurify 3.5.0`
+
+### 🚀 What's Changed
+
+- 11 new notification channels — 16 in total: Slack, Microsoft Teams (Workflows webhook, Adaptive Card), Google Chat, Mattermost (also Rocket.Chat webhooks), Matrix, Signal (signal-cli-rest-api), Bark (iPhone), Pushover, Pushbullet, Email (SMTP with STARTTLS / SSL / none) and Apprise API (100+ more services such as WhatsApp, LINE and SMS).
+- The channel picker is grouped (chat apps / push to your phone / other) as app-style tiles with each service's icon (logos from Simple Icons, generic icons where no free logo exists) and shows platform icons for the selected channel (iOS, Android, Windows, macOS, Linux, Web); Gotify is marked as Android / web only and the ntfy hint explains `upstream-base-url` for iPhones with a self-hosted ntfy server.
+
 ## 0.18.0
 
 *Released: 2026-11-26*
