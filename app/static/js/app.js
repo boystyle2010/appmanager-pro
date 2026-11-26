@@ -2046,6 +2046,15 @@
                    matrix: 'Matrix', signal: 'Signal', ntfy: 'ntfy', gotify: 'Gotify', bark: 'Bark', pushover: 'Pushover', pushbullet: 'Pushbullet',
                    email: 'Email', apprise: 'Apprise', webhook: 'Webhook' }[t] || t;
         },
+        // Icon vector cho trạng thái (thay ký hiệu chữ / emoji): danger = X, warn = !, ok = ✓, info = i
+        toneIcon(tone) {
+          return {
+            danger: '<path d="M6 6l12 12M18 6L6 18"/>',
+            warn: '<path d="M12 4v10"/><circle cx="12" cy="19" r="0.6" fill="currentColor"/>',
+            ok: '<path d="M4.5 12.5l5 5L19.5 7"/>',
+            info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle cx="12" cy="7.6" r="0.5" fill="currentColor"/>',
+          }[tone] || '';
+        },
         notifyCanEncrypt(t) { return t === 'bark' || t === 'webhook'; },
         genNotifyKey() {
           const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';

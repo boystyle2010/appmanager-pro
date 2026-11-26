@@ -52,6 +52,11 @@ const results = []; const check = (n, c, d = '') => { results.push(!!c); console
   await p.evaluate(() => window.scrollTo(0, 0)); await p.screenshot({ path: OUT + '/n6-list.png' });
   check('Saved channel keeps Private mode + encryption (shown in the list)', (await p.textContent('body')).includes('mã hoá') && (await p.textContent('body')).includes('riêng tư'));
   check('Saved channel list uses the app icon', await p.evaluate(() => [...document.querySelectorAll('svg')].some(x => x.getAttribute('x-html') === 'notifyIcon(ch.type).svg' && x.innerHTML.length > 20)));
+  await p.evaluate(() => document.querySelector('select[x-model="notifyState.settings.lang"]')?.scrollIntoView({ block: 'center' })); await sleep(300);
+  await p.screenshot({ path: OUT + '/n9-lang-select.png' });
+  const gap = await p.evaluate(() => { const el = document.querySelector('select[x-model="notifyState.settings.lang"]'); const cs = getComputedStyle(el); return [cs.appearance, el.getBoundingClientRect().width]; });
+  check('Language select: vector arrow next to the text (no native arrow, compact width)', gap[0] === 'none' && gap[1] < 140, JSON.stringify(gap));
+  check('No emoji stickers in the notification UI', !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(await p.evaluate(() => document.querySelector('[x-show], body').innerText.replace(/[✓✕→↗]/g, ''))));
   check('No JavaScript errors', !errs.length, errs.join(' | '));
   console.log(`SUMMARY ${results.filter(Boolean).length} / ${results.length}`);
   await b.close();
