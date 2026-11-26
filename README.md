@@ -352,7 +352,7 @@ Once a server is added, a switcher appears above the app list (**This server** /
 | **App card → version row** | Open update details: changelog, release channel, auto-update toggle, skip version, *Update App*. |
 | **App card → Restore** | Go back to a saved version (image + compose + settings). |
 | **App card → badges** | **BETA / DEV** (channel available / in use), **AUTO** (auto-update on), **2** (duplicate compose files — tap to review). |
-| **App card → ⋯** | Logs, start/stop/restart, Edit Config, uninstall. |
+| **App card → ⋯** | Check this app for updates, choose version, logs, start/stop/restart, Edit Config, uninstall. |
 | **Header → activity icon** | Task Manager (live resources, restart/stop/kill). |
 | **Header → ⚙️** | Section list: General, Storage & SSD (data folders, cleanup, app data backups), Notifications, Security (2FA, password, activity log), API tokens, History, About. |
 | **Task Manager → 24h** | CPU/RAM charts for all containers or a single one. |
@@ -437,6 +437,7 @@ All endpoints except login/setup and `/api/health` require the session cookie or
 | `GET` | `/api/audit` | Activity log |
 | `GET` | `/api/apps` | List apps with update status |
 | `POST` | `/api/updates/check` | Re-check all registries |
+| `POST` | `/api/apps/{name}/check` | Re-check one app now |
 | `GET` | `/api/apps/{name}/details` | Changelog & update details |
 | `POST` | `/api/apps/{name}/prefs` | Auto-update, skip version, custom repo |
 | `POST` | `/api/apps/{id}/{action}` | `start`, `stop`, `restart`, `kill` |

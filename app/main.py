@@ -517,6 +517,19 @@ async def api_check_updates(_: str = Depends(require_user)):
     return JSONResponse(content=result)
 
 
+@app.post("/api/apps/{container_name}/check")
+async def api_check_one(container_name: str, request: Request, user: str = Depends(require_user)):
+    """Kiểm tra bản mới cho một app ngay (không đợi lần kiểm tra định kỳ)."""
+    before = await asyncio.to_thread(get_app_by_name, container_name)
+    if not before:
+        raise HTTPException(status_code=404, detail="App not found")
+    cache = await check_one_app_by_name(container_name) or {}
+    app_info = await asyncio.to_thread(get_app_by_name, container_name) or before
+    audit(request, user, "check_update", container_name, "has update" if app_info.get("has_update") else "up to date")
+    return {"app": app_info, "has_update": bool(app_info.get("has_update")), "error": cache.get("error") or "",
+            "checked_at": cache.get("checked_at") or ""}
+
+
 @app.get("/api/apps/{container_name}/details")
 async def api_app_details(
     container_name: str, refresh: bool = False, _: str = Depends(require_user)
@@ -1185,6 +1198,7 @@ _API_GUIDE: list[tuple[str, str, str, str, str]] = [
     ("GET", "/api/apps/{container_name}/versions", "Versions you can switch to for one app.",
      "Các phiên bản có thể chuyển sang của một app.", ""),
     ("POST", "/api/updates/check", "Check every app for new versions now.", "Kiểm tra bản mới cho mọi app ngay.", ""),
+    ("POST", "/api/apps/{container_name}/check", "Check one app for a new version now.", "Kiểm tra bản mới cho một app ngay.", ""),
     ("POST", "/api/apps/{container_name}/update", "Update one app in the background (health check + automatic rollback). Returns a job; optional body selects a version from /versions.",
      "Cập nhật một app (chạy nền, có kiểm tra sức khoẻ + tự quay lại). Trả về mã việc; body tuỳ chọn để chọn phiên bản trong /versions.", '{"tag": ""}'),
     ("POST", "/api/update-all", "Update every app that has an update (except apps excluded from Update All), in the background.",

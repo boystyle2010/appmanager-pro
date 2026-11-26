@@ -38,6 +38,7 @@ _NEVER = (
 # Quyền "update": ngoài đọc, được kiểm tra bản mới, cập nhật app (qua job), cập nhật tất cả, start/stop/restart.
 _UPDATE_POST = (
     re.compile(r"^/api/updates/check$"),
+    re.compile(r"^/api/apps/[^/]+/check$"),
     re.compile(r"^/api/apps/[^/]+/update$"),
     re.compile(r"^/api/update-all$"),
     re.compile(r"^/api/apps/[^/]+/(start|stop|restart)$"),

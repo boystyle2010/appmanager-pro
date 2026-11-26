@@ -103,6 +103,7 @@ Xem chi tiết lỗi một bộ: chạy đúng dòng đó nhưng bỏ `| grep ..
 | 21 | `t_notify2.py` | 11 kênh thông báo mới: Email qua Mailpit thật (SMTP :1025, xem :8025), Apprise API thật (:8095, cần `-e IPV4_ONLY=yes` vì sandbox không có IPv6) chuyển tiếp tới ntfy thật, Slack/Teams/Google Chat/Mattermost/Matrix/Signal/Bark/Pushover/Pushbullet đúng định dạng API (giả lập `httpx.MockTransport`); tự dựng và xoá Mailpit/Apprise | 18/18 |
 | 22 | `e2e15.js` | giao diện chọn kênh (3 nhóm, icon từng app, biểu tượng nền tảng, form Email, mã hoá Bark + chế độ riêng tư) | 13/13 |
 | 23 | `t_notify3.py` (cần `pip install cryptography` để đối chiếu) | mã hoá Bark AES-128/192/256-CBC và Webhook AES-256-GCM (giải mã lại bằng thư viện `cryptography`), chế độ riêng tư, kiểm tra khoá / IV | 12/12 |
+| 24 | `e2e16.js` (`setup.sh`, uvicorn :8794) | kiểm tra bản mới cho 1 app: dòng trong menu ⋯, nút làm mới trong cửa sổ cập nhật, `POST /api/apps/{tên}/check` với Token Cập nhật / Chỉ đọc | 5/5 |
 
 Fixture: `setup.sh` — `web` (nginx 1.26, 2 mạng, IP tĩnh 172.30.0.50, alias, volume tên + ẩn danh, bind `$S/bind`
 chứa `hello-from-bind`, healthcheck), `bb-sidecar` (`--network container:web`), `bb-fail` (bản 1.36 sẽ chết → rollback),

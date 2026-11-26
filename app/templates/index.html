@@ -788,6 +788,15 @@
           <span x-show="actionSheet.app?.has_update" class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300">NEW</span>
         </button>
 
+        <button @click="const a = actionSheet.app; closeActionSheet(); checkOneApp(a)" class="ios-row">
+          <span class="flex items-center gap-3">
+            <svg class="w-4 h-4 text-sky-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+            </svg>
+            <span x-text="t('checkOne')"></span>
+          </span>
+        </button>
+
         <button x-show="!actionSheet.app?.can_update && actionSheet.app?.compose_issue && !actionSheet.app?.is_self"
                 @click="const a = actionSheet.app; closeActionSheet(); openComposeHint(a)" class="ios-row">
           <span class="flex items-center gap-3 min-w-0">
@@ -999,12 +1008,20 @@
           </div>
         </div>
 
+        <div class="flex items-center gap-2 shrink-0">
+        <button @click="refreshSingleApp()" :disabled="updateModal.checking || updateModal.updating" :aria-label="t('checkOne')" :title="t('checkOne')"
+                class="glass-btn w-8 h-8 rounded-full flex items-center justify-center text-sky-400 shrink-0 disabled:opacity-50">
+          <svg class="w-4 h-4" :class="updateModal.checking ? 'animate-spin' : ''" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+          </svg>
+        </button>
         <button @click="closeUpdateModal()" aria-label="Close"
                 class="glass-btn w-8 h-8 rounded-full flex items-center justify-center text-muted hover:text-[var(--text-primary)] shrink-0">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
           </svg>
         </button>
+        </div>
       </div>
 
       <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-4 flex flex-col gap-3.5">

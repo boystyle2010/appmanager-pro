@@ -39,7 +39,7 @@
           feedback: '', feedbackOk: true, deploying: false, done: false, logs: '', ws: null
         },
         updateModal: {
-          open: false, loading: false, updating: false, app: null,
+          open: false, loading: false, updating: false, checking: false, app: null,
           changelogHtml: '', changelogError: '', releaseTag: '', releaseUrl: '',
           autoUpdate: false, customRepo: '', showRepoInput: false, updateLogs: '', ws: null, preview: null
         },
@@ -79,6 +79,7 @@
         restorePicker: { open: false, app: null, items: [], selected: '' },
         versionPicker: { open: false, loading: false, error: '', items: [], selected: '' },
         apiDocs: { open: false },
+        checkingOne: {},
         srv: { list: [], loaded: false, statusBusy: false, form: { open: false, id: '', name: '', url: '', token: '', verify_tls: true }, test: null, busy: false, error: '' },
         remote: { id: '', loading: false, data: null, error: '', busy: '', checking: false },
         remoteJob: { open: false, server: null, app: '', id: '', status: '', log: '', result: {}, error: '' },
@@ -600,9 +601,28 @@
         },
 
         async refreshSingleApp() {
-          if (!this.updateModal.app) return;
-          await this._fetchAppDetails(this.updateModal.app.name, true);
-          await this.loadApps();
+          if (!this.updateModal.app || this.updateModal.checking) return;
+          this.updateModal.checking = true;
+          try {
+            await this._fetchAppDetails(this.updateModal.app.name, true);
+            await this.loadApps();
+            const a = this.updateModal.app;
+            this.showToast(a?.has_update ? this.t('checkOneNew').replace('{v}', a.remote_version || '') : this.t('checkOneLatest'));
+          } finally { this.updateModal.checking = false; }
+        },
+
+        // Kiểm tra bản mới cho riêng một app (menu ⋯)
+        async checkOneApp(app) {
+          if (this.checkingOne[app.name]) return;
+          this.checkingOne = { ...this.checkingOne, [app.name]: true };
+          try {
+            const { res, data } = await this._postJson(`/api/apps/${encodeURIComponent(app.name)}/check`, {});
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            await this.loadApps();
+            if (data.error && !data.has_update) this.showToast(`${app.title}: ${data.error}`);
+            else this.showToast(`${app.title}: ` + (data.has_update ? this.t('checkOneNew').replace('{v}', data.app?.remote_version || '') : this.t('checkOneLatest')));
+          } catch (err) { this.showToast(err.message); }
+          finally { const c = { ...this.checkingOne }; delete c[app.name]; this.checkingOne = c; }
         },
 
         async saveAppPref() {
