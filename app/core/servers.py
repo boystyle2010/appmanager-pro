@@ -145,39 +145,66 @@ def _detail(resp: httpx.Response) -> str:
         return (resp.text or "")[:200]
 
 
+def _headers(s: dict[str, Any]) -> dict[str, str]:
+    return {"Authorization": f"Bearer {s['token']}", "Accept": "application/json",
+            "User-Agent": "AppManager-Pro (multi-server)"}
+
+
+async def open_stream(s: dict[str, Any], path: str, timeout: float = 120) -> tuple[httpx.AsyncClient, httpx.Response]:
+    """Mở luồng GET tới máy phụ (vd tải log). Người gọi phải đóng resp + client. Lỗi kết nối -> RemoteError."""
+    c = net.client(verify=bool(s.get("verify_tls", True)), follow_redirects=False,
+                   timeout=httpx.Timeout(timeout, connect=6.0))
+    try:
+        req = c.build_request("GET", s["url"] + path, headers=_headers(s))
+        resp = await c.send(req, stream=True)
+        return c, resp
+    except Exception as exc:
+        await c.aclose()
+        raise _conn_error(s, exc)
+
+
+def _conn_error(s: dict[str, Any], exc: Exception) -> RemoteError:
+    if isinstance(exc, net.RateLimited):
+        return RemoteError(f"{s['name']} refused for now (too many failed attempts from this server); "
+                           f"try again after {time.strftime('%H:%M', time.localtime(exc.until))}", 429)
+    if isinstance(exc, httpx.ConnectError):
+        txt = str(exc)
+        if "CERTIFICATE" in txt.upper() or "SSL" in txt.upper():
+            return RemoteError(f"HTTPS certificate of {s['url']} is not trusted (self-signed?). Use a trusted "
+                               "certificate or turn off certificate checking for this server.", 502)
+        return RemoteError(f"Cannot connect to {s['url']}: check the address, port, firewall / VPN and that AppManager is running there.", 504)
+    if isinstance(exc, httpx.TimeoutException):
+        return RemoteError(f"{s['url']} did not answer in time", 504)
+    if isinstance(exc, RemoteError):
+        return exc
+    return RemoteError(f"Connection to {s['url']} failed: {str(exc)[:200]}", 502)
+
+
+def error_for(s: dict[str, Any], resp: httpx.Response) -> RemoteError:
+    """Mã lỗi HTTP của máy phụ -> RemoteError dễ hiểu (đã đọc nội dung resp)."""
+    if 300 <= resp.status_code < 400:
+        return RemoteError(f"{s['url']} redirects to {resp.headers.get('location', '?')}; enter that address instead", 502)
+    if resp.status_code == 401:
+        return RemoteError("The API Token was refused (wrong, deleted or expired). Create a new one on that server.", 424)  # không dùng 401: trình duyệt sẽ tưởng phiên đăng nhập của máy này hết hạn
+    if resp.status_code == 403:
+        return RemoteError(f"Not allowed by the API Token on {s['name']}: {_detail(resp) or 'permission'}", 403)
+    if resp.status_code == 404:
+        return RemoteError(f"{s['name']} does not know this request (AppManager too old? Update it to the same version): {_detail(resp)}", 404)
+    code = resp.status_code if resp.status_code in (400, 409, 429) else 502
+    return RemoteError(f"{s['name']}: {_detail(resp) or 'HTTP ' + str(resp.status_code)}", code)
+
+
 async def call(s: dict[str, Any], method: str, path: str, body: Any = None, timeout: float = 20) -> Any:
     """Gọi API của máy phụ; lỗi -> RemoteError với lời giải thích dễ hiểu."""
     url = s["url"] + path
-    headers = {"Authorization": f"Bearer {s['token']}", "Accept": "application/json",
-               "User-Agent": "AppManager-Pro (multi-server)"}
     try:
         async with net.client(verify=bool(s.get("verify_tls", True)), follow_redirects=False,
                               timeout=httpx.Timeout(timeout, connect=6.0)) as c:
-            resp = await c.request(method, url, headers=headers, json=body if method != "GET" else None)
-    except net.RateLimited as exc:
-        raise RemoteError(f"{s['name']} refused for now (too many failed attempts from this server); "
-                          f"try again after {time.strftime('%H:%M', time.localtime(exc.until))}", 429)
-    except httpx.ConnectError as exc:
-        txt = str(exc)
-        if "CERTIFICATE" in txt.upper() or "SSL" in txt.upper():
-            raise RemoteError(f"HTTPS certificate of {s['url']} is not trusted (self-signed?). Use a trusted "
-                              "certificate or turn off certificate checking for this server.", 502)
-        raise RemoteError(f"Cannot connect to {s['url']}: check the address, port, firewall / VPN and that AppManager is running there.", 504)
-    except httpx.TimeoutException:
-        raise RemoteError(f"{s['url']} did not answer in time", 504)
-    except httpx.HTTPError as exc:
-        raise RemoteError(f"Connection to {s['url']} failed: {str(exc)[:200]}", 502)
-    if 300 <= resp.status_code < 400:
-        raise RemoteError(f"{s['url']} redirects to {resp.headers.get('location', '?')}; enter that address instead", 502)
-    if resp.status_code == 401:
-        raise RemoteError("The API Token was refused (wrong, deleted or expired). Create a new one on that server.", 424)  # không dùng 401: trình duyệt sẽ tưởng phiên đăng nhập của máy này hết hạn
-    if resp.status_code == 403:
-        raise RemoteError(f"Not allowed by the API Token on {s['name']}: {_detail(resp) or 'permission'}", 403)
-    if resp.status_code == 404:
-        raise RemoteError(f"{s['name']} does not know this request (AppManager too old?): {_detail(resp)}", 404)
-    if resp.status_code >= 400:
-        code = resp.status_code if resp.status_code in (400, 409, 429) else 502
-        raise RemoteError(f"{s['name']}: {_detail(resp) or 'HTTP ' + str(resp.status_code)}", code)
+            resp = await c.request(method, url, headers=_headers(s), json=body if method != "GET" else None)
+    except (net.RateLimited, httpx.HTTPError) as exc:
+        raise _conn_error(s, exc)
+    if resp.status_code >= 300:
+        raise error_for(s, resp)
     try:
         return resp.json()
     except Exception:
@@ -218,3 +245,54 @@ def trim_app(a: dict[str, Any], base: str) -> dict[str, Any]:
     if icon.startswith("/"):
         out["icon"] = base + icon   # biểu tượng nằm trên máy phụ
     return out
+
+
+# ---------------------------------------------------------------- theo dõi máy phụ (0.21)
+WATCH_SETTING = "servers_down"   # {id: thời điểm bắt đầu mất kết nối} — nhớ qua khi khởi động lại
+_FAILS: dict[str, int] = {}
+FAILS_BEFORE_ALERT = 2           # 2 lần liền (job chạy mỗi 3 phút) -> tránh báo nhầm khi mạng chập chờn
+
+
+def _down_map() -> dict[str, float]:
+    try:
+        d = json.loads(get_setting(WATCH_SETTING, "{}") or "{}")
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def _fmt_duration(sec: float) -> str:
+    m = int(sec // 60)
+    return f"{m // 60} h {m % 60} min" if m >= 60 else f"{max(m, 1)} min"
+
+
+async def watch_once() -> list[str]:
+    """Kiểm tra mọi máy phụ; báo khi mất kết nối (2 lần liền) và khi kết nối lại. Trả các sự kiện đã báo."""
+    from app.core import notify
+    items = _load()
+    if not items:
+        return []
+    results = await asyncio.gather(*(probe(s) for s in items))
+    down = _down_map()
+    sent: list[str] = []
+    for s, st in zip(items, results):
+        sid = s["id"]
+        if st.get("ok"):
+            _FAILS.pop(sid, None)
+            if sid in down:
+                since = float(down.pop(sid) or time.time())
+                notify.notify("server_offline", f"{notify.tr('server_online')}: {s['name']}",
+                              f"{s['url']} · {notify.tr('down_for')} {_fmt_duration(time.time() - since)}",
+                              {"server": s["name"], "url": s["url"], "online": True})
+                sent.append(f"online:{s['name']}")
+            continue
+        _FAILS[sid] = _FAILS.get(sid, 0) + 1
+        if _FAILS[sid] >= FAILS_BEFORE_ALERT and sid not in down:
+            down[sid] = time.time() - 180 * (FAILS_BEFORE_ALERT - 1)
+            notify.notify("server_offline", f"{notify.tr('server_offline')}: {s['name']}",
+                          f"{s['url']}\n{st.get('error') or ''}".strip(),
+                          {"server": s["name"], "url": s["url"], "online": False, "error": st.get("error") or ""})
+            sent.append(f"offline:{s['name']}")
+    ids = {s["id"] for s in items}
+    set_setting(WATCH_SETTING, json.dumps({k: v for k, v in down.items() if k in ids}))  # máy đã xoá -> bỏ
+    return sent

@@ -10,12 +10,12 @@ from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from app.core import api_tokens, jobs, servers
+from app.core import api_tokens, jobs, logs as app_logs, servers
 from app.core.app_backup import delete_backup, list_backups, restore_backup
 from app.core.auth import (
     check_second_factor,
@@ -1219,6 +1219,75 @@ async def api_server_action(server_id: str, name: str, action: str, request: Req
     return await _remote(s, "POST", f"/api/apps/{quote(name, safe='')}/{action}", {}, timeout=60)
 
 
+_LOG_Q = re.compile(r"^(15m|1h|6h|24h|7d|all)$")
+
+
+def _log_query(range: str, q: str, level: str, limit: int = 0) -> str:
+    if not _LOG_Q.match(range or "") or level not in ("", "warn", "error"):
+        raise HTTPException(status_code=400, detail="Invalid log filter")
+    params = {"range": range, "q": (q or "")[:200], "level": level}
+    if limit:
+        params["limit"] = str(max(50, min(int(limit), 5000)))
+    from urllib.parse import urlencode
+    return urlencode(params)
+
+
+@app.get("/api/servers/{server_id}/apps/{name}/logs")
+async def api_server_logs(server_id: str, name: str, range: str = "1h", q: str = "", level: str = "", limit: int = 2000,
+                          _: str = Depends(_session_only)):
+    """Log app trên máy phụ (máy phụ cần AppManager >= 0.21)."""
+    s = _server_or_404(server_id)
+    return await _remote(s, "GET", f"/api/apps/{quote(name, safe='')}/logs?{_log_query(range, q, level, limit)}", timeout=60)
+
+
+@app.get("/api/servers/{server_id}/apps/{name}/logs/download")
+async def api_server_logs_download(server_id: str, name: str, request: Request, range: str = "24h", q: str = "",
+                                   level: str = "", user: str = Depends(_session_only)):
+    """Tải log app trên máy phụ: chuyển thẳng luồng dữ liệu, không giữ cả file trong RAM."""
+    s = _server_or_404(server_id)
+    path = f"/api/apps/{quote(name, safe='')}/logs/download?{_log_query(range, q, level)}"
+    client, resp = await servers.open_stream(s, path)
+    if resp.status_code != 200:
+        try:
+            await resp.aread()
+            err = servers.error_for(s, resp)
+        finally:
+            await resp.aclose(); await client.aclose()
+        raise HTTPException(status_code=err.status, detail=err.message)
+    audit(request, user, "remote_logs_download", f"{s['name']}/{name}", range)
+
+    async def body():
+        try:
+            async for chunk in resp.aiter_bytes():
+                yield chunk
+        finally:
+            await resp.aclose(); await client.aclose()
+
+    disp = resp.headers.get("content-disposition") or f'attachment; filename="{name}-logs.txt"'
+    return StreamingResponse(body(), media_type="text/plain; charset=utf-8", headers={"Content-Disposition": disp})
+
+
+@app.get("/api/servers/{server_id}/backups")
+async def api_server_backups(server_id: str, app_name: str = "", _: str = Depends(_session_only)):
+    s = _server_or_404(server_id)
+    data = await _remote(s, "GET", "/api/backups", timeout=30)
+    items = [b for b in (data.get("items") or []) if not app_name or b.get("app") == app_name]
+    return {"items": items}
+
+
+@app.post("/api/servers/{server_id}/backups/restore")
+async def api_server_restore(server_id: str, payload: BackupActionPayload, request: Request, user: str = Depends(_session_only)):
+    """Khôi phục bản sao lưu cấu hình app trên máy phụ (Token quyền Cập nhật trở lên)."""
+    s = _server_or_404(server_id)
+    try:
+        res = await servers.call(s, "POST", "/api/backups/restore", {"app": payload.app, "file": payload.file}, timeout=900)
+    except servers.RemoteError as exc:
+        audit(request, user, "remote_backup_restore", f"{s['name']}/{payload.app}", payload.file, False)
+        raise HTTPException(status_code=exc.status, detail=exc.message)
+    audit(request, user, "remote_backup_restore", f"{s['name']}/{payload.app}", payload.file, bool(res.get("ok", True)))
+    return res
+
+
 # Mô tả các API hay dùng cho tự động hoá (hiện ở đầu trang /docs); API khác nằm trong mục "Các API khác"
 _API_GUIDE: list[tuple[str, str, str, str, str]] = [
     # (method, path, english, tiếng Việt, ví dụ body JSON)
@@ -1241,9 +1310,12 @@ _API_GUIDE: list[tuple[str, str, str, str, str]] = [
     ("GET", "/api/jobs", "Recent background jobs (kept until AppManager restarts).", "Các việc chạy nền gần đây (giữ tới khi AppManager khởi động lại).", ""),
     ("POST", "/api/apps/{container_id}/{action}", "Container action: start, stop or restart (kill needs full access).",
      "Thao tác container: start, stop, restart (kill cần toàn quyền).", ""),
+    ("GET", "/api/apps/{container_name}/logs", "Logs of one app: range (15m, 1h, 6h, 24h, 7d, all), q (several words = all of them, -word = exclude), level (warn = warnings + errors, error = errors only), limit (max 5000 lines).",
+     "Log của một app: range (15m, 1h, 6h, 24h, 7d, all), q (nhiều từ = có đủ, -từ = bỏ), level (warn = cảnh báo + lỗi, error = chỉ lỗi), limit (tối đa 5000 dòng).", ""),
+    ("GET", "/api/apps/{container_name}/logs/download", "Download logs as a .txt file (same filters, max 50 MB).", "Tải log về file .txt (cùng bộ lọc, tối đa 50 MB).", ""),
     ("GET", "/api/settings", "Settings and the last 30 update history entries.", "Cài đặt và 30 mục lịch sử cập nhật gần nhất.", ""),
     ("GET", "/api/backups", "App configuration backups.", "Các bản sao lưu cấu hình app.", ""),
-    ("POST", "/api/backups/restore", "Restore an app configuration backup.", "Khôi phục bản sao lưu cấu hình app.", '{"app": "<app>", "file": "<backup file>"}'),
+    ("POST", "/api/backups/restore", "Restore an app configuration backup (Update permission or higher).", "Khôi phục bản sao lưu cấu hình app (quyền Cập nhật trở lên).", '{"app": "<app>", "file": "<backup file>"}'),
     ("GET", "/api/system/storage", "Docker disk usage and reclaimable space.", "Dung lượng Docker và phần có thể dọn.", ""),
     ("GET", "/api/audit", "Activity log (who did what, from which IP).", "Nhật ký hoạt động (ai làm gì, từ IP nào).", ""),
 ]
@@ -1601,6 +1673,30 @@ async def api_resource_history(container: str = "", hours: int = 24, _: str = De
     else:
         points = await asyncio.to_thread(get_resource_totals, since)
     return {"container": container, "hours": hours, "points": points}
+
+
+@app.get("/api/apps/{container_name}/logs")
+async def api_app_logs(container_name: str, range: str = "1h", q: str = "", level: str = "", limit: int = 2000,
+                       _: str = Depends(require_user)):
+    """Log của một app theo khoảng thời gian (15m, 1h, 6h, 24h, 7d, all), tìm chữ (q: nhiều từ = có đủ, -từ = bỏ)
+    và mức (level: warn = cảnh báo + lỗi, error = chỉ lỗi)."""
+    try:
+        return await asyncio.to_thread(app_logs.fetch, container_name, range, q, level, limit)
+    except app_logs.LogError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.detail)
+
+
+@app.get("/api/apps/{container_name}/logs/download")
+async def api_app_logs_download(container_name: str, request: Request, range: str = "24h", q: str = "", level: str = "",
+                                user: str = Depends(require_user)):
+    """Tải log về file .txt (cùng bộ lọc như /logs, tối đa 50 MB)."""
+    try:
+        fname, gen = await asyncio.to_thread(app_logs.download, container_name, range, q, level)
+    except app_logs.LogError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.detail)
+    audit(request, user, "logs_download", container_name, range)
+    return StreamingResponse(gen, media_type="text/plain; charset=utf-8",
+                             headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
 
 @app.get("/api/backups")

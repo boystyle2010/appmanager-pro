@@ -28,8 +28,10 @@ logger = logging.getLogger(__name__)
 
 CHANNEL_TYPES = ("telegram", "discord", "slack", "teams", "googlechat", "mattermost", "matrix", "signal",
                  "ntfy", "gotify", "bark", "pushover", "pushbullet", "email", "apprise", "webhook")
-EVENTS = ("update_available", "update_success", "update_failed", "self_update", "app_unhealthy", "disk_low", "security")
-CRITICAL = {"update_failed", "app_unhealthy", "disk_low", "security"}
+EVENTS = ("update_available", "update_success", "update_failed", "self_update", "app_unhealthy", "server_offline", "disk_low", "security")
+CRITICAL = {"update_failed", "app_unhealthy", "server_offline", "disk_low", "security"}
+# Sự kiện có từ bản đầu (0.16). Sự kiện thêm sau được tự bật cho kênh đã có (xem channels()).
+_BASE_EVENTS = ("update_available", "update_success", "update_failed", "self_update", "app_unhealthy", "disk_low", "security")
 SECRET_FIELDS = {"telegram": ("bot_token",), "discord": ("webhook_url",), "ntfy": ("token",), "gotify": ("app_token",),
                  "webhook": ("secret", "enc_key"), "slack": ("webhook_url",), "teams": ("webhook_url",), "googlechat": ("webhook_url",),
                  "mattermost": ("webhook_url",), "matrix": ("access_token",), "signal": (), "bark": ("device_key", "enc_key", "enc_iv"),
@@ -51,6 +53,7 @@ T = {
         "test": "🔔 Test notification", "digest": "🕘 While notifications were quiet",
         "test_body": "AppManager Pro can reach this channel.", "private_body": "Open AppManager Pro to see the details.", "used": "used", "free": "free",
         "config": "settings applied", "recovery": "recovered after an interruption",
+        "server_offline": "🔌 Server unreachable", "server_online": "✅ Server reachable again", "down_for": "unreachable for",
     },
     "vi": {
         "update_available": "🆕 Có bản cập nhật mới", "update_success": "✅ Đã cập nhật", "update_failed": "❌ Cập nhật thất bại",
@@ -59,6 +62,7 @@ T = {
         "test": "🔔 Tin thử", "digest": "🕘 Trong giờ im lặng",
         "test_body": "AppManager Pro gửi được tới kênh này.", "private_body": "Mở AppManager Pro để xem chi tiết.", "used": "đã dùng", "free": "còn trống",
         "config": "đã áp dụng cấu hình", "recovery": "đã phục hồi sau sự cố",
+        "server_offline": "🔌 Máy chủ mất kết nối", "server_online": "✅ Máy chủ đã kết nối lại", "down_for": "mất kết nối trong",
     },
 }
 
@@ -75,9 +79,22 @@ def tr(key: str) -> str:
 def channels() -> list[dict[str, Any]]:
     try:
         data = json.loads(get_setting("notify_channels", "[]") or "[]")
-        return [c for c in data if isinstance(c, dict) and c.get("type") in CHANNEL_TYPES]
+        items = [c for c in data if isinstance(c, dict) and c.get("type") in CHANNEL_TYPES]
     except Exception:
         return []
+    # Sự kiện mới (vd server_offline từ 0.21): tự bật cho các kênh đã có, một lần duy nhất (người dùng tắt sau vẫn giữ)
+    try:
+        known = set(json.loads(get_setting("notify_known_events", "[]") or "[]")) or set(_BASE_EVENTS)
+    except Exception:
+        known = set(_BASE_EVENTS)
+    new = [e for e in EVENTS if e not in known]
+    if new:
+        for c in items:
+            c["events"] = list(dict.fromkeys(list(c.get("events") or []) + new))
+        if items:
+            _save_channels(items)
+        set_setting("notify_known_events", json.dumps(list(EVENTS)))
+    return items
 
 
 def _save_channels(items: list[dict[str, Any]]) -> None:

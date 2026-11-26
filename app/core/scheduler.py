@@ -198,6 +198,11 @@ def configure_jobs() -> None:
     scheduler.add_job(notify.check_disk, trigger=IntervalTrigger(hours=1), id="notify_disk",
                       next_run_time=datetime.now(timezone.utc) + timedelta(minutes=2), replace_existing=True)
     scheduler.add_job(notify.flush_deferred, trigger=IntervalTrigger(minutes=5), id="notify_flush", replace_existing=True)
+    # Máy phụ (0.21): báo khi mất kết nối / kết nối lại
+    from app.core import servers as _servers
+
+    scheduler.add_job(_servers.watch_once, trigger=IntervalTrigger(minutes=3), id="servers_watch", max_instances=1,
+                      coalesce=True, next_run_time=datetime.now(timezone.utc) + timedelta(seconds=45), replace_existing=True)
 
     if scheduler.get_job("auto_prune_job"):
         scheduler.remove_job("auto_prune_job")

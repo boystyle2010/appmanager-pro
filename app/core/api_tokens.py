@@ -35,13 +35,15 @@ _NEVER = (
     re.compile(r"^/api/system/registry-logins(/|$)"),
     re.compile(r"^/api/servers(/|$)"),   # máy chủ khác: chứa Token của máy khác -> chỉ người đăng nhập
 )
-# Quyền "update": ngoài đọc, được kiểm tra bản mới, cập nhật app (qua job), cập nhật tất cả, start/stop/restart.
+# Quyền "update": ngoài đọc, được kiểm tra bản mới, cập nhật app (qua job), cập nhật tất cả, start/stop/restart,
+# khôi phục bản sao lưu cấu hình app.
 _UPDATE_POST = (
     re.compile(r"^/api/updates/check$"),
     re.compile(r"^/api/apps/[^/]+/check$"),
     re.compile(r"^/api/apps/[^/]+/update$"),
     re.compile(r"^/api/update-all$"),
     re.compile(r"^/api/apps/[^/]+/(start|stop|restart)$"),
+    re.compile(r"^/api/backups/restore$"),   # 0.21: khôi phục cấu hình app (máy chính khôi phục máy phụ từ xa)
 )
 
 

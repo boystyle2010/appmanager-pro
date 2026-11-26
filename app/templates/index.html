@@ -147,6 +147,11 @@
           <span x-text="t('svThis')"></span>
           <span x-show="summary.updates" class="px-1.5 py-0.5 rounded-full text-[10px] leading-none bg-amber-500/25 text-amber-300" x-text="summary.updates"></span>
         </button>
+        <button @click="selectServer('*')" class="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-semibold transition"
+                :class="remote.id === '*' ? 'glass-btn-primary' : 'glass-btn text-muted'">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/></svg>
+          <span x-text="t('svAll')"></span>
+        </button>
         <template x-for="sv in srv.list" :key="sv.id">
           <button @click="selectServer(sv.id)" class="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-semibold transition"
                   :class="remote.id === sv.id ? 'glass-btn-primary' : 'glass-btn text-muted'">
@@ -160,7 +165,31 @@
       <!-- App của máy khác -->
       <template x-if="remote.id">
         <div class="space-y-3.5">
-          <div class="glass-panel rounded-[22px] p-4 space-y-3">
+          <!-- Gộp mọi máy (0.21) -->
+          <div x-show="remote.id === '*'" class="glass-panel rounded-[22px] p-4 space-y-3">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <h2 class="font-bold text-[15px] truncate" x-text="t('svAllTitle')"></h2>
+                <p class="text-[11px] text-muted mt-0.5" x-text="remote.data ? t('svAllSummary').replace('{n}', remote.data.summary.total).replace('{u}', remote.data.summary.updates).replace('{s}', remote.data.servers) : t('svLoading')"></p>
+              </div>
+              <button @click="reloadRemote()" :disabled="remote.loading" :aria-label="t('logRefresh')"
+                      class="glass-btn w-9 h-9 rounded-xl flex items-center justify-center text-sky-400 shrink-0 disabled:opacity-50">
+                <svg class="w-4 h-4" :class="remote.loading && 'animate-spin'" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>
+              </button>
+            </div>
+            <div class="relative">
+              <svg class="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-subtle pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+              <input type="search" x-model="remote.q" :placeholder="t('svAllSearch')" autocapitalize="off" autocorrect="off" spellcheck="false"
+                     class="glass-input w-full rounded-xl py-2 pl-8 pr-3 text-xs" />
+            </div>
+            <template x-for="e in (remote.data?.errors || [])" :key="e.name">
+              <div class="rounded-xl px-3 py-2 bg-rose-500/12 border border-rose-500/30 text-[11px] text-rose-300 break-words">
+                <span class="font-semibold" x-text="e.name + ': '"></span><span x-text="e.error"></span>
+              </div>
+            </template>
+            <p class="text-[10.5px] text-subtle leading-snug" x-text="t('svAllNote')"></p>
+          </div>
+          <div x-show="remote.id !== '*'" class="glass-panel rounded-[22px] p-4 space-y-3">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
                 <h2 class="font-bold text-[15px] truncate" x-text="currentServer()?.name"></h2>
@@ -179,7 +208,7 @@
           <div x-show="remote.error" class="glass-panel rounded-2xl p-3.5 border-rose-500/40 bg-rose-500/15 text-xs text-rose-300 break-words" x-text="remote.error"></div>
           <div x-show="remote.loading && !remote.data" class="glass-panel rounded-[22px] p-10 text-center text-sm text-muted" x-text="t('svLoading')"></div>
           <div x-show="remote.data" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
-            <template x-for="ra in (remote.data?.apps || [])" :key="ra.name">
+            <template x-for="ra in remoteApps()" :key="(ra._server ?? '') + '/' + ra.name">
               <div class="glass-card rounded-[22px] p-4 space-y-3" :class="ra.has_update ? 'glass-card-update' : ''">
                 <div class="flex items-center gap-3">
                   <template x-if="ra.icon">
@@ -197,6 +226,11 @@
                       <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="ra.status === 'running' ? 'bg-emerald-400' : 'bg-slate-500'"></span>
                       <span x-text="ra.name"></span>
                     </p>
+                    <p x-show="remote.id === '*'" class="mt-1 inline-flex items-center gap-1 max-w-full text-[10px] font-semibold px-1.5 py-0.5 rounded-md"
+                       :class="ra._server ? 'bg-violet-500/12 text-violet-300 border border-violet-400/25' : 'bg-emerald-500/12 text-emerald-300 border border-emerald-400/25'">
+                      <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z"/></svg>
+                      <span class="truncate" x-text="ra._serverName"></span>
+                    </p>
                   </div>
                   <span class="h-6 inline-flex items-center text-[9.5px] px-2 rounded-lg font-semibold uppercase tracking-wider border leading-none shrink-0"
                         :class="ra.manage === 'run' ? 'bg-teal-500/12 text-teal-300 border-teal-400/25' : ra.source === 'casaos' ? 'bg-indigo-500/12 text-indigo-300 border-indigo-400/20' : 'bg-sky-500/12 text-sky-300 border-sky-400/20'"
@@ -204,19 +238,44 @@
                 </div>
                 <p class="text-[11.5px] font-mono-code truncate" :class="ra.has_update ? 'text-amber-300' : 'text-muted'"
                    x-text="ra.has_update ? `${ra.version || '?'} → ${ra.remote_version || '?'}` : (ra.version || ra.image_tag || '')"></p>
-                <div class="flex gap-2">
-                  <button x-show="ra.has_update && ra.can_update" @click="confirmRemoteUpdate(ra)" class="glass-btn-update flex-1 h-9 rounded-xl text-xs font-semibold" x-text="t('svUpdate')"></button>
-                  <button x-show="ra.status === 'running'" @click="remoteAction(ra, 'restart')" :disabled="remote.busy === ra.name"
-                          class="glass-btn flex-1 h-9 rounded-xl text-xs font-semibold disabled:opacity-50" x-text="remote.busy === ra.name ? '…' : t('restart')"></button>
-                  <button x-show="ra.status === 'running' && !ra.is_self" @click="remoteAction(ra, 'stop')" :disabled="remote.busy === ra.name"
-                          class="glass-btn h-9 px-3 rounded-xl text-xs font-semibold text-rose-400 disabled:opacity-50" x-text="t('stop')"></button>
-                  <button x-show="ra.status !== 'running'" @click="remoteAction(ra, 'start')" :disabled="remote.busy === ra.name"
-                          class="glass-btn flex-1 h-9 rounded-xl text-xs font-semibold text-emerald-300 disabled:opacity-50" x-text="remote.busy === ra.name ? '…' : t('start')"></button>
+                <!-- App của máy này trong danh sách gộp: dùng cửa sổ cập nhật + menu thao tác như trang chính -->
+                <div x-show="ra._server === ''" class="flex gap-2">
+                  <button x-show="ra.has_update && ra.can_update" @click="openUpdateModal(ra)" class="glass-btn-update flex-1 h-9 rounded-xl text-xs font-semibold" x-text="t('svUpdate')"></button>
+                  <button @click="openLogs(ra)" class="glass-btn flex-1 h-9 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12"/></svg>
+                    <span x-text="t('svLogs')"></span>
+                  </button>
+                  <button @click="openActionSheet(ra)" class="glass-btn h-9 px-3 rounded-xl text-xs font-semibold" :aria-label="t('svMore')">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+                  </button>
                 </div>
+                <template x-if="ra._server !== ''">
+                  <div class="space-y-2">
+                    <div class="flex gap-2">
+                      <button x-show="ra.has_update && ra.can_update" @click="confirmRemoteUpdate(ra)" class="glass-btn-update flex-1 h-9 rounded-xl text-xs font-semibold" x-text="t('svUpdate')"></button>
+                      <button x-show="ra.status === 'running'" @click="remoteAction(ra, 'restart')" :disabled="remote.busy === rkey(ra)"
+                              class="glass-btn flex-1 h-9 rounded-xl text-xs font-semibold disabled:opacity-50" x-text="remote.busy === rkey(ra) ? '…' : t('restart')"></button>
+                      <button x-show="ra.status === 'running' && !ra.is_self" @click="remoteAction(ra, 'stop')" :disabled="remote.busy === rkey(ra)"
+                              class="glass-btn h-9 px-3 rounded-xl text-xs font-semibold text-rose-400 disabled:opacity-50" x-text="t('stop')"></button>
+                      <button x-show="ra.status !== 'running'" @click="remoteAction(ra, 'start')" :disabled="remote.busy === rkey(ra)"
+                              class="glass-btn flex-1 h-9 rounded-xl text-xs font-semibold text-emerald-300 disabled:opacity-50" x-text="remote.busy === rkey(ra) ? '…' : t('start')"></button>
+                    </div>
+                    <div class="flex gap-2">
+                      <button @click="openLogs(ra, currentServerOf(ra))" class="glass-btn flex-1 h-8 rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12"/></svg>
+                        <span x-text="t('svLogs')"></span>
+                      </button>
+                      <button x-show="!ra.is_self" @click="confirmRemoteRestore(ra)" :disabled="remote.busy === rkey(ra)" class="glass-btn flex-1 h-8 rounded-xl text-[11px] font-semibold text-amber-300 flex items-center justify-center gap-1.5 disabled:opacity-50">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"/></svg>
+                        <span x-text="t('restore')"></span>
+                      </button>
+                    </div>
+                  </div>
+                </template>
               </div>
             </template>
           </div>
-          <p class="text-center text-[10.5px] text-subtle" x-text="t('svRemoteNote')"></p>
+          <p x-show="remote.id !== '*'" class="text-center text-[10.5px] text-subtle" x-text="t('svRemoteNote')"></p>
         </div>
       </template>
 
@@ -2952,13 +3011,17 @@
     <div class="glass-panel w-full max-w-4xl rounded-t-[28px] sm:rounded-[28px] p-5 flex flex-col h-[82dvh] sm:max-h-[84vh]"
          style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
       <div class="sheet-handle sm:hidden"></div>
-      <div class="flex items-center justify-between gap-3 pb-3.5 border-b border-[var(--glass-border)]">
+      <div class="flex items-center justify-between gap-3 pb-3 border-b border-[var(--glass-border)]">
         <div class="min-w-0">
-          <h3 class="font-bold text-sm sm:text-base truncate" x-text="`Live Logs — ${logModal.title}`"></h3>
-          <p class="text-[11px] text-muted font-mono-code truncate" x-text="logModal.containerName"></p>
+          <h3 class="font-bold text-sm sm:text-base truncate" x-text="`Logs — ${logModal.title}`"></h3>
+          <p class="text-[11px] text-muted font-mono-code truncate" x-text="(logModal.server ? logModal.server.name + ' · ' : '') + logModal.containerName"></p>
         </div>
-        <div class="flex items-center gap-1.5">
-          <button @click="logModal.lines = ''" class="glass-btn px-3 py-1.5 rounded-xl text-xs" x-text="t('clear')"></button>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button @click="downloadLogs()" :aria-label="t('logDownload')" :title="t('logDownload')"
+                  class="glass-btn h-8 px-2.5 rounded-xl text-xs font-semibold text-sky-400 flex items-center gap-1">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+            <span x-text="t('logDownloadShort')"></span>
+          </button>
           <button @click="closeLogs()" aria-label="Close"
                   class="glass-btn w-8 h-8 rounded-full flex items-center justify-center text-muted hover:text-[var(--text-primary)] shrink-0">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
@@ -2967,9 +3030,42 @@
           </button>
         </div>
       </div>
+      <!-- Bộ lọc: thời gian, mức, tìm -->
+      <div class="pt-3 space-y-2 shrink-0">
+        <div class="flex items-center gap-2">
+          <select class="glass-input rounded-xl py-1.5 pl-2.5 text-xs w-auto shrink-0" :value="logModal.mode" @change="setLogMode($event.target.value)">
+            <template x-if="!logModal.server"><option value="live" x-text="t('logRange_live')"></option></template>
+            <template x-for="r in ['15m', '1h', '6h', '24h', '7d', 'all']" :key="r">
+              <option :value="r" x-text="t('logRange_' + r)" :selected="logModal.mode === r"></option>
+            </template>
+          </select>
+          <div class="glass-inset rounded-xl p-0.5 flex flex-1 min-w-0">
+            <template x-for="lv in ['', 'warn', 'error']" :key="lv">
+              <button @click="setLogLevel(lv)" class="flex-1 min-w-0 py-1 rounded-lg text-[11px] font-semibold truncate transition"
+                      :class="logModal.level === lv ? (lv === 'error' ? 'bg-rose-500/25 text-rose-200' : lv === 'warn' ? 'bg-amber-500/25 text-amber-200' : 'bg-sky-500/25 text-sky-200') : 'text-muted'"
+                      x-text="t('logLevel_' + (lv || 'all'))"></button>
+            </template>
+          </div>
+          <button x-show="logModal.mode !== 'live'" @click="fetchLogs()" :disabled="logModal.loading" :aria-label="t('logRefresh')"
+                  class="glass-btn w-8 h-8 rounded-xl flex items-center justify-center text-sky-400 shrink-0 disabled:opacity-50">
+            <svg class="w-4 h-4" :class="logModal.loading && 'animate-spin'" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>
+          </button>
+          <button x-show="logModal.mode === 'live'" @click="logModal.lines = ''" class="glass-btn h-8 px-2.5 rounded-xl text-[11px] shrink-0" x-text="t('clear')"></button>
+        </div>
+        <div class="relative">
+          <svg class="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-subtle pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+          <input type="search" x-model="logModal.q" @input="onLogQuery()" :placeholder="t('logSearch')" :title="t('logSearchHelp')" autocapitalize="off" autocorrect="off" spellcheck="false"
+                 class="glass-input w-full rounded-xl py-1.5 pl-8 pr-8 text-xs" />
+          <button x-show="logModal.q" @click="logModal.q = ''; onLogQuery()" aria-label="Clear"
+                  class="absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-muted">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <p class="text-[10.5px] leading-snug" :class="logModal.error ? 'text-rose-300' : 'text-subtle'" x-text="logModal.error || logInfoText()"></p>
+      </div>
       <pre x-ref="logBox"
-           class="glass-terminal font-mono-code rounded-2xl p-4 mt-4 flex-1 overflow-auto text-[11px] sm:text-xs text-emerald-300/95 leading-relaxed whitespace-pre-wrap break-all"
-           x-text="logModal.lines || t('connectingLogs')"></pre>
+           class="glass-terminal font-mono-code rounded-2xl p-4 mt-2 flex-1 overflow-auto text-[11px] sm:text-xs text-emerald-300/95 leading-relaxed whitespace-pre-wrap break-all"
+           x-text="logView() || (logModal.loading ? t('logLoading') : logModal.mode === 'live' && !logModal.lines ? t('connectingLogs') : t('logNoMatch'))"></pre>
     </div>
   </div>
 

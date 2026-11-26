@@ -78,7 +78,7 @@
       <pre class="glass-terminal font-mono-code rounded-xl p-2.5 text-[11px] text-emerald-300 whitespace-pre-wrap break-all">Authorization: Bearer amp_…</pre>
       <ul class="space-y-1.5 text-[11.5px]">
         <li><span class="s-read px-1.5 py-0.5 rounded-md text-[10px] font-semibold">{{ scope_label('read') }}</span> {{ 'mọi GET (xem).' if vi else 'every GET (view only).' }}</li>
-        <li><span class="s-update px-1.5 py-0.5 rounded-md text-[10px] font-semibold">{{ scope_label('update') }}</span> {{ '+ kiểm tra bản mới, cập nhật app / tất cả, start / stop / restart.' if vi else '+ check for updates, update an app / all apps, start / stop / restart.' }}</li>
+        <li><span class="s-update px-1.5 py-0.5 rounded-md text-[10px] font-semibold">{{ scope_label('update') }}</span> {{ '+ kiểm tra bản mới, cập nhật app / tất cả, start / stop / restart, khôi phục bản sao lưu cấu hình app.' if vi else '+ check for updates, update an app / all apps, start / stop / restart, restore an app configuration backup.' }}</li>
         <li><span class="s-full px-1.5 py-0.5 rounded-md text-[10px] font-semibold">{{ scope_label('full') }}</span> {{ 'mọi thứ trừ tài khoản, 2FA, API Token và mật khẩu registry.' if vi else 'everything except account, 2FA, API Tokens and registry passwords.' }}</li>
       </ul>
       <p class="text-[11.5px]">{{ 'Cập nhật chạy nền: POST …/update trả về mã việc (202), hỏi lại GET /api/jobs/{id} tới khi status khác "running". Sai Token 5 lần sẽ bị khoá IP 15 phút (429). Token không được gửi trong URL.' if vi else 'Updates run in the background: POST …/update returns a job (202); poll GET /api/jobs/{id} until status is not "running". 5 wrong Tokens lock the IP for 15 minutes (429). Tokens are never accepted in the URL.' }}</p>

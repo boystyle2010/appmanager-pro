@@ -29,6 +29,7 @@ fresh d19; suite "19. Multiple servers" env S=$S bash -c "bash $S/setup.sh >/dev
 fresh d21; suite "21. New notification channels (Mailpit, Apprise)" env APP_DATA_DIR=$S/d21 S=$S timeout 600 python -u $S/t_notify2.py
 fresh d23; suite "23. Content encryption + private mode" env APP_DATA_DIR=$S/d23 S=$S timeout 300 python -u $S/t_notify3.py
 fresh d26; suite "26. Auto-update rules per app" env APP_DATA_DIR=$S/d26 bash -c "bash $S/setup.sh >/dev/null 2>&1; timeout 600 python -u $S/t_policy.py"
+fresh d30; suite "30. Logs, remote logs / restore, server offline alerts" env S=$S bash -c "bash $S/setup.sh >/dev/null 2>&1; timeout 900 python -u $S/t_v021.py"
 fresh d25; suite "25. Release channels" env APP_DATA_DIR=$S/d25 timeout 300 python -u $S/t_channels.py
 echo; echo "Result:"; grep -E "^(===|SUMMARY|FAIL)" "$OUT"
 exit $FAILED

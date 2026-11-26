@@ -30,7 +30,7 @@
 
         confirmModal: { open: false, tone: 'primary', title: '', message: '', confirmLabel: '', onConfirm: null },
         actionSheet: { open: false, app: null },
-        logModal: { open: false, title: '', containerName: '', lines: '', ws: null },
+        logModal: { open: false, title: '', containerName: '', lines: '', ws: null, mode: 'live', q: '', level: '', server: null, loading: false, info: null, error: '' },
         historyLog: { id: null, text: '', loading: false },
         batchModal: { open: false, running: false, items: [], doneCount: 0, succeeded: 0, failed: 0, logs: '', ws: null },
         deployModal: {
@@ -76,13 +76,13 @@
         pwForm: { current: '', next: '', confirm: '', busy: false },
         auditItems: [],
         backupsState: { loading: false, items: [], busyFile: '' },
-        restorePicker: { open: false, app: null, items: [], selected: '' },
+        restorePicker: { open: false, app: null, items: [], selected: '', server: null },
         versionPicker: { open: false, loading: false, error: '', items: [], selected: '' },
         apiDocs: { open: false },
         checkingOne: {},
         autoCfg: { enabled: false, time: '03:30' },
         srv: { list: [], loaded: false, statusBusy: false, form: { open: false, id: '', name: '', url: '', token: '', verify_tls: true }, test: null, busy: false, error: '' },
-        remote: { id: '', loading: false, data: null, error: '', busy: '', checking: false },
+        remote: { id: '', loading: false, data: null, error: '', busy: '', checking: false, q: '' },
         remoteJob: { open: false, server: null, app: '', id: '', status: '', log: '', result: {}, error: '' },
         tokenState: { loading: false, items: [], loaded: false, form: { open: false, name: '', scope: 'read', days: 90, ips: '' }, created: '', busy: false, error: '', examples: false },
         dataFolders: { open: false, mode: 'list', folder: null, newPath: '', check: null, busy: false, error: '' },
@@ -499,6 +499,7 @@
             this.apps = data.apps;
             this.lastChecked = data.last_checked || '';
             this.checkingUpdates = !!data.checking_updates;
+            if (this.remote.id === '*' && this.remote.data) this._mergeLocal();
           } catch (err) { this.error = err.message; }
           finally { this.loading = false; }
         },
@@ -772,11 +773,18 @@
           }
         },
 
-        // ---------------- Live Logs ----------------
-        openLogs(app) {
-          if (this.logModal.ws) { try { this.logModal.ws.close(); } catch (_) {} }
-          const ws = new WebSocket(this.wsUrl(`/ws/logs/${encodeURIComponent(app.name)}`));
-          this.logModal = { open: true, title: app.title, containerName: app.name, lines: '', ws };
+        // ---------------- Logs: trực tiếp / theo khoảng thời gian, tìm, lọc mức, tải về (0.21) ----------------
+        openLogs(app, server = null) {
+          this._closeLogWs();
+          this.logModal = { open: true, title: app.title, containerName: app.name, lines: '', ws: null,
+                            mode: server ? '1h' : 'live', q: '', level: '', server, loading: false, info: null, error: '' };
+          if (server) this.fetchLogs(); else this._openLogWs();
+        },
+
+        _openLogWs() {
+          const m = this.logModal;
+          const ws = new WebSocket(this.wsUrl(`/ws/logs/${encodeURIComponent(m.containerName)}`));
+          m.ws = ws; m.lines = ''; m.info = null; m.error = '';
           ws.onmessage = (event) => {
             if (this.logModal.ws !== ws) return;
             let next = this.logModal.lines + event.data;
@@ -792,9 +800,116 @@
           };
         },
 
-        closeLogs() {
+        _closeLogWs() {
           if (this.logModal.ws) { try { this.logModal.ws.close(); } catch (_) {} }
           this.logModal.ws = null;
+        },
+
+        _logBase() {
+          const m = this.logModal, n = encodeURIComponent(m.containerName);
+          return m.server ? `/api/servers/${m.server.id}/apps/${n}/logs` : `/api/apps/${n}/logs`;
+        },
+
+        _logParams(range) {
+          const m = this.logModal;
+          return new URLSearchParams({ range, q: m.q.trim(), level: m.level }).toString();
+        },
+
+        setLogMode(mode) {
+          const m = this.logModal;
+          m.mode = mode;
+          if (mode === 'live') { this._openLogWs(); return; }
+          this._closeLogWs();
+          this.fetchLogs();
+        },
+
+        setLogLevel(lv) {
+          this.logModal.level = lv;
+          if (this.logModal.mode !== 'live') this.fetchLogs();
+        },
+
+        onLogQuery() {
+          clearTimeout(this._logQT);
+          if (this.logModal.mode !== 'live') this._logQT = setTimeout(() => this.fetchLogs(), 450);
+        },
+
+        async fetchLogs() {
+          const m = this.logModal, key = `${m.containerName}|${m.mode}|${m.q}|${m.level}`;
+          m.loading = true; m.error = '';
+          try {
+            const res = await fetch(`${this._logBase()}?${this._logParams(m.mode)}&limit=3000`);
+            const data = await res.json().catch(() => ({}));
+            if (key !== `${m.containerName}|${m.mode}|${m.q}|${m.level}`) return;  // đã đổi bộ lọc trong lúc chờ
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            m.lines = data.text || ''; m.info = data;
+            this._scrollRef('logBox');
+          } catch (err) { m.error = err.message; m.lines = ''; m.info = null; }
+          finally { m.loading = false; }
+        },
+
+        // Mức của một dòng log (giống app/core/logs.py) — dùng để lọc khi xem trực tiếp
+        _logLevelOf(text) {
+          if (/\b(error|err|fatal|fail(?:ed|ure)?|crit(?:ical)?|panic|emerg|alert|exception|traceback|segfault)\b|\[(?:e|err|error|fatal|crit)\]|\blevel=(?:error|fatal|crit)/i.test(text)) return 'error';
+          if (/\b(warn(?:ing)?|deprecated)\b|\[(?:w|warn|warning)\]|\blevel=warn/i.test(text)) return 'warn';
+          return '';
+        },
+
+        // Nội dung hiển thị: xem trực tiếp thì lọc ngay trên trình duyệt; theo khoảng thời gian thì máy chủ đã lọc
+        logView() { return this._logShortTimes(this._logFiltered()); },
+
+        // Thời gian Docker (2026-11-26T22:33:48.414222022Z) -> giờ máy ngắn gọn "26/11 22:33:48" cho màn hình điện thoại
+        _logShortTimes(text) {
+          if (!text) return text;
+          const pad = n => String(n).padStart(2, '0');
+          return text.replace(/^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(\.\d+)?Z /gm, (all, base) => {
+            const d = new Date(base + 'Z');
+            return isNaN(d) ? all : `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} `;
+          });
+        },
+
+        _logFiltered() {
+          const m = this.logModal;
+          if (m.mode !== 'live' || (!m.q.trim() && !m.level)) return m.lines;
+          const words = m.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+          const inc = words.filter(w => !(w.startsWith('-') && w.length > 1)), exc = words.filter(w => w.startsWith('-') && w.length > 1).map(w => w.slice(1));
+          let prev = '';
+          return m.lines.split('\n').filter(line => {
+            const text = line.replace(/^\d{4}-\d\d-\d\dT[\d:.]+Z?\s?/, '');
+            let lv = this._logLevelOf(text);
+            if (!lv && /^[ \t]/.test(text) && prev) lv = prev;
+            prev = lv;
+            if (m.level === 'error' && lv !== 'error') return false;
+            if (m.level === 'warn' && !lv) return false;
+            const low = text.toLowerCase();
+            return inc.every(w => low.includes(w)) && !exc.some(w => low.includes(w));
+          }).join('\n');
+        },
+
+        logInfoText() {
+          const m = this.logModal, i = m.info;
+          if (m.mode === 'live') {
+            if (!m.q.trim() && !m.level) return this.t('logLiveHint');
+            const v = this._logFiltered();
+            return this.t('logMatched').replace('{n}', v ? v.split('\n').filter(Boolean).length : 0);
+          }
+          if (!i) return '';
+          let s = this.t('logMatched').replace('{n}', i.matched) + ' · ' + this.t('logScanned').replace('{n}', i.scanned);
+          if (i.truncated) s += ' · ' + this.t('logTruncated');
+          if (i.capped) s += ' · ' + this.t('logCapped');
+          return s;
+        },
+
+        downloadLogs() {
+          const m = this.logModal, range = m.mode === 'live' ? '24h' : m.mode;
+          const a = document.createElement('a');
+          a.href = `${this._logBase()}/download?${this._logParams(range)}`;
+          a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove();
+          this.showToast(this.t('logDownloading').replace('{r}', this.t('logRange_' + range)));
+        },
+
+        closeLogs() {
+          this._closeLogWs();
+          clearTimeout(this._logQT);
           this.logModal.open = false;
         },
 
@@ -1835,19 +1950,70 @@
             onConfirm: async () => {
               const { res, data } = await this._postJson('/api/servers/delete', { id: s.id });
               if (!res.ok) { this.showToast(data.detail || 'Failed'); return; }
-              if (this.remote.id === s.id) this.selectServer('');
+              if (this.remote.id === s.id || (this.remote.id === '*' && this.srv.list.length <= 1)) this.selectServer('');
               this.loadServers();
             }
           });
         },
 
         currentServer() { return this.srv.list.find(x => x.id === this.remote.id) || null; },
+        // Máy của một app trên thẻ (danh sách gộp mọi máy có trường _server; trang một máy thì là máy đang chọn)
+        currentServerOf(app) { return (app && app._server && this.srv.list.find(x => x.id === app._server)) || this.currentServer(); },
 
         selectServer(id) {
           this.remote.id = id; this.remote.data = null; this.remote.error = '';
-          if (id) { this.settingsModal.open = false; this.loadRemoteApps(); window.scrollTo(0, 0); }
+          if (id) { this.settingsModal.open = false; this.reloadRemote(); window.scrollTo(0, 0); }
           else this.loadApps();
         },
+
+        reloadRemote() { return this.remote.id === '*' ? this.loadAllServersApps() : this.loadRemoteApps(); },
+
+        // 0.21: gộp app của máy này + mọi máy phụ vào một danh sách (máy không trả lời -> báo lỗi riêng, máy khác vẫn hiện)
+        async loadAllServersApps() {
+          const r = this.remote;
+          r.loading = true; r.error = '';
+          try {
+            const remotes = Promise.all(this.srv.list.map(async sv => {
+              try {
+                const res = await fetch(`/api/servers/${sv.id}/apps`);
+                const d = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(d.detail || 'Failed');
+                sv.status = { ...(sv.status || {}), ok: true, checked: Math.floor(Date.now() / 1000), apps: d.summary || {} };
+                return { sv, apps: d.apps || [] };
+              } catch (err) {
+                sv.status = { ...(sv.status || {}), ok: false, checked: Math.floor(Date.now() / 1000), error: err.message };
+                return { sv, apps: [], error: err.message };
+              }
+            }));
+            await this.loadApps();
+            const results = await remotes;
+            if (r.id !== '*') return;
+            const remoteApps = [];
+            for (const x of results) for (const a of x.apps) remoteApps.push({ ...a, _server: x.sv.id, _serverName: x.sv.name });
+            r.data = { apps: remoteApps, summary: {}, errors: results.filter(x => x.error).map(x => ({ name: x.sv.name, error: x.error })), servers: results.length + 1 };
+            this._mergeLocal();
+          } catch (err) { if (r.id === '*') r.error = err.message; }
+          finally { if (r.id === '*') r.loading = false; }
+        },
+
+        // Thẻ app hiển thị ở chế độ máy phụ / gộp mọi máy (gộp: lọc theo ô tìm — tên app, image, tên máy)
+        remoteApps() {
+          const r = this.remote, list = r.data?.apps || [];
+          const q = (r.q || '').trim().toLowerCase();
+          if (r.id !== '*' || !q) return list;
+          return list.filter(a => [a.title, a.name, a.image, a._serverName].some(x => String(x || '').toLowerCase().includes(q)));
+        },
+
+        // Danh sách gộp: thay phần app của máy này bằng dữ liệu mới (sau khi cập nhật / thao tác trên máy này)
+        _mergeLocal() {
+          const d = this.remote.data;
+          this.apps.forEach(a => { a._server = ''; a._serverName = this.t('svThis'); });
+          d.apps = [...this.apps, ...d.apps.filter(a => a._server)]
+            .sort((a, b) => (!!b.has_update - !!a.has_update) || String(a.title).localeCompare(String(b.title)) || a._serverName.localeCompare(b._serverName));
+          d.summary = { total: d.apps.length, updates: d.apps.filter(a => a.has_update).length };
+        },
+
+        rkey(app) { return `${app._server ?? this.remote.id}/${app.name}`; },
 
         async loadRemoteApps() {
           const r = this.remote, id = r.id;
@@ -1878,11 +2044,11 @@
         },
 
         confirmRemoteUpdate(app) {
-          const s = this.currentServer();
+          const s = this.currentServerOf(app);
           this.askConfirm({
             tone: 'update', title: this.t('svUpdateTitle').replace('{app}', app.title),
             message: this.t('svUpdateMsg').replace('{server}', s?.name || '').replace('{from}', app.version || '?').replace('{to}', app.remote_version || '?'),
-            confirmLabel: this.t('updateNow'), onConfirm: () => this.startRemoteJob(app, `/api/servers/${s.id}/apps/${encodeURIComponent(app.name)}/update`)
+            confirmLabel: this.t('updateNow'), onConfirm: () => this.startRemoteJob(app, `/api/servers/${s.id}/apps/${encodeURIComponent(app.name)}/update`, s)
           });
         },
 
@@ -1895,8 +2061,8 @@
           });
         },
 
-        async startRemoteJob(app, url) {
-          const s = this.currentServer(), j = this.remoteJob;
+        async startRemoteJob(app, url, server = null) {
+          const s = server || this.currentServer(), j = this.remoteJob;
           Object.assign(j, { open: true, server: s, app: app.title, id: '', status: 'starting', log: '', result: {}, error: '' });
           try {
             const { res, data } = await this._postJson(url, {});
@@ -1915,21 +2081,21 @@
             if (res.ok) {
               j.log = data.log || ''; j.status = data.status; j.result = data.result || {};
               this.$nextTick(() => { const el = document.getElementById('remote-job-log'); if (el) el.scrollTop = el.scrollHeight; });
-              if (data.status !== 'running') { this.loadRemoteApps(); this.refreshServerStatus(); return; }
+              if (data.status !== 'running') { this.reloadRemote(); this.refreshServerStatus(); return; }
             } else j.error = data.detail || 'Failed';
           } catch (err) { j.error = err.message; }
           setTimeout(() => this._pollRemoteJob(), 2000);
         },
 
         async remoteAction(app, action) {
-          const s = this.currentServer(), r = this.remote;
+          const s = this.currentServerOf(app), r = this.remote;
           const go = async () => {
-            r.busy = app.name;
+            r.busy = this.rkey(app);
             try {
               const { res, data } = await this._postJson(`/api/servers/${s.id}/apps/${encodeURIComponent(app.name)}/${action}`, {});
               if (!res.ok) throw new Error(data.detail || 'Failed');
               this.showToast(this.t('svActionDone').replace('{app}', app.title));
-              await this.loadRemoteApps();
+              await this.reloadRemote();
             } catch (err) { this.showToast(err.message); }
             finally { r.busy = ''; }
           };
@@ -2427,25 +2593,41 @@
         confirmRestoreApp(app) {
           const items = app.backups?.length ? app.backups : (app.latest_backup ? [app.latest_backup] : []);
           if (!items.length) return;
-          this.restorePicker = { open: true, app, items, selected: items[0].file };
+          this.restorePicker = { open: true, app, items, selected: items[0].file, server: null };
+        },
+
+        // Máy phụ (0.21): lấy danh sách bản sao lưu của app trên máy đó rồi mở cùng cửa sổ chọn bản
+        async confirmRemoteRestore(app) {
+          const s = this.currentServerOf(app), r = this.remote;
+          r.busy = this.rkey(app);
+          try {
+            const res = await fetch(`/api/servers/${s.id}/backups?app_name=${encodeURIComponent(app.name)}`);
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            const items = data.items || [];
+            if (!items.length) { this.showToast(this.t('svNoBackups').replace('{app}', app.title)); return; }
+            this.restorePicker = { open: true, app, items, selected: items[0].file, server: s };
+          } catch (err) { this.showToast(err.message); }
+          finally { r.busy = ''; }
         },
 
         runRestorePicker() {
           const p = this.restorePicker;
           const b = p.items.find(x => x.file === p.selected) || p.items[0];
           p.open = false;
-          if (b) this.restoreBackup(b);
+          if (b) this.restoreBackup(b, p.server);
         },
 
         // Khôi phục có cửa sổ tiến trình: đang chạy (đếm giây) -> kết quả + các bước đã làm
-        async restoreBackup(b) {
-          const app = this.apps.find(a => a.name === b.app);
+        async restoreBackup(b, server = null) {
+          const app = server ? this.restorePicker.app : this.apps.find(a => a.name === b.app);
           if (this.restoreRun.timer) clearInterval(this.restoreRun.timer);
-          this.restoreRun = { open: true, running: true, title: app?.title || b.app, version: b.version || '', run: app?.manage === 'run', status: '', message: '', log: [], elapsed: 0, timer: null };
+          this.restoreRun = { open: true, running: true, title: (server ? server.name + ' · ' : '') + (app?.title || b.app), version: b.version || '', run: app?.manage === 'run', status: '', message: '', log: [], elapsed: 0, timer: null };
           this.restoreRun.timer = setInterval(() => { this.restoreRun.elapsed += 1; }, 1000);
           this.backupsState.busyFile = b.file;
           try {
-            const { res, data } = await this._postJson('/api/backups/restore', { app: b.app, file: b.file });
+            const url = server ? `/api/servers/${server.id}/backups/restore` : '/api/backups/restore';
+            const { res, data } = await this._postJson(url, { app: b.app, file: b.file });
             this.restoreRun.log = data.log || [];
             if (!res.ok) {
               this.restoreRun.status = 'error';
@@ -2454,7 +2636,7 @@
               this.restoreRun.status = data.warning ? 'warning' : 'success';
               this.restoreRun.message = data.warning || data.message || 'OK';
             }
-            this.loadApps();
+            if (server) this.reloadRemote(); else this.loadApps();
             if (this.settingsModal.open) this.loadBackups();
           } catch (err) {
             this.restoreRun.status = 'error';

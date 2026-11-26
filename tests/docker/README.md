@@ -109,6 +109,8 @@ Xem chi tiết lỗi một bộ: chạy đúng dòng đó nhưng bỏ `| grep ..
 | 27 | `e2e17.js` (uvicorn :8794) | giao diện quy tắc: phần quy tắc trong cửa sổ cập nhật, dòng "đang giữ lại" trên thẻ, cảnh báo khi tự cập nhật chung tắt | 5/5 |
 | 28 | `e2e18.js` (uvicorn :8795) | kênh theo biến thể: glances `latest-full` có thêm `latest` thường (không có `dev`), `latest` có `latest-full` + `dev`, cảnh báo đổi biến thể, nhãn changelog (container busybox gắn tag glances, kênh lấy từ Docker Hub thật) | 6/6 |
 | 29 | `e2e19.js` (uvicorn :8796) | trang cũ (Safari giữ tab sau khi AppManager cập nhật) tự tải lại đúng 1 lần theo mã build; HTML `Cache-Control: no-cache`; file tĩnh `?v=<mã build>` | 5/5 |
+| 30 | `t_v021.py` (`setup.sh`) | 0.21: log theo khoảng thời gian / tìm (nhiều từ, `-từ`) / lọc mức (khối Traceback đi cùng dòng lỗi) / tải về + audit; Token Chỉ đọc đọc / tải log, không khôi phục được; máy chính :8783 → máy phụ :8782: log, tải log (luồng), danh sách sao lưu, khôi phục thật bb-none + audit 2 máy, Token Chỉ đọc bị 403, tên file lạ bị từ chối; theo dõi máy phụ (2 lần lỗi mới báo, không báo lặp, nhớ qua khởi động lại, báo kết nối lại + thời gian mất); sự kiện mới tự bật cho kênh cũ đúng 1 lần | 30/30 |
+| 31 | `e2e20.js` (+`srv_setup.sh`, container `lg`, bản sao lưu bb-none trên máy phụ) | giao diện 0.21: cửa sổ log (trực tiếp + tìm, 1 giờ + Lỗi, số dòng, tải .txt), "Tất cả máy" (thẻ ghi tên máy, tìm theo tên máy), log máy phụ, khôi phục máy phụ (chọn bản → kết quả) | 11/11 |
 
 Fixture: `setup.sh` — `web` (nginx 1.26, 2 mạng, IP tĩnh 172.30.0.50, alias, volume tên + ẩn danh, bind `$S/bind`
 chứa `hello-from-bind`, healthcheck), `bb-sidecar` (`--network container:web`), `bb-fail` (bản 1.36 sẽ chết → rollback),
