@@ -97,6 +97,8 @@ Xem chi tiết lỗi một bộ: chạy đúng dòng đó nhưng bỏ `| grep ..
 | 16 | `t_datafolders.py` (`setup2.sh`, cần `build_amp.sh`) | thư mục dữ liệu: ẩn docker.sock, kiểm tra, đổi đường dẫn, gỡ, chặn gỡ thư mục chứa compose của AppManager, mở rộng sang thư mục cha | 21/21 |
 | 17 | `t_tokens.py` (`setup.sh`) | API token: quyền chỉ đọc / cập nhật / toàn quyền, hạn dùng, giới hạn IP, khoá IP khi sai, cập nhật app thật qua HTTP job, `/api/health`, `/docs`, audit, thông báo bảo mật (uvicorn :8795, webhook :8094) | 39/39 |
 | 18 | `e2e12.js` + `e2e13.js` | giao diện 0.17: Cài đặt dạng danh sách, thư mục dữ liệu (AppManager compose :8770), API token + trang tài liệu (uvicorn :8794) | 9/9 + 8/8 |
+| 19 | `t_servers.py` (`setup.sh`) | 0.18 nhiều máy chủ: máy chính :8793 + máy phụ HTTP :8792 + HTTPS tự ký :8791 (uvicorn từ repo, cùng Docker), máy giả bản cũ / chuyển hướng :8790, địa chỉ chết :8799; Token sai / chỉ đọc / bị xoá, cập nhật + start/stop/restart thật từ xa, audit 2 máy, bảo mật | 26/26 |
+| 20 | `e2e14.js` (+`srv_setup.sh`) | giao diện nhiều máy chủ: Cài đặt → Máy chủ (giải thích giao thức), thêm máy, thanh chọn máy, cập nhật thật từ xa | 7/7 |
 
 Fixture: `setup.sh` — `web` (nginx 1.26, 2 mạng, IP tĩnh 172.30.0.50, alias, volume tên + ẩn danh, bind `$S/bind`
 chứa `hello-from-bind`, healthcheck), `bb-sidecar` (`--network container:web`), `bb-fail` (bản 1.36 sẽ chết → rollback),

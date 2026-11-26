@@ -79,6 +79,9 @@
         restorePicker: { open: false, app: null, items: [], selected: '' },
         versionPicker: { open: false, loading: false, error: '', items: [], selected: '' },
         apiDocs: { open: false },
+        srv: { list: [], loaded: false, statusBusy: false, form: { open: false, id: '', name: '', url: '', token: '', verify_tls: true }, test: null, busy: false, error: '' },
+        remote: { id: '', loading: false, data: null, error: '', busy: '', checking: false },
+        remoteJob: { open: false, server: null, app: '', id: '', status: '', log: '', result: {}, error: '' },
         tokenState: { loading: false, items: [], loaded: false, form: { open: false, name: '', scope: 'read', days: 90, ips: '' }, created: '', busy: false, error: '', examples: false },
         dataFolders: { open: false, mode: 'list', folder: null, newPath: '', check: null, busy: false, error: '' },
         dataSetup: { open: false, step: 'intro', status: null, manualPath: '', busy: false, error: '', candidates: [], selected: [], elapsed: 0, source: '' },
@@ -373,7 +376,7 @@
 
         async init() {
           this.$watch(() => [this.confirmModal, this.actionSheet, this.logModal, this.batchModal, this.deployModal, this.updateModal,
-                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker, this.restoreRun, this.updateAllPicker, this.versionPicker, this.dupPopup, this.dataSetup, this.dataFolders, this.tokenState.form, this.apiDocs, this.composeHint, this.runCmd].some(m => m && m.open), (open) => {
+                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker, this.restoreRun, this.updateAllPicker, this.versionPicker, this.dupPopup, this.dataSetup, this.dataFolders, this.tokenState.form, this.apiDocs, this.srv.form, this.remoteJob, this.composeHint, this.runCmd].some(m => m && m.open), (open) => {
             const b = document.body, h = document.documentElement;
             if (open) {
               this._lockY = window.scrollY || 0;
@@ -387,6 +390,7 @@
           });
           await this.loadApps();
           this.checkDataSetup();
+          this.loadServers(true);
           const stale = !this.lastChecked || (Date.now() - new Date(this.lastChecked).getTime()) > 3600000;
           if (stale && !this.checkingUpdates) this.checkUpdates(true);
         },
@@ -1693,6 +1697,179 @@
           else if (tab === 'notify') this.loadNotify();
           else if (tab === 'security') this.loadSecurity();
           else if (tab === 'tokens') this.loadTokens();
+          else if (tab === 'servers') this.loadServers(true);
+        },
+
+        // ---------------- Nhiều máy chủ (0.18) ----------------
+        async loadServers(withStatus = false) {
+          const v = this.srv;
+          try {
+            const res = await fetch('/api/servers');
+            if (!res.ok) return;
+            v.list = (await res.json()).servers || []; v.loaded = true;
+            if (withStatus && v.list.length) this.refreshServerStatus();
+          } catch (_) {}
+        },
+
+        async refreshServerStatus() {
+          const v = this.srv;
+          if (v.statusBusy) return;
+          v.statusBusy = true;
+          try {
+            const res = await fetch('/api/servers/status');
+            if (res.ok) v.list = (await res.json()).servers || v.list;
+          } catch (_) {}
+          finally { v.statusBusy = false; }
+        },
+
+        serverStatusText(s) {
+          const st = s.status || {};
+          if (!st.checked) return this.t('svChecking');
+          if (!st.ok) return st.error || this.t('svOffline');
+          const a = st.apps || {};
+          return [`v${st.version}`, this.t('svApps').replace('{n}', a.total ?? 0),
+                  a.updates ? this.t('svUpdates').replace('{n}', a.updates) : '', st.latency_ms != null ? `${st.latency_ms} ms` : ''].filter(Boolean).join(' · ');
+        },
+
+        openServerForm(s = null) {
+          Object.assign(this.srv, { test: null, error: '', busy: false });
+          this.srv.form = s ? { open: true, id: s.id, name: s.name, url: s.url, token: '', verify_tls: s.verify_tls }
+                            : { open: true, id: '', name: '', url: '', token: '', verify_tls: true };
+        },
+
+        async testServerForm() {
+          const v = this.srv;
+          v.busy = true; v.error = ''; v.test = null;
+          try {
+            const { res, data } = await this._postJson('/api/servers/test', v.form);
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            v.test = data;
+          } catch (err) { v.error = err.message; }
+          finally { v.busy = false; }
+        },
+
+        async saveServerForm() {
+          const v = this.srv;
+          v.busy = true; v.error = '';
+          try {
+            const { res, data } = await this._postJson('/api/servers', v.form);
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            v.form.open = false;
+            this.showToast(data.status?.ok ? this.t('svSaved') : this.t('svSavedOffline'));
+            await this.loadServers();
+          } catch (err) { v.error = err.message; }
+          finally { v.busy = false; }
+        },
+
+        confirmDeleteServer(s) {
+          this.askConfirm({
+            tone: 'danger', title: this.t('svDeleteTitle'), message: `${s.name} (${s.url}) — ${this.t('svDeleteMsg')}`,
+            confirmLabel: this.t('svDelete'),
+            onConfirm: async () => {
+              const { res, data } = await this._postJson('/api/servers/delete', { id: s.id });
+              if (!res.ok) { this.showToast(data.detail || 'Failed'); return; }
+              if (this.remote.id === s.id) this.selectServer('');
+              this.loadServers();
+            }
+          });
+        },
+
+        currentServer() { return this.srv.list.find(x => x.id === this.remote.id) || null; },
+
+        selectServer(id) {
+          this.remote.id = id; this.remote.data = null; this.remote.error = '';
+          if (id) { this.settingsModal.open = false; this.loadRemoteApps(); window.scrollTo(0, 0); }
+          else this.loadApps();
+        },
+
+        async loadRemoteApps() {
+          const r = this.remote, id = r.id;
+          if (!id) return;
+          r.loading = true; r.error = '';
+          try {
+            const res = await fetch(`/api/servers/${id}/apps`);
+            const data = await res.json();
+            if (r.id !== id) return;
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            data.apps.sort((a, b) => (b.has_update - a.has_update) || a.title.localeCompare(b.title));
+            r.data = data;
+            const sv = this.srv.list.find(x => x.id === id);  // số app / bản mới trên thanh chọn máy theo dữ liệu mới nhất
+            if (sv) sv.status = { ...(sv.status || {}), ok: true, checked: Math.floor(Date.now() / 1000), apps: data.summary || {} };
+          } catch (err) { if (r.id === id) { r.error = err.message; r.data = null; } }
+          finally { if (r.id === id) r.loading = false; }
+        },
+
+        async remoteCheck() {
+          const r = this.remote, id = r.id;
+          r.checking = true; r.error = '';
+          try {
+            const { res, data } = await this._postJson(`/api/servers/${id}/check`, {});
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            await this.loadRemoteApps(); this.refreshServerStatus();
+          } catch (err) { r.error = err.message; }
+          finally { r.checking = false; }
+        },
+
+        confirmRemoteUpdate(app) {
+          const s = this.currentServer();
+          this.askConfirm({
+            tone: 'update', title: this.t('svUpdateTitle').replace('{app}', app.title),
+            message: this.t('svUpdateMsg').replace('{server}', s?.name || '').replace('{from}', app.version || '?').replace('{to}', app.remote_version || '?'),
+            confirmLabel: this.t('updateNow'), onConfirm: () => this.startRemoteJob(app, `/api/servers/${s.id}/apps/${encodeURIComponent(app.name)}/update`)
+          });
+        },
+
+        confirmRemoteUpdateAll() {
+          const s = this.currentServer(), n = this.remote.data?.summary?.updates || 0;
+          this.askConfirm({
+            tone: 'update', title: this.t('svUpdateAllTitle').replace('{server}', s?.name || ''),
+            message: this.t('svUpdateAllMsg').replace('{n}', n), confirmLabel: this.t('svUpdateAll'),
+            onConfirm: () => this.startRemoteJob({ title: this.t('svAllApps') }, `/api/servers/${s.id}/update-all`)
+          });
+        },
+
+        async startRemoteJob(app, url) {
+          const s = this.currentServer(), j = this.remoteJob;
+          Object.assign(j, { open: true, server: s, app: app.title, id: '', status: 'starting', log: '', result: {}, error: '' });
+          try {
+            const { res, data } = await this._postJson(url, {});
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            j.id = data.id; j.status = data.status;
+            this._pollRemoteJob();
+          } catch (err) { j.status = 'failed'; j.error = err.message; }
+        },
+
+        async _pollRemoteJob() {
+          const j = this.remoteJob;
+          if (!j.open || !j.id) return;
+          try {
+            const res = await fetch(`/api/servers/${j.server.id}/jobs/${j.id}`);
+            const data = await res.json();
+            if (res.ok) {
+              j.log = data.log || ''; j.status = data.status; j.result = data.result || {};
+              this.$nextTick(() => { const el = document.getElementById('remote-job-log'); if (el) el.scrollTop = el.scrollHeight; });
+              if (data.status !== 'running') { this.loadRemoteApps(); this.refreshServerStatus(); return; }
+            } else j.error = data.detail || 'Failed';
+          } catch (err) { j.error = err.message; }
+          setTimeout(() => this._pollRemoteJob(), 2000);
+        },
+
+        async remoteAction(app, action) {
+          const s = this.currentServer(), r = this.remote;
+          const go = async () => {
+            r.busy = app.name;
+            try {
+              const { res, data } = await this._postJson(`/api/servers/${s.id}/apps/${encodeURIComponent(app.name)}/${action}`, {});
+              if (!res.ok) throw new Error(data.detail || 'Failed');
+              this.showToast(this.t('svActionDone').replace('{app}', app.title));
+              await this.loadRemoteApps();
+            } catch (err) { this.showToast(err.message); }
+            finally { r.busy = ''; }
+          };
+          if (action === 'stop') {
+            this.askConfirm({ tone: 'danger', title: this.t('svStopTitle').replace('{app}', app.title),
+                              message: this.t('svStopMsg').replace('{server}', s.name), confirmLabel: this.t('stop'), onConfirm: go });
+          } else go();
         },
 
         // ---------------- API token (0.17) ----------------
@@ -1772,7 +1949,7 @@
         settingsSectionTitle() {
           return {
             home: this.t('settingsTitle'), schedule: this.t('setGeneral'), storage: this.t('setStorage'),
-            notify: this.t('setNotify'), security: this.t('tabSecurity'), tokens: this.t('setTokens'), history: this.t('tabHistory'), about: this.t('tabAbout'),
+            notify: this.t('setNotify'), servers: this.t('setServers'), security: this.t('tabSecurity'), tokens: this.t('setTokens'), history: this.t('tabHistory'), about: this.t('tabAbout'),
           }[this.settingsModal.tab] || this.t('settingsTitle');
         },
 
@@ -1785,6 +1962,7 @@
             bell: 'M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0',
             lock: 'M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z',
             clock: 'M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z',
+            servers: 'M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z',
             key: 'M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z',
             info: 'M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z',
           };
@@ -1798,6 +1976,7 @@
               { tab: 'schedule', title: this.t('setGeneral'), desc: this.t('setGeneralDesc'), icon: I.gear, color: c('sky') },
               { tab: 'storage', title: this.t('setStorage'), desc: st?.missing_count ? this.t('dataFoldersMissing').replace('{n}', st.missing_count) : this.t('setStorageDesc'), warn: !!st?.missing_count, icon: I.disk, color: c('emerald') },
               { tab: 'notify', title: this.t('setNotify'), desc: this.t('setNotifyDesc'), icon: I.bell, color: c('amber') },
+              { tab: 'servers', title: this.t('setServers'), desc: this.srv.list.length ? this.t('svCount').replace('{n}', this.srv.list.length) : this.t('setServersDesc'), icon: I.servers, color: c('violet') },
             ] },
             { id: 'safety', items: [
               { tab: 'security', title: this.t('tabSecurity'), desc: this.t('setSecurityDesc'), icon: I.lock, color: c('rose') },

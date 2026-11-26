@@ -138,6 +138,88 @@
     </header>
 
     <main class="max-w-7xl mx-auto px-4 pt-4">
+      <!-- Chọn máy chủ (0.18): chỉ hiện khi đã thêm máy khác -->
+      <div x-show="srv.list.length" x-cloak class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 mb-3">
+        <button @click="selectServer('')" class="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-semibold transition"
+                :class="!remote.id ? 'glass-btn-primary' : 'glass-btn text-muted'">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+          <span x-text="t('svThis')"></span>
+          <span x-show="summary.updates" class="px-1.5 py-0.5 rounded-full text-[10px] leading-none bg-amber-500/25 text-amber-300" x-text="summary.updates"></span>
+        </button>
+        <template x-for="sv in srv.list" :key="sv.id">
+          <button @click="selectServer(sv.id)" class="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-semibold transition"
+                  :class="remote.id === sv.id ? 'glass-btn-primary' : 'glass-btn text-muted'">
+            <span class="w-1.5 h-1.5 rounded-full" :class="!sv.status?.checked ? 'bg-slate-500' : sv.status.ok ? 'bg-emerald-400' : 'bg-rose-400'"></span>
+            <span x-text="sv.name"></span>
+            <span x-show="sv.status?.apps?.updates" class="px-1.5 py-0.5 rounded-full text-[10px] leading-none bg-amber-500/25 text-amber-300" x-text="sv.status?.apps?.updates"></span>
+          </button>
+        </template>
+      </div>
+
+      <!-- App của máy khác -->
+      <template x-if="remote.id">
+        <div class="space-y-3.5">
+          <div class="glass-panel rounded-[22px] p-4 space-y-3">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <h2 class="font-bold text-[15px] truncate" x-text="currentServer()?.name"></h2>
+                <p class="font-mono-code text-[11px] text-subtle break-all" x-text="currentServer()?.url"></p>
+                <p class="text-[11px] text-muted mt-0.5" x-text="currentServer() ? serverStatusText(currentServer()) : ''"></p>
+              </div>
+              <a :href="currentServer()?.url" target="_blank" rel="noopener" class="glass-btn px-3 py-2 rounded-xl text-[11px] font-semibold text-sky-400 shrink-0" x-text="t('svOpenWeb')"></a>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <button @click="remoteCheck()" :disabled="remote.checking || remote.loading" class="glass-btn py-2.5 rounded-xl text-xs font-semibold disabled:opacity-50"
+                      x-text="remote.checking ? t('svCheckingUpdates') : t('svCheck')"></button>
+              <button @click="confirmRemoteUpdateAll()" :disabled="!remote.data?.summary?.updates" class="glass-btn-update py-2.5 rounded-xl text-xs font-semibold disabled:opacity-40"
+                      x-text="t('svUpdateAll') + (remote.data?.summary?.updates ? ' (' + remote.data.summary.updates + ')' : '')"></button>
+            </div>
+          </div>
+          <div x-show="remote.error" class="glass-panel rounded-2xl p-3.5 border-rose-500/40 bg-rose-500/15 text-xs text-rose-300 break-words" x-text="remote.error"></div>
+          <div x-show="remote.loading && !remote.data" class="glass-panel rounded-[22px] p-10 text-center text-sm text-muted" x-text="t('svLoading')"></div>
+          <div x-show="remote.data" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+            <template x-for="ra in (remote.data?.apps || [])" :key="ra.name">
+              <div class="glass-card rounded-[22px] p-4 space-y-3" :class="ra.has_update ? 'glass-card-update' : ''">
+                <div class="flex items-center gap-3">
+                  <template x-if="ra.icon">
+                    <div class="w-11 h-11 rounded-[14px] shrink-0 overflow-hidden flex items-center justify-center glass-icon-box p-1.5">
+                      <img :src="ra.icon" :alt="ra.title" class="w-full h-full object-contain rounded-lg" @error="ra.icon = ''" />
+                    </div>
+                  </template>
+                  <template x-if="!ra.icon">
+                    <div class="w-11 h-11 rounded-[14px] shrink-0 flex items-center justify-center text-white font-bold text-xs uppercase ring-1 ring-white/20"
+                         :class="avatarGradient(ra.title)" x-text="ra.title.slice(0, 2)"></div>
+                  </template>
+                  <div class="min-w-0 flex-1">
+                    <h3 class="font-semibold text-[15px] leading-tight truncate" x-text="ra.title"></h3>
+                    <p class="text-[11px] text-muted truncate flex items-center gap-1.5">
+                      <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="ra.status === 'running' ? 'bg-emerald-400' : 'bg-slate-500'"></span>
+                      <span x-text="ra.name"></span>
+                    </p>
+                  </div>
+                  <span class="h-6 inline-flex items-center text-[9.5px] px-2 rounded-lg font-semibold uppercase tracking-wider border leading-none shrink-0"
+                        :class="ra.manage === 'run' ? 'bg-teal-500/12 text-teal-300 border-teal-400/25' : ra.source === 'casaos' ? 'bg-indigo-500/12 text-indigo-300 border-indigo-400/20' : 'bg-sky-500/12 text-sky-300 border-sky-400/20'"
+                        x-text="ra.manage === 'run' ? 'run' : ra.source"></span>
+                </div>
+                <p class="text-[11.5px] font-mono-code truncate" :class="ra.has_update ? 'text-amber-300' : 'text-muted'"
+                   x-text="ra.has_update ? `${ra.version || '?'} → ${ra.remote_version || '?'}` : (ra.version || ra.image_tag || '')"></p>
+                <div class="flex gap-2">
+                  <button x-show="ra.has_update && ra.can_update" @click="confirmRemoteUpdate(ra)" class="glass-btn-update flex-1 h-9 rounded-xl text-xs font-semibold" x-text="t('svUpdate')"></button>
+                  <button x-show="ra.status === 'running'" @click="remoteAction(ra, 'restart')" :disabled="remote.busy === ra.name"
+                          class="glass-btn flex-1 h-9 rounded-xl text-xs font-semibold disabled:opacity-50" x-text="remote.busy === ra.name ? '…' : t('restart')"></button>
+                  <button x-show="ra.status === 'running' && !ra.is_self" @click="remoteAction(ra, 'stop')" :disabled="remote.busy === ra.name"
+                          class="glass-btn h-9 px-3 rounded-xl text-xs font-semibold text-rose-400 disabled:opacity-50" x-text="t('stop')"></button>
+                  <button x-show="ra.status !== 'running'" @click="remoteAction(ra, 'start')" :disabled="remote.busy === ra.name"
+                          class="glass-btn flex-1 h-9 rounded-xl text-xs font-semibold text-emerald-300 disabled:opacity-50" x-text="remote.busy === ra.name ? '…' : t('start')"></button>
+                </div>
+              </div>
+            </template>
+          </div>
+          <p class="text-center text-[10.5px] text-subtle" x-text="t('svRemoteNote')"></p>
+        </div>
+      </template>
+
+      <div x-show="!remote.id">
       <!-- Dismissible Update Notification Banner + Update All -->
       <div x-show="showUpdateBanner" x-cloak x-transition
            class="glass-panel rounded-[22px] p-4 mb-4 border-amber-400/35 bg-linear-to-r from-amber-500/12 via-orange-500/8 to-transparent flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 relative">
@@ -452,6 +534,8 @@
       <div x-show="!loading && filteredApps.length === 0" x-cloak
            class="glass-panel rounded-[22px] p-12 text-center text-sm text-muted"
            x-text="t('noApps')"></div>
+
+      </div>
 
       <!-- Bản quyền -->
       <footer class="mt-10 mb-2 text-center text-[11px] leading-relaxed text-subtle">
@@ -2286,6 +2370,49 @@
           </div>
         </template>
 
+        <!-- MÁY CHỦ (0.18): quản lý AppManager trên máy khác qua REST API + API Token -->
+        <template x-if="settingsModal.tab === 'servers'">
+          <div class="space-y-3.5">
+            <div class="glass-inset rounded-2xl p-3.5 space-y-2.5 text-[11.5px] leading-relaxed">
+              <p class="text-xs font-semibold" x-text="t('svHowTitle')"></p>
+              <template x-for="(row, i) in [['svProto', 'svProtoDesc'], ['svReq', 'svReqDesc'], ['svTok', 'svTokDesc'], ['svSec', 'svSecDesc'], ['svWork', 'svWorkDesc']]" :key="i">
+                <div class="flex gap-2.5">
+                  <span class="w-5 h-5 rounded-full bg-violet-500/15 text-violet-300 text-[10.5px] font-bold flex items-center justify-center shrink-0 mt-0.5" x-text="i + 1"></span>
+                  <p class="min-w-0"><span class="font-semibold" x-text="t(row[0]) + ': '"></span><span class="text-muted" x-text="t(row[1])"></span></p>
+                </div>
+              </template>
+              <button type="button" @click="openServerForm()" class="glass-btn-primary w-full py-2.5 rounded-xl text-xs font-semibold" x-text="t('svAdd')"></button>
+            </div>
+
+            <div x-show="srv.list.length" class="flex items-center justify-between px-1">
+              <p class="text-[11px] font-semibold text-muted" x-text="t('svListTitle')"></p>
+              <button type="button" @click="refreshServerStatus()" :disabled="srv.statusBusy" class="text-[11px] font-semibold text-sky-400 disabled:opacity-50" x-text="srv.statusBusy ? t('svChecking') : t('svRecheck')"></button>
+            </div>
+            <template x-for="sv in srv.list" :key="sv.id">
+              <div class="glass-inset rounded-2xl p-3.5 space-y-2">
+                <div class="flex items-start justify-between gap-2">
+                  <div class="min-w-0">
+                    <p class="text-[13px] font-semibold truncate flex items-center gap-1.5">
+                      <span class="w-2 h-2 rounded-full shrink-0" :class="!sv.status?.checked ? 'bg-slate-500' : sv.status.ok ? 'bg-emerald-400' : 'bg-rose-400'"></span>
+                      <span x-text="sv.name"></span>
+                    </p>
+                    <p class="font-mono-code text-[11px] text-subtle break-all" x-text="sv.url"></p>
+                  </div>
+                  <span x-show="!sv.https" class="shrink-0 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-amber-500/15 text-amber-300" x-text="t('svHttp')"></span>
+                </div>
+                <p class="text-[11px] leading-snug" :class="sv.status?.checked && !sv.status.ok ? 'text-rose-300' : 'text-muted'" x-text="serverStatusText(sv)"></p>
+                <p x-show="sv.status?.scope" class="text-[10.5px] text-subtle" x-text="t('svScope') + ': ' + tokenScope(sv.status?.scope).title + ' · ' + sv.token_hint"></p>
+                <div class="grid grid-cols-3 gap-2 pt-0.5">
+                  <button type="button" @click="selectServer(sv.id)" class="glass-btn py-2 rounded-xl text-[11px] font-semibold text-sky-400" x-text="t('svOpen')"></button>
+                  <button type="button" @click="openServerForm(sv)" class="glass-btn py-2 rounded-xl text-[11px] font-semibold" x-text="t('svEdit')"></button>
+                  <button type="button" @click="confirmDeleteServer(sv)" class="glass-btn py-2 rounded-xl text-[11px] font-semibold text-rose-400" x-text="t('svDelete')"></button>
+                </div>
+              </div>
+            </template>
+            <p x-show="srv.loaded && !srv.list.length" class="text-center text-xs text-muted py-2" x-text="t('svNone')"></p>
+          </div>
+        </template>
+
         <!-- API TOKEN (0.17): token cho Home Assistant, script, Uptime Kuma -->
         <template x-if="settingsModal.tab === 'tokens'">
           <div class="space-y-3.5">
@@ -2992,6 +3119,71 @@
       <template x-if="apiDocs.open">
         <iframe :src="'/docs?embed=1&lang=' + lang" class="w-full flex-1 min-h-0 border-0 bg-[#090f1d]" :title="t('tkDocs')"></iframe>
       </template>
+    </div>
+  </div>
+
+  <!-- POPUP: thêm / sửa máy chủ -->
+  <div x-show="srv.form.open" x-cloak x-transition.opacity
+       class="fixed inset-0 z-[57] flex items-center justify-center p-4 sm:p-5 bg-black/70 backdrop-blur-md">
+    <div class="glass-panel w-full max-w-md rounded-[26px] p-5 space-y-4 shadow-2xl max-h-[88dvh] flex flex-col">
+      <h3 class="font-bold text-[15px] leading-tight shrink-0" x-text="srv.form.id ? t('svEditTitle') : t('svAdd')"></h3>
+      <div class="overflow-y-auto min-h-0 space-y-3 text-[11.5px]">
+        <label class="block space-y-1">
+          <span class="text-[10.5px] text-subtle" x-text="t('svName')"></span>
+          <input type="text" x-model="srv.form.name" maxlength="40" :placeholder="t('svNamePh')" class="glass-input w-full rounded-xl px-3 py-2 text-xs" />
+        </label>
+        <label class="block space-y-1">
+          <span class="text-[10.5px] text-subtle" x-text="t('svUrl')"></span>
+          <input type="url" x-model="srv.form.url" @input="srv.test = null" placeholder="http://192.168.1.20:8098" autocapitalize="off" autocorrect="off" spellcheck="false"
+                 class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
+          <span class="block text-[10.5px] text-subtle leading-snug" x-text="t('svUrlHint')"></span>
+        </label>
+        <label class="block space-y-1">
+          <span class="text-[10.5px] text-subtle" x-text="t('svToken')"></span>
+          <input type="password" x-model="srv.form.token" @input="srv.test = null" autocomplete="off" autocapitalize="off" spellcheck="false"
+                 :placeholder="srv.form.id ? t('svTokenKeep') : 'amp_…'" class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
+          <span class="block text-[10.5px] text-subtle leading-snug" x-text="t('svTokenHint')"></span>
+        </label>
+        <div x-show="srv.form.url.trim().toLowerCase().startsWith('https://')" class="flex items-center justify-between gap-3">
+          <span class="min-w-0">
+            <span class="block text-xs font-semibold" x-text="t('svVerify')"></span>
+            <span class="block text-[10.5px] text-subtle leading-snug" x-text="t('svVerifyDesc')"></span>
+          </span>
+          <button type="button" role="switch" :aria-checked="srv.form.verify_tls" @click="srv.form.verify_tls = !srv.form.verify_tls; srv.test = null"
+                  class="relative w-11 h-6 rounded-full transition shrink-0" :class="srv.form.verify_tls ? 'bg-emerald-500' : 'bg-slate-600'">
+            <span class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition" :class="srv.form.verify_tls ? 'translate-x-5' : ''"></span>
+          </button>
+        </div>
+        <div x-show="srv.form.url.trim() && !srv.form.url.trim().toLowerCase().startsWith('https://')"
+             class="rounded-xl px-3 py-2 bg-amber-500/10 border border-amber-400/30 text-amber-200 leading-snug" x-text="t('svHttpWarn')"></div>
+        <div x-show="srv.test" class="rounded-xl px-3 py-2 border leading-snug"
+             :class="srv.test?.ok ? 'bg-emerald-500/10 border-emerald-400/30 text-emerald-300' : 'bg-rose-500/12 border-rose-500/30 text-rose-300'"
+             x-text="srv.test?.ok ? t('svTestOk').replace('{v}', srv.test.version).replace('{n}', srv.test.apps?.total ?? 0).replace('{ms}', srv.test.latency_ms) + (srv.test.scope ? ' · ' + t('svScope') + ': ' + tokenScope(srv.test.scope).title : '') : (srv.test?.error || '')"></div>
+        <div x-show="srv.error" class="rounded-xl px-3 py-2 bg-rose-500/12 border border-rose-500/30 text-rose-300 break-words" x-text="srv.error"></div>
+      </div>
+      <div class="grid grid-cols-3 gap-2 pt-1 shrink-0">
+        <button @click="srv.form.open = false" :disabled="srv.busy" class="glass-btn py-2.5 rounded-xl text-xs font-semibold" x-text="t('cancel')"></button>
+        <button @click="testServerForm()" :disabled="srv.busy || !srv.form.url.trim()" class="glass-btn py-2.5 rounded-xl text-xs font-semibold text-sky-400 disabled:opacity-50" x-text="srv.busy ? '…' : t('svTest')"></button>
+        <button @click="saveServerForm()" :disabled="srv.busy || !srv.form.name.trim() || !srv.form.url.trim() || (!srv.form.id && !srv.form.token.trim())"
+                class="glass-btn-primary py-2.5 rounded-xl text-xs font-semibold disabled:opacity-50" x-text="t('save')"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- POPUP: theo dõi việc cập nhật trên máy khác -->
+  <div x-show="remoteJob.open" x-cloak x-transition.opacity
+       class="fixed inset-0 z-[57] flex items-center justify-center p-4 sm:p-5 bg-black/70 backdrop-blur-md">
+    <div class="glass-panel w-full max-w-lg rounded-[26px] p-5 space-y-3.5 shadow-2xl max-h-[88dvh] flex flex-col">
+      <div class="shrink-0">
+        <h3 class="font-bold text-[15px] leading-tight" x-text="t('svJobTitle').replace('{app}', remoteJob.app).replace('{server}', remoteJob.server?.name || '')"></h3>
+        <p class="text-[11px] mt-1 font-semibold"
+           :class="{ 'text-sky-300': remoteJob.status === 'running' || remoteJob.status === 'starting', 'text-emerald-300': remoteJob.status === 'success', 'text-rose-300': remoteJob.status === 'failed' }"
+           x-text="t('svJob_' + (remoteJob.status || 'starting'))"></p>
+      </div>
+      <pre id="remote-job-log" class="glass-terminal font-mono-code rounded-xl p-3 text-[10.5px] text-emerald-300 whitespace-pre-wrap break-words overflow-y-auto min-h-[30vh] flex-1" x-text="remoteJob.log || '…'"></pre>
+      <div x-show="remoteJob.error" class="rounded-xl px-3 py-2 bg-rose-500/12 border border-rose-500/30 text-[11px] text-rose-300 break-words shrink-0" x-text="remoteJob.error"></div>
+      <p class="text-[10.5px] text-subtle shrink-0" x-text="t('svJobNote')"></p>
+      <button @click="remoteJob.open = false" class="glass-btn w-full py-2.5 rounded-xl text-xs font-semibold shrink-0" x-text="t('close')"></button>
     </div>
   </div>
 

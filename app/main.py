@@ -3,6 +3,8 @@ import logging
 import json
 import threading
 import time
+import re
+from urllib.parse import quote
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Optional
@@ -13,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from app.core import api_tokens, jobs
+from app.core import api_tokens, jobs, servers
 from app.core.app_backup import delete_backup, list_backups, restore_backup
 from app.core.auth import (
     check_second_factor,
@@ -938,6 +940,9 @@ async def api_health(request: Request):
         authed = None
     if authed:
         out["version"] = APP_VERSION
+        tok = getattr(request.state, "api_token", None)
+        if tok:
+            out["token_scope"] = tok.get("scope", "")
         try:
             data = await asyncio.to_thread(list_all_apps, False)
             out["apps"] = data["summary"]
@@ -1044,6 +1049,128 @@ async def openapi_json(request: Request):
     if not (get_current_user_optional(request) or token_user(request)):
         raise HTTPException(status_code=401, detail="Unauthorized")
     return JSONResponse(_openapi_schema())
+
+
+# ---------------- Nhiều máy chủ (0.18): máy chính gọi REST API của AppManager máy khác bằng API Token ----------------
+class ServerPayload(BaseModel):
+    id: str = ""
+    name: str = ""
+    url: str = ""
+    token: str = ""
+    verify_tls: bool = True
+
+
+class ServerIdPayload(BaseModel):
+    id: str
+
+
+def _server_or_404(server_id: str) -> dict:
+    try:
+        return servers.get(server_id)
+    except servers.RemoteError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.message)
+
+
+async def _remote(s: dict, method: str, path: str, body: Any = None, timeout: float = 20) -> Any:
+    try:
+        return await servers.call(s, method, path, body, timeout)
+    except servers.RemoteError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.message)
+
+
+@app.get("/api/servers")
+async def api_servers(_: str = Depends(_session_only)):
+    return {"servers": servers.list_servers()}
+
+
+@app.get("/api/servers/status")
+async def api_servers_status(_: str = Depends(_session_only)):
+    """Kiểm tra mọi máy (song song): kết nối, Token, phiên bản, số app / bản mới."""
+    return {"servers": await servers.probe_all()}
+
+
+@app.post("/api/servers/test")
+async def api_server_test(payload: ServerPayload, _: str = Depends(_session_only)):
+    """Thử kết nối trước khi lưu (Token để trống khi sửa = dùng Token đã lưu)."""
+    existing = None
+    if payload.id:
+        existing = _server_or_404(payload.id)
+    try:
+        rec = servers.build(payload.model_dump(), existing)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    rec.pop("id", None)
+    return await servers.probe(rec)
+
+
+@app.post("/api/servers")
+async def api_server_save(payload: ServerPayload, request: Request, user: str = Depends(_session_only)):
+    try:
+        rec = servers.upsert(payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    audit(request, user, "server_edit" if payload.id else "server_add", rec["name"], rec["url"])
+    st = await servers.probe(rec)
+    return {"server": servers.public(rec), "status": st}
+
+
+@app.post("/api/servers/delete")
+async def api_server_delete(payload: ServerIdPayload, request: Request, user: str = Depends(_session_only)):
+    rec = servers.delete(payload.id)
+    if not rec:
+        raise HTTPException(status_code=404, detail="Server not found")
+    audit(request, user, "server_delete", rec["name"], rec["url"])
+    return {"ok": True}
+
+
+@app.get("/api/servers/{server_id}/apps")
+async def api_server_apps(server_id: str, _: str = Depends(_session_only)):
+    s = _server_or_404(server_id)
+    data = await _remote(s, "GET", "/api/apps", timeout=60)
+    apps = [servers.trim_app(a, s["url"]) for a in (data.get("apps") or [])]
+    return {"server": servers.public(s), "apps": apps, "summary": data.get("summary") or {},
+            "last_checked": data.get("last_checked", ""), "checking": bool(data.get("checking_updates"))}
+
+
+@app.post("/api/servers/{server_id}/check")
+async def api_server_check(server_id: str, request: Request, user: str = Depends(_session_only)):
+    s = _server_or_404(server_id)
+    audit(request, user, "remote_check", s["name"])
+    await _remote(s, "POST", "/api/updates/check", {}, timeout=300)
+    return {"ok": True}
+
+
+@app.post("/api/servers/{server_id}/update-all")
+async def api_server_update_all(server_id: str, request: Request, user: str = Depends(_session_only)):
+    s = _server_or_404(server_id)
+    audit(request, user, "remote_update_all", s["name"])
+    return await _remote(s, "POST", "/api/update-all", {})
+
+
+@app.post("/api/servers/{server_id}/apps/{name}/update")
+async def api_server_update(server_id: str, name: str, request: Request, payload: Optional[UpdateJobPayload] = None,
+                            user: str = Depends(_session_only)):
+    s = _server_or_404(server_id)
+    tag = (payload.tag if payload else "") or ""
+    audit(request, user, "remote_update", f"{s['name']}/{name}", tag)
+    return await _remote(s, "POST", f"/api/apps/{quote(name, safe='')}/update", {"tag": tag})
+
+
+@app.get("/api/servers/{server_id}/jobs/{job_id}")
+async def api_server_job(server_id: str, job_id: str, _: str = Depends(_session_only)):
+    s = _server_or_404(server_id)
+    if not re.fullmatch(r"[0-9a-f]{6,32}", job_id):
+        raise HTTPException(status_code=400, detail="Invalid job id")
+    return await _remote(s, "GET", f"/api/jobs/{job_id}")
+
+
+@app.post("/api/servers/{server_id}/apps/{name}/{action}")
+async def api_server_action(server_id: str, name: str, action: str, request: Request, user: str = Depends(_session_only)):
+    if action not in ("start", "stop", "restart"):
+        raise HTTPException(status_code=400, detail="Invalid action")
+    s = _server_or_404(server_id)
+    audit(request, user, f"remote_{action}", f"{s['name']}/{name}")
+    return await _remote(s, "POST", f"/api/apps/{quote(name, safe='')}/{action}", {}, timeout=60)
 
 
 # Mô tả các API hay dùng cho tự động hoá (hiện ở đầu trang /docs); API khác nằm trong mục "Các API khác"

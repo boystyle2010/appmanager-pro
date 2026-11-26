@@ -316,6 +316,20 @@ rest_command:
       Authorization: "Bearer amp_…"
 ```
 
+### Multiple servers
+
+*Settings → Servers*: manage the AppManager of other machines from this one.
+
+| | |
+|---|---|
+| **Protocol** | This AppManager calls the **REST API** of the AppManager on the other machine over **HTTP or HTTPS**, authenticated with an **API Token** (`Authorization: Bearer amp_…`). The Docker socket is never exposed to the network and no extra agent is installed. |
+| **Requirements** | The other machine runs **AppManager 0.17.0 or newer**; this machine can reach its address and port (same LAN, a VPN such as Tailscale / WireGuard, or HTTPS through a reverse proxy). |
+| **API Token** | On the other machine: *Settings → API Token* → permission **Update** (update, start / stop / restart) or **Read only** (view). Limit it to this machine's IP. |
+| **Security** | Over the Internet use **HTTPS** — plain HTTP sends the Token unencrypted. A self-signed certificate works if you turn off certificate checking for that server. Redirects are never followed, so the Token is only sent to the address you entered. Tokens are stored in this machine's database and never returned to the browser; API Tokens of this machine cannot use the server list. |
+| **Who does the work** | The other machine still pulls, recreates, health-checks and rolls back by itself; this machine only sends the command and shows the live log. Both activity logs record the action. |
+
+Once a server is added, a switcher appears above the app list (**This server** / other servers, with update counts and a red dot when a server is unreachable). For another server you can see its apps, check for updates, update one app or all apps and start / stop / restart containers; logs, Edit Config, restore and uninstall stay on that server's own AppManager (*Open ↗*).
+
 ## 🧭 Usage
 
 | Where | What you can do |
@@ -430,6 +444,8 @@ All endpoints except login/setup and `/api/health` require the session cookie or
 | `POST` | `/api/apps/{name}/update` · `/api/update-all` | Update in the background → job |
 | `GET` | `/api/jobs` · `/api/jobs/{id}` | Background job status & log |
 | `GET` · `POST` | `/api/tokens` · `/api/tokens/delete` | Manage API tokens (web sign-in only) |
+| `GET` · `POST` | `/api/servers` · `/api/servers/{test,delete,status}` | Other servers (web sign-in only) |
+| `GET` · `POST` | `/api/servers/{id}/apps` · `…/check` · `…/update-all` · `…/apps/{name}/{update,start,stop,restart}` · `…/jobs/{job}` | Manage apps on another server |
 
 </details>
 

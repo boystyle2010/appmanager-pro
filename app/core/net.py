@@ -381,6 +381,13 @@ def status() -> list[dict[str, Any]]:
     now = time.time()
     out = []
     names = set(_state) | {"dockerhub", "github"}
+    try:  # máy chủ AppManager khác (0.18) không phải nguồn cập nhật -> không liệt kê ở đây
+        from urllib.parse import urlparse
+
+        from app.core.servers import list_servers
+        names -= {urlparse(x["url"]).hostname or "" for x in list_servers()}
+    except Exception:
+        pass
     for src in sorted(names, key=lambda x: (x not in ("dockerhub", "github", "ghcr"), x)):
         s = _st(src)
         req = sum(1 for t in s["requests"] if t > now - 3600)

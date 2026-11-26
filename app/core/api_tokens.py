@@ -33,6 +33,7 @@ _NEVER = (
     re.compile(r"^/api/auth(/|$)"),
     re.compile(r"^/api/tokens(/|$)"),
     re.compile(r"^/api/system/registry-logins(/|$)"),
+    re.compile(r"^/api/servers(/|$)"),   # máy chủ khác: chứa Token của máy khác -> chỉ người đăng nhập
 )
 # Quyền "update": ngoài đọc, được kiểm tra bản mới, cập nhật app (qua job), cập nhật tất cả, start/stop/restart.
 _UPDATE_POST = (
