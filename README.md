@@ -523,6 +523,8 @@ See [CHANGELOG.md](CHANGELOG.md) or the [Releases](https://github.com/boystyle20
 
 [FastAPI](https://fastapi.tiangolo.com/) · [docker-py](https://github.com/docker/docker-py) · [ruamel.yaml](https://yaml.readthedocs.io/) · [APScheduler](https://apscheduler.readthedocs.io/) · [Alpine.js](https://alpinejs.dev/) · [Tailwind CSS](https://tailwindcss.com/) · [marked](https://marked.js.org/) · [DOMPurify](https://github.com/cure53/DOMPurify) · [CasaOS](https://casaos.io/)
 
+Notification channel logos (Telegram, Discord, Google Chat, Mattermost, Matrix, Signal, ntfy, Pushbullet) come from [Simple Icons](https://simpleicons.org/) (CC0); all trademarks belong to their owners and are used only to name the service. Slack, Microsoft Teams, Pushover, Gotify, Bark, Apprise, Email and Webhook use generic icons drawn for AppManager, not the companies' logos.
+
 ## 📄 License
 
 Released under the [MIT License](LICENSE) — free to use, modify and distribute, provided the copyright notice is kept. The software is provided "as is", without warranty.

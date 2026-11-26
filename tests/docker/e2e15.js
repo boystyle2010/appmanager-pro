@@ -18,6 +18,8 @@ const results = []; const check = (n, c, d = '') => { results.push(!!c); console
   check('16 channel types in 3 groups', types.length === 16, JSON.stringify(types));
   check('Telegram shows 6 platform icons, no dots on the picker', await p.evaluate(() => [...document.querySelectorAll('svg')].filter(x => x.getAttribute('x-html') === 'platformIcon(pf)' && x.getBoundingClientRect().width > 0).length) === 6
         && await p.evaluate(() => [...document.querySelectorAll('button')].filter(b => /Telegram|Discord|Bark|Signal/.test(b.textContent) && b.querySelector('.rounded-full')).length) === 0);
+  const iconOk = await p.evaluate(() => [...document.querySelectorAll('svg')].filter(x => x.getAttribute('x-html') === 'notifyIcon(tp).svg' && x.innerHTML.length > 20).length);
+  check('Every channel button shows its icon (16)', iconOk === 16, iconOk);
   for (const w of [390, 320]) {  // iPhone thường và iPhone SE: tên kênh không bị cắt
     await p.setViewportSize({ width: w, height: 844 }); await sleep(300);
     const cut = await p.evaluate(() => [...document.querySelectorAll('button')].filter(b => b.getAttribute('x-text') === null && b.querySelector('span') && /^(Telegram|Discord|Slack|Teams|Google Chat|Mattermost|Matrix|Signal|ntfy|Bark|Pushover|Pushbullet|Gotify|Email|Apprise|Webhook)$/.test(b.textContent.trim()) && (b.scrollWidth > b.clientWidth + 1 || b.querySelector('span').scrollWidth > b.querySelector('span').clientWidth + 1)).map(b => b.textContent.trim()));
@@ -35,6 +37,10 @@ const results = []; const check = (n, c, d = '') => { results.push(!!c); console
   await D("d.notifyState.edit.type = 'ntfy'"); await sleep(300);
   check('ntfy hint explains upstream-base-url for iPhone', (await p.textContent('body')).includes('upstream-base-url'));
   await shot('n5-ntfy.png');
+  // danh sách kênh đã lưu cũng dùng icon
+  await D("d.notifyState.edit = null"); await D("return d._postJson('/api/notify/channels', { type: 'bark', name: 'iPhone của mình', config: { device_key: 'K' }, events: d.notifyState.events })"); await D('return d.loadNotify()'); await sleep(800);
+  await p.evaluate(() => window.scrollTo(0, 0)); await p.screenshot({ path: OUT + '/n6-list.png' });
+  check('Saved channel list uses the app icon', await p.evaluate(() => [...document.querySelectorAll('svg')].some(x => x.getAttribute('x-html') === 'notifyIcon(ch.type).svg' && x.innerHTML.length > 20)));
   check('No JavaScript errors', !errs.length, errs.join(' | '));
   console.log(`SUMMARY ${results.filter(Boolean).length} / ${results.length}`);
   await b.close();

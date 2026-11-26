@@ -2046,6 +2046,7 @@
                    matrix: 'Matrix', signal: 'Signal', ntfy: 'ntfy', gotify: 'Gotify', bark: 'Bark', pushover: 'Pushover', pushbullet: 'Pushbullet',
                    email: 'Email', apprise: 'Apprise', webhook: 'Webhook' }[t] || t;
         },
+        notifyIcon(t) { return (window.AMP_NOTIFY_ICONS || {})[t] || { bg: '#475569', svg: '' }; },
         notifyTypeShort(t) {
           return { telegram: 'TG', discord: 'DC', slack: 'SL', teams: 'MT', googlechat: 'GC', mattermost: 'MM', matrix: 'MX', signal: 'SG',
                    ntfy: 'NT', gotify: 'GO', bark: 'BK', pushover: 'PO', pushbullet: 'PB', email: '@', apprise: 'AP', webhook: 'WH' }[t] || '?';

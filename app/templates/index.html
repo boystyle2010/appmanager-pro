@@ -2269,7 +2269,9 @@
               <template x-for="ch in notifyState.channels" :key="ch.id">
                 <div x-show="!notifyState.edit || notifyState.edit.id !== ch.id" class="rounded-xl border border-[var(--glass-border)] px-3 py-2.5 space-y-2">
                   <div class="flex items-center gap-2.5">
-                    <span class="w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold text-white shrink-0" :class="notifyColor(ch.type)" x-text="notifyTypeShort(ch.type)"></span>
+                    <span class="w-8 h-8 rounded-[9px] flex items-center justify-center shrink-0 shadow-xs" :style="'background:' + notifyIcon(ch.type).bg">
+                      <svg class="w-[19px] h-[19px]" viewBox="0 0 24 24" aria-hidden="true" x-html="notifyIcon(ch.type).svg"></svg>
+                    </span>
                     <span class="min-w-0 flex-1">
                       <span class="block text-xs font-semibold truncate" x-text="ch.name"></span>
                       <span class="block text-[10.5px] text-muted truncate" x-text="notifyTypeLabel(ch.type) + ' • ' + t('notifyEventsCount').replace('{n}', ch.events.length)"></span>
@@ -2297,12 +2299,15 @@
                   <template x-for="g in notifyGroups()" :key="g.id">
                     <div x-show="!notifyState.edit.id || g.types.includes(notifyState.edit.type)" class="space-y-1">
                       <p class="text-[10px] font-semibold uppercase tracking-wider text-subtle" x-text="t('ng_' + g.id)"></p>
-                      <div class="grid grid-cols-4 gap-1">
+                      <div class="grid grid-cols-4 gap-1.5">
                         <template x-for="tp in g.types" :key="tp">
                           <button type="button" @click="notifyState.edit.type = tp; if (tp === 'email' && !notifyState.edit.config.security) notifyState.edit.config.security = 'starttls'"
                                   :disabled="!!notifyState.edit.id && notifyState.edit.type !== tp"
-                                  class="relative min-h-[30px] py-1 px-0.5 rounded-lg text-[10px] leading-tight font-semibold border transition disabled:opacity-40 break-words"
-                                  :class="notifyState.edit.type === tp ? 'border-sky-400/60 bg-sky-500/15 text-sky-200' : 'border-[var(--glass-border)] text-muted'">
+                                  class="flex flex-col items-center gap-1.5 pt-2.5 pb-2 px-0 rounded-xl text-[clamp(8px,2.6vw,10.5px)] leading-tight font-semibold border transition disabled:opacity-40 text-center break-words"
+                                  :class="notifyState.edit.type === tp ? 'border-sky-400/65 bg-sky-500/15 text-sky-100' : 'border-[var(--glass-border)] text-muted'">
+                            <span class="w-[30px] h-[30px] rounded-[9px] flex items-center justify-center shrink-0 shadow-xs" :style="'background:' + notifyIcon(tp).bg">
+                              <svg class="w-[19px] h-[19px]" viewBox="0 0 24 24" aria-hidden="true" x-html="notifyIcon(tp).svg"></svg>
+                            </span>
                             <span x-text="notifyTypeLabel(tp)"></span>
                           </button>
                         </template>
@@ -3645,6 +3650,7 @@
   </div>
 
   <script src="/static/js/i18n.js?v={{ version }}"></script>
+  <script src="/static/js/notify-icons.js?v={{ version }}"></script>
   <script src="/static/js/app.js?v={{ version }}"></script>
 </body>
 </html>
