@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.17.0
+
+*Released: 2026-11-26*
+
+### 📦 Component & Version Matrix
+
+- **App Release:** Bumped from `v0.16.0` ➡️ `v0.17.0`
+- **Supported Architectures:** `linux/amd64` (x86_64), `linux/arm64` (ARM64) & `linux/arm/v7` (ARMv7 32-bit) *(Multi-arch GHCR Image)*
+- **Python Base Image:** `python 3.15.2`
+- **Docker CLI:** `docker 29.10.1`
+- **Core Python Stack:** `FastAPI 0.165.0` • `Uvicorn 0.54.0` • `Docker SDK 7.2.0` • `ruamel.yaml 0.19.1` • `Argon2 25.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.28.1` • `APScheduler 3.11.3` • `segno 1.6.6`
+- **Frontend Libraries:** `Alpine.js 3.17.5` • `Tailwind CSS 4.3.5` • `marked 18.3.0` • `DOMPurify 3.5.0`
+
+### 🚀 What's Changed
+
+- Settings now opens on a list of sections (General, Storage & SSD, Notifications, Security, History, About) with a short summary each; tap one to open it and use ‹ to go back — no more crowded tab bar on phones.
+- Storage & SSD: the data folder card shows only how many folders and apps are covered. Tap the card to see every folder in full (apps inside, backup / AppManager badges) and change its path, remove it or add one manually at any time; "Set up" still opens the Manual / Auto Scan menu, and Manual now leads to the same window. AppManager restarts safely to apply changes (the previous docker-compose.yml is put back if it fails), and the folder holding AppManager's own docker-compose.yml cannot be removed.
+- Fixed: the backup size fields in Storage cut off numbers such as 20480.
+- API tokens (Settings → API tokens) for Home Assistant, scripts / CI and Uptime Kuma: `Authorization: Bearer amp_…`, three permissions (read only, update, full access — tokens can never manage the account, 2FA, tokens or registry passwords), optional expiry and IP / network allow-list, shown once and stored only as a SHA-256 fingerprint, last use (time + IP) in the list, 5 wrong tokens lock the IP like failed sign-ins, every action logged as `token:<name>`, Security notification when a token is created.
+- Background update API for automation: `POST /api/apps/{name}/update` (optional version) and `POST /api/update-all` return a job; `GET /api/jobs/{id}` shows status and log. Updates keep the usual health check and automatic rollback.
+- `GET /api/health`: `{"status": "ok"}` without a token (Uptime Kuma); with a token also the version, app counts and apps with an update.
+- API docs at `/docs` (signed in): mobile-friendly, no external CDN, permission and curl example per endpoint, English / Vietnamese; OpenAPI 3 at `/openapi.json`. The previous public FastAPI `/docs` and `/openapi.json` are now closed to visitors who are not signed in.
+- Copy buttons now also work when AppManager is opened over plain HTTP on the LAN (iPhone Safari).
+
 ## 0.16.0
 
 *Released: 2026-11-25*
