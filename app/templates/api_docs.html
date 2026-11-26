@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#090f1d" />
-  <title>AppManager Pro API</title>
+  <title>AppManager Pro — API Docs</title>
   <link rel="icon" type="image/png" href="/assets/icon.png?v=2" />
   <link href="/static/vendor/fonts.css" rel="stylesheet" />
   <link rel="stylesheet" href="/static/css/tailwind.css?v={{ version }}" />
@@ -47,16 +47,22 @@
       <button type="button" class="copy absolute top-1.5 right-1.5 glass-btn px-2 py-1 rounded-lg text-[10px] font-semibold text-sky-400" data-text="{{ e.curl }}">{{ 'Chép' if vi else 'Copy' }}</button>
     </div>
     {% else %}
-    <p>{{ 'Chỉ dùng được khi đăng nhập trên web (không dùng API token).' if vi else 'Only available when signed in on the web (not with an API token).' }}</p>
+    <p>{{ 'Chỉ dùng được khi đăng nhập trên web (không dùng API Token).' if vi else 'Only available when signed in on the web (not with an API Token).' }}</p>
     {% endif %}
   </div>
 </details>
 {% endmacro %}
 <body class="text-slate-100 antialiased">
-  <main class="max-w-2xl mx-auto px-4 pt-5 pb-10 space-y-4" style="padding-top: calc(1.25rem + env(safe-area-inset-top));">
+  <main class="max-w-2xl mx-auto px-4 pt-5 pb-10 space-y-4" {% if not embed %}style="padding-top: calc(1.25rem + env(safe-area-inset-top));"{% endif %}>
+    {% if embed %}
+    <div class="flex items-center justify-between gap-3">
+      <p class="text-[11px] text-slate-400">v{{ version }} · {{ base }}</p>
+      <a href="?embed=1&lang={{ 'en' if vi else 'vi' }}" class="glass-btn px-3 py-1.5 rounded-xl text-[11px] font-semibold shrink-0">{{ 'EN' if vi else 'VI' }}</a>
+    </div>
+    {% else %}
     <header class="flex items-center justify-between gap-3">
       <div class="min-w-0">
-        <h1 class="text-lg font-bold">AppManager Pro API</h1>
+        <h1 class="text-lg font-bold">API Docs</h1>
         <p class="text-[11px] text-slate-400">v{{ version }} · {{ base }}</p>
       </div>
       <div class="flex gap-2 shrink-0">
@@ -64,17 +70,18 @@
         <a href="/" class="glass-btn px-3 py-2 rounded-xl text-[11px] font-semibold text-sky-400">{{ '‹ Về app' if vi else '‹ Back to app' }}</a>
       </div>
     </header>
+    {% endif %}
 
     <section class="glass-panel rounded-2xl p-4 space-y-2.5 text-[12px] leading-relaxed text-slate-300">
       <p class="font-semibold text-slate-100">{{ 'Cách dùng' if vi else 'How to use' }}</p>
-      <p>{{ 'Tạo token trong Cài đặt → API token, rồi gửi kèm mọi request:' if vi else 'Create a token in Settings → API tokens, then send it with every request:' }}</p>
+      <p>{{ 'Tạo Token trong Cài đặt → API Token, rồi gửi kèm mọi request:' if vi else 'Create a Token in Settings → API Tokens, then send it with every request:' }}</p>
       <pre class="glass-terminal font-mono-code rounded-xl p-2.5 text-[11px] text-emerald-300 whitespace-pre-wrap break-all">Authorization: Bearer amp_…</pre>
       <ul class="space-y-1.5 text-[11.5px]">
         <li><span class="s-read px-1.5 py-0.5 rounded-md text-[10px] font-semibold">{{ scope_label('read') }}</span> {{ 'mọi GET (xem).' if vi else 'every GET (view only).' }}</li>
         <li><span class="s-update px-1.5 py-0.5 rounded-md text-[10px] font-semibold">{{ scope_label('update') }}</span> {{ '+ kiểm tra bản mới, cập nhật app / tất cả, start / stop / restart.' if vi else '+ check for updates, update an app / all apps, start / stop / restart.' }}</li>
-        <li><span class="s-full px-1.5 py-0.5 rounded-md text-[10px] font-semibold">{{ scope_label('full') }}</span> {{ 'mọi thứ trừ tài khoản, 2FA, API token và mật khẩu registry.' if vi else 'everything except account, 2FA, API tokens and registry passwords.' }}</li>
+        <li><span class="s-full px-1.5 py-0.5 rounded-md text-[10px] font-semibold">{{ scope_label('full') }}</span> {{ 'mọi thứ trừ tài khoản, 2FA, API Token và mật khẩu registry.' if vi else 'everything except account, 2FA, API Tokens and registry passwords.' }}</li>
       </ul>
-      <p class="text-[11.5px]">{{ 'Cập nhật chạy nền: POST …/update trả về mã việc (202), hỏi lại GET /api/jobs/{id} tới khi status khác "running". Sai token 5 lần sẽ bị khoá IP 15 phút (429). Token không được gửi trong URL.' if vi else 'Updates run in the background: POST …/update returns a job (202); poll GET /api/jobs/{id} until status is not "running". 5 wrong tokens lock the IP for 15 minutes (429). Tokens are never accepted in the URL.' }}</p>
+      <p class="text-[11.5px]">{{ 'Cập nhật chạy nền: POST …/update trả về mã việc (202), hỏi lại GET /api/jobs/{id} tới khi status khác "running". Sai Token 5 lần sẽ bị khoá IP 15 phút (429). Token không được gửi trong URL.' if vi else 'Updates run in the background: POST …/update returns a job (202); poll GET /api/jobs/{id} until status is not "running". 5 wrong Tokens lock the IP for 15 minutes (429). Tokens are never accepted in the URL.' }}</p>
       <p class="text-[11.5px]"><a class="text-sky-400 underline" href="/openapi.json">openapi.json</a> {{ '(OpenAPI 3, dùng cho công cụ tạo client).' if vi else '(OpenAPI 3, for client generators).' }}</p>
     </section>
 

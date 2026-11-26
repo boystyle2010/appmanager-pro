@@ -2293,7 +2293,7 @@
               <p class="text-[11.5px] text-muted leading-relaxed" x-text="t('tkIntro')"></p>
               <div class="grid grid-cols-2 gap-2">
                 <button type="button" @click="openTokenForm()" class="glass-btn-primary py-2.5 rounded-xl text-xs font-semibold" x-text="t('tkCreate')"></button>
-                <a :href="'/docs?lang=' + lang" target="_blank" rel="noopener" class="glass-btn py-2.5 rounded-xl text-xs font-semibold text-center text-sky-400" x-text="t('tkDocs')"></a>
+                <button type="button" @click="apiDocs.open = true" class="glass-btn py-2.5 rounded-xl text-xs font-semibold text-center text-sky-400" x-text="t('tkDocs')"></button>
               </div>
             </div>
 
@@ -2968,6 +2968,30 @@
                 class="glass-btn-update py-2.5 px-3 rounded-xl text-xs font-semibold disabled:opacity-50"
                 x-text="dataSetup.busy ? '…' : t('dataApplyBtn')"></button>
       </div>
+    </div>
+  </div>
+
+  <!-- API Docs ngay trong app (trang /docs trong khung, cùng nguồn) -->
+  <div x-show="apiDocs.open" x-cloak x-transition.opacity
+       class="fixed inset-0 z-[58] flex items-end sm:items-center justify-center sm:p-4 bg-black/70 backdrop-blur-md"
+       @keydown.escape.window="apiDocs.open = false">
+    <div class="glass-panel w-full max-w-2xl rounded-t-[28px] sm:rounded-[28px] flex flex-col h-[94dvh] sm:h-[88dvh] overflow-hidden"
+         style="padding-bottom: env(safe-area-inset-bottom);">
+      <div class="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-[var(--glass-border)] shrink-0">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border bg-sky-500/15 border-sky-400/35 text-sky-400">
+            <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5"/></svg>
+          </div>
+          <h3 class="font-bold text-[15px] truncate" x-text="t('tkDocs')"></h3>
+        </div>
+        <button @click="apiDocs.open = false" aria-label="Close"
+                class="glass-btn w-8 h-8 rounded-full flex items-center justify-center text-muted hover:text-[var(--text-primary)] shrink-0">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <template x-if="apiDocs.open">
+        <iframe :src="'/docs?embed=1&lang=' + lang" class="w-full flex-1 min-h-0 border-0 bg-[#090f1d]" :title="t('tkDocs')"></iframe>
+      </template>
     </div>
   </div>
 

@@ -13,10 +13,10 @@ const results = []; const check = (n, c, d = '') => { results.push(!!c); console
   await p.goto(B + '/'); await sleep(2500); await D("d.lang = 'vi'; d.dataSetup.open = false");
   await D('d.openSettings()'); await sleep(1200);
   await p.screenshot({ path: OUT + '/k0-settings-home.png' });
-  await p.getByText('API token', { exact: true }).click(); await sleep(1200);
+  await p.getByText('API Token', { exact: true }).click(); await sleep(1200);
   check('API token row opens the section', await D("return d.settingsModal.tab === 'tokens' && d.tokenState.loaded"));
   await p.screenshot({ path: OUT + '/k1-empty.png' });
-  await p.getByText('Tạo token', { exact: true }).first().click(); await sleep(500);
+  await p.getByText('Tạo Token', { exact: true }).first().click(); await sleep(500);
   await p.fill('input[x-model="tokenState.form.name"]', 'Home Assistant');
   await p.getByText('Cập nhật', { exact: true }).click(); await p.getByText('90 ngày', { exact: true }).click();
   await p.fill('input[x-model="tokenState.form.ips"]', '192.168.68.0/24, 127.0.0.1');
@@ -42,15 +42,18 @@ const results = []; const check = (n, c, d = '') => { results.push(!!c); console
   await D('d.runConfirmedAction()'); await sleep(1200);
   const r2 = await fetch(B + '/api/health', { headers: { Authorization: 'Bearer ' + tok } }).then(x => x.json());
   check('Deleted token no longer returns details', !r2.version && (await D('return d.tokenState.items.length')) === 1, JSON.stringify(r2));
-  // Trang tài liệu API (không cần CDN)
-  const dp = await ctx.newPage(); dp.on('pageerror', e => errs.push(e.message));
-  await dp.goto(B + '/docs?lang=vi'); await sleep(1500);
-  await dp.screenshot({ path: OUT + '/k8-docs.png' });
-  await dp.locator('details').nth(5).locator('summary').click(); await sleep(400);
-  await dp.locator('details').nth(5).scrollIntoViewIfNeeded(); await sleep(300);
-  await dp.screenshot({ path: OUT + '/k9-docs-update.png' });
-  check('API docs page lists the automation endpoints', (await dp.locator('details').count()) > 20 && await dp.getByText('API cho tự động hoá').count() === 1);
-  await dp.close();
+  // API Docs mở ngay trong app (khung trong cửa sổ, không mở tab mới)
+  await D("d.settingsModal.tab = 'tokens'"); await sleep(400);
+  const pagesBefore = ctx.pages().length;
+  await p.getByRole('button', { name: 'API Docs' }).click(); await sleep(2500);
+  const fr = p.frameLocator('iframe');
+  check('API Docs opens inside AppManager (no new tab) and shows the automation API',
+        ctx.pages().length === pagesBefore && await D('return d.apiDocs.open') && await fr.getByText('API cho tự động hoá').count() === 1);
+  await p.screenshot({ path: OUT + '/k8-docs.png' });
+  await fr.locator('details').nth(5).locator('summary').click(); await sleep(400);
+  await fr.locator('details').nth(5).scrollIntoViewIfNeeded(); await sleep(300);
+  await p.screenshot({ path: OUT + '/k9-docs-update.png' });
+  await D('d.apiDocs.open = false'); await sleep(300);
   // English labels fit
   await D("d.lang = 'en'"); await sleep(400); await D("d.settingsModal.tab = 'home'"); await sleep(400);
   await p.screenshot({ path: OUT + '/k7-home-en.png' });

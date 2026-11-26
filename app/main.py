@@ -1107,7 +1107,8 @@ async def api_docs(request: Request):
     others = [entry(m.upper(), pth) for pth, ops in sorted(paths.items()) for m in ops
               if (m.upper(), pth) not in seen]
     return templates.TemplateResponse(request, "api_docs.html", {
-        "version": APP_VERSION, "lang": lang, "guide": guide, "others": others, "base": base})
+        "version": APP_VERSION, "lang": lang, "guide": guide, "others": others, "base": base,
+        "embed": request.query_params.get("embed") == "1"})
 
 
 # ---------------- Chuyển container docker run -> Docker Compose ----------------
