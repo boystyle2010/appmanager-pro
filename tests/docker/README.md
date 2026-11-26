@@ -95,6 +95,8 @@ Xem chi tiết lỗi một bộ: chạy đúng dòng đó nhưng bỏ `| grep ..
 | 14 | `t_net_real.py` | tài khoản registry thật (`privreg` :5001, registry:2 + htpasswd, user `tester`/`s3cret`) | 8/8 |
 | 15 | `t_notify.py` (`setup.sh`) | thông báo: ntfy/Gotify thật, webhook thật (:8093, HMAC), Telegram/Discord giả lập, cập nhật thật, giờ im lặng, crash-loop, ổ đĩa | 21/21 |
 | 16 | `t_datafolders.py` (`setup2.sh`, cần `build_amp.sh`) | thư mục dữ liệu: ẩn docker.sock, kiểm tra, đổi đường dẫn, gỡ, chặn gỡ thư mục chứa compose của AppManager, mở rộng sang thư mục cha | 21/21 |
+| 17 | `t_tokens.py` (`setup.sh`) | API token: quyền chỉ đọc / cập nhật / toàn quyền, hạn dùng, giới hạn IP, khoá IP khi sai, cập nhật app thật qua HTTP job, `/api/health`, `/docs`, audit, thông báo bảo mật (uvicorn :8795, webhook :8094) | 39/39 |
+| 18 | `e2e12.js` + `e2e13.js` | giao diện 0.17: Cài đặt dạng danh sách, thư mục dữ liệu (AppManager compose :8770), API token + trang tài liệu (uvicorn :8794) | 9/9 + 8/8 |
 
 Fixture: `setup.sh` — `web` (nginx 1.26, 2 mạng, IP tĩnh 172.30.0.50, alias, volume tên + ẩn danh, bind `$S/bind`
 chứa `hello-from-bind`, healthcheck), `bb-sidecar` (`--network container:web`), `bb-fail` (bản 1.36 sẽ chết → rollback),

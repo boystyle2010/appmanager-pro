@@ -78,6 +78,7 @@
         backupsState: { loading: false, items: [], busyFile: '' },
         restorePicker: { open: false, app: null, items: [], selected: '' },
         versionPicker: { open: false, loading: false, error: '', items: [], selected: '' },
+        tokenState: { loading: false, items: [], loaded: false, form: { open: false, name: '', scope: 'read', days: 90, ips: '' }, created: '', busy: false, error: '', examples: false },
         dataFolders: { open: false, mode: 'list', folder: null, newPath: '', check: null, busy: false, error: '' },
         dataSetup: { open: false, step: 'intro', status: null, manualPath: '', busy: false, error: '', candidates: [], selected: [], elapsed: 0, source: '' },
         composeHint: { open: false, app: null, loading: false, busy: false, preview: null, folder: '', yaml: '', log: '', error: '', done: false },
@@ -371,7 +372,7 @@
 
         async init() {
           this.$watch(() => [this.confirmModal, this.actionSheet, this.logModal, this.batchModal, this.deployModal, this.updateModal,
-                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker, this.restoreRun, this.updateAllPicker, this.versionPicker, this.dupPopup, this.dataSetup, this.dataFolders, this.composeHint, this.runCmd].some(m => m && m.open), (open) => {
+                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker, this.restoreRun, this.updateAllPicker, this.versionPicker, this.dupPopup, this.dataSetup, this.dataFolders, this.tokenState.form, this.composeHint, this.runCmd].some(m => m && m.open), (open) => {
             const b = document.body, h = document.documentElement;
             if (open) {
               this._lockY = window.scrollY || 0;
@@ -1690,12 +1691,87 @@
           if (tab === 'storage') { this.loadStorage(); this.loadBackups(); this.refreshDataStatus(); }
           else if (tab === 'notify') this.loadNotify();
           else if (tab === 'security') this.loadSecurity();
+          else if (tab === 'tokens') this.loadTokens();
+        },
+
+        // ---------------- API token (0.17) ----------------
+        async loadTokens() {
+          const st = this.tokenState;
+          st.loading = true;
+          try {
+            const res = await fetch('/api/tokens');
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            st.items = data.tokens || []; st.loaded = true;
+          } catch (err) { this.showToast(err.message); }
+          finally { st.loading = false; }
+        },
+
+        tokenScopes() {
+          return [
+            { id: 'read', title: this.t('tkRead'), desc: this.t('tkReadDesc'), cls: 'bg-sky-500/15 text-sky-300' },
+            { id: 'update', title: this.t('tkUpdate'), desc: this.t('tkUpdateDesc'), cls: 'bg-amber-500/15 text-amber-300' },
+            { id: 'full', title: this.t('tkFull'), desc: this.t('tkFullDesc'), cls: 'bg-rose-500/15 text-rose-300' },
+          ];
+        },
+
+        tokenScope(id) { return this.tokenScopes().find(s => s.id === id) || this.tokenScopes()[0]; },
+
+        tokenExpiry(t) {
+          if (!t.expires) return this.t('tkNoExpiry');
+          return (t.expired ? this.t('tkExpired') : this.t('tkExpires')) + ' ' + this.formatTs(t.expires);
+        },
+
+        openTokenForm() {
+          Object.assign(this.tokenState, { created: '', error: '' });
+          this.tokenState.form = { open: true, name: '', scope: 'read', days: 90, ips: '' };
+        },
+
+        async createToken() {
+          const st = this.tokenState, f = st.form;
+          st.busy = true; st.error = '';
+          try {
+            const { res, data } = await this._postJson('/api/tokens', { name: f.name, scope: f.scope, days: Number(f.days) || 0, ips: f.ips });
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            st.created = data.token;
+            this.loadTokens();
+          } catch (err) { st.error = err.message; }
+          finally { st.busy = false; }
+        },
+
+        closeTokenForm() {
+          this.tokenState.form.open = false;
+          this.tokenState.created = '';  // token không còn trong bộ nhớ trang
+        },
+
+        confirmDeleteToken(t) {
+          this.askConfirm({
+            tone: 'danger', title: this.t('tkDeleteTitle'),
+            message: `${t.name} (${t.hint}) — ${this.t('tkDeleteMsg')}`,
+            confirmLabel: this.t('tkDelete'),
+            onConfirm: async () => {
+              try {
+                const { res, data } = await this._postJson('/api/tokens/delete', { id: t.id });
+                if (!res.ok) throw new Error(data.detail || 'Failed');
+                this.showToast(this.t('tkDeleted')); this.loadTokens();
+              } catch (err) { this.showToast(err.message); }
+            }
+          });
+        },
+
+        tokenExamples() {
+          const base = location.origin;
+          return [
+            { title: 'curl', code: `curl -H "Authorization: Bearer amp_…" ${base}/api/health\n\n# ${this.t('tkExUpdate')}\ncurl -X POST -H "Authorization: Bearer amp_…" ${base}/api/apps/<app>/update\ncurl -H "Authorization: Bearer amp_…" ${base}/api/jobs/<job_id>` },
+            { title: 'Home Assistant', code: `# configuration.yaml\nrest:\n  - resource: ${base}/api/health\n    headers:\n      Authorization: "Bearer amp_…"\n    scan_interval: 300\n    sensor:\n      - name: "AppManager updates"\n        value_template: "{{ value_json.apps.updates }}"\n\nrest_command:\n  appmanager_update_all:\n    url: ${base}/api/update-all\n    method: POST\n    headers:\n      Authorization: "Bearer amp_…"` },
+            { title: 'Uptime Kuma', code: `${this.t('tkExKuma')}\nURL: ${base}/api/health\nKeyword: "ok"` },
+          ];
         },
 
         settingsSectionTitle() {
           return {
             home: this.t('settingsTitle'), schedule: this.t('setGeneral'), storage: this.t('setStorage'),
-            notify: this.t('setNotify'), security: this.t('tabSecurity'), history: this.t('tabHistory'), about: this.t('tabAbout'),
+            notify: this.t('setNotify'), security: this.t('tabSecurity'), tokens: this.t('setTokens'), history: this.t('tabHistory'), about: this.t('tabAbout'),
           }[this.settingsModal.tab] || this.t('settingsTitle');
         },
 
@@ -1708,6 +1784,7 @@
             bell: 'M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0',
             lock: 'M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z',
             clock: 'M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z',
+            key: 'M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z',
             info: 'M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z',
           };
           // tên class viết đầy đủ để Tailwind biên dịch được
@@ -1723,6 +1800,7 @@
             ] },
             { id: 'safety', items: [
               { tab: 'security', title: this.t('tabSecurity'), desc: this.t('setSecurityDesc'), icon: I.lock, color: c('rose') },
+              { tab: 'tokens', title: this.t('setTokens'), desc: this.t('setTokensDesc'), icon: I.key, color: c('sky') },
               { tab: 'history', title: this.t('tabHistory'), desc: this.t('setHistoryDesc'), icon: I.clock, color: c('violet') },
             ] },
             { id: 'about', items: [
@@ -1953,8 +2031,18 @@
         },
 
         copyText(text) {
-          try { navigator.clipboard.writeText(text); this.showToast(this.t('copied')); }
-          catch (_) { this.showToast(text); }
+          // navigator.clipboard chỉ có trên HTTPS / localhost; truy cập bằng http://IP trong mạng nhà -> dùng cách cũ
+          const fallback = () => {
+            const ta = document.createElement('textarea');
+            ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+            let ok = false; try { ok = document.execCommand('copy'); } catch (_) {}
+            ta.remove();
+            this.showToast(ok ? this.t('copied') : this.t('copyManual'));
+          };
+          if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(() => this.showToast(this.t('copied')), fallback);
+          } else fallback();
         },
 
         async changePassword() {

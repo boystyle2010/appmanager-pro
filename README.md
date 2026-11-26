@@ -282,6 +282,40 @@ Docker Hub and GitHub limit how many requests an IP can make (GitHub: 60/hour wi
 - limits parallel requests per source;
 - shows requests, cache hits, remaining quota and pauses in *Settings → Update sources & API limits*, where you can also add a GitHub token and registry accounts (Docker Hub, GHCR, any registry) to raise the limits.
 
+### API tokens (automation)
+
+*Settings → API tokens*: create a token for **Home Assistant**, scripts / CI or **Uptime Kuma** and send it as `Authorization: Bearer amp_…`.
+
+| Permission | Allows |
+|---|---|
+| Read only | every `GET`: apps, versions, updates, history, health |
+| Update | read + check for updates, update an app or all apps (health check + rollback as usual), start / stop / restart |
+| Full access | everything except your account, 2FA, API tokens and registry passwords |
+
+- The token is shown **once**; AppManager stores only its SHA-256 fingerprint. Optional expiry (30 days, 90 days, 1 year or never) and IP / network allow-list; the list shows when and from which IP each token was last used.
+- Tokens are never accepted in the URL; 5 wrong tokens lock the IP for 15 minutes (as for sign-in). Creating a token sends a *Security* notification; every action is in the activity log as `token:<name>`.
+- `GET /api/health` needs no token and returns only `{"status": "ok"}` (Uptime Kuma keyword monitor); with a token it adds the version, app counts and apps with an update.
+- Updates run in the background: `POST /api/apps/{name}/update` (optional `{"tag": "<version>"}`) or `POST /api/update-all` returns a job; poll `GET /api/jobs/{id}`.
+- **API docs** for your server (curl examples, permission per endpoint) at `/docs` when signed in; OpenAPI 3 at `/openapi.json`.
+
+```yaml
+# Home Assistant — configuration.yaml
+rest:
+  - resource: http://192.168.1.10:8098/api/health
+    headers:
+      Authorization: "Bearer amp_…"
+    scan_interval: 300
+    sensor:
+      - name: "AppManager updates"
+        value_template: "{{ value_json.apps.updates }}"
+rest_command:
+  appmanager_update_all:
+    url: http://192.168.1.10:8098/api/update-all
+    method: POST
+    headers:
+      Authorization: "Bearer amp_…"
+```
+
 ## 🧭 Usage
 
 | Where | What you can do |
@@ -292,7 +326,7 @@ Docker Hub and GitHub limit how many requests an IP can make (GitHub: 60/hour wi
 | **App card → badges** | **BETA / DEV** (channel available / in use), **AUTO** (auto-update on), **2** (duplicate compose files — tap to review). |
 | **App card → ⋯** | Logs, start/stop/restart, Edit Config, uninstall. |
 | **Header → activity icon** | Task Manager (live resources, restart/stop/kill). |
-| **Header → ⚙️** | General settings, Storage / SSD cleanup & app data backups, Security (2FA, password, activity log), update history. |
+| **Header → ⚙️** | Section list: General, Storage & SSD (data folders, cleanup, app data backups), Notifications, Security (2FA, password, activity log), API tokens, History, About. |
 | **Task Manager → 24h** | CPU/RAM charts for all containers or a single one. |
 | **＋ button** | Deploy a new app from YAML or the quick form. |
 
@@ -360,7 +394,7 @@ appmanager-pro/
 
 ## 🔌 API reference
 
-All endpoints except login/setup require the session cookie.
+All endpoints except login/setup and `/api/health` require the session cookie or an API token (`Authorization: Bearer amp_…`, see [API tokens](#api-tokens-automation)). Full, always up-to-date reference for your version: `/docs` (signed in).
 
 <details>
 <summary><b>REST</b></summary>
@@ -392,6 +426,10 @@ All endpoints except login/setup require the session cookie.
 | `POST` | `/api/apps/{name}/compose/duplicates` | `merge` / `skip` duplicate compose files |
 | `POST` | `/api/update-all/excluded` | Apps left out of *Update All* |
 | `GET` | `/api/history/{id}/log` | Full log of one update |
+| `GET` | `/api/health` | Health (no token: status only) |
+| `POST` | `/api/apps/{name}/update` · `/api/update-all` | Update in the background → job |
+| `GET` | `/api/jobs` · `/api/jobs/{id}` | Background job status & log |
+| `GET` · `POST` | `/api/tokens` · `/api/tokens/delete` | Manage API tokens (web sign-in only) |
 
 </details>
 

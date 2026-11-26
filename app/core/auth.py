@@ -15,6 +15,7 @@ from argon2.exceptions import VerifyMismatchError
 from fastapi import HTTPException, Request, Response, WebSocket, status
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
+from app.core import api_tokens
 from app.core.database import (
     add_login_failure,
     clear_login_failures,
@@ -261,7 +262,32 @@ def get_current_user_optional(request: Request) -> Optional[str]:
     return verify_session_token(request.cookies.get(COOKIE_NAME))
 
 
+def token_user(request: Request) -> Optional[str]:
+    """Xác thực bằng API token (header Authorization: Bearer amp_…). None = request không có token."""
+    token = api_tokens.bearer(request.headers)
+    if not token:
+        return None
+    ip = get_client_ip(request)
+    wait = is_ip_locked(ip)
+    if wait:
+        raise HTTPException(status_code=429, detail=f"Too many failed attempts from {ip}; try again in {wait // 60 + 1} min",
+                            headers={"Retry-After": str(wait)})
+    try:
+        rec = api_tokens.verify(token, ip, request.method, request.url.path)
+    except api_tokens.TokenError as exc:
+        if exc.status == 401:
+            record_failed_attempt(ip)
+        raise HTTPException(status_code=exc.status, detail=exc.detail,
+                            headers={"WWW-Authenticate": "Bearer"} if exc.status == 401 else None)
+    request.state.api_token = rec
+    return f"token:{rec['name']}"
+
+
 def require_user(request: Request) -> str:
+    """Người đăng nhập (cookie phiên) hoặc API token hợp lệ có đủ quyền cho request này."""
+    tu = token_user(request)
+    if tu:
+        return tu
     user = get_current_user_optional(request)
     if not user:
         raise HTTPException(

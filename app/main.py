@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
+from app.core import api_tokens, jobs
 from app.core.app_backup import delete_backup, list_backups, restore_backup
 from app.core.auth import (
     check_second_factor,
@@ -27,6 +28,7 @@ from app.core.auth import (
     origin_allowed,
     record_failed_attempt,
     require_user,
+    token_user,
     set_session_cookie,
     setup_first_admin,
     totp_qr_svg,
@@ -131,7 +133,8 @@ async def lifespan(_: FastAPI):
     stop_scheduler()
 
 
-app = FastAPI(title="AppManager Pro", version=APP_VERSION, lifespan=lifespan)
+app = FastAPI(title="AppManager Pro", version=APP_VERSION, lifespan=lifespan,
+              docs_url=None, redoc_url=None, openapi_url=None)  # tài liệu API chỉ cho người đã đăng nhập: /docs
 
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 if ASSETS_DIR.exists():
@@ -869,6 +872,242 @@ async def api_data_update(payload: DataUpdatePayload, request: Request, user: st
         raise HTTPException(status_code=500, detail=f"Cannot update AppManager: {str(exc)[:200]}")
     audit(request, user, "data_mount_change", detail)
     return {**res, "self_update": True}
+
+
+# ---------------- API token cho tự động hoá (0.17) ----------------
+class TokenCreatePayload(BaseModel):
+    name: str
+    scope: str = "read"
+    days: int = 0
+    ips: str = ""
+
+
+class TokenDeletePayload(BaseModel):
+    id: str
+
+
+class UpdateJobPayload(BaseModel):
+    tag: str = ""
+
+
+def _session_only(request: Request) -> str:
+    """Quản lý token chỉ qua giao diện web (cookie phiên) — token không tự tạo / xoá token được."""
+    if api_tokens.bearer(request.headers):
+        raise HTTPException(status_code=403, detail="API tokens cannot manage API tokens; sign in on the web page")
+    user = get_current_user_optional(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return user
+
+
+@app.get("/api/tokens")
+async def api_tokens_list(_: str = Depends(_session_only)):
+    return {"tokens": api_tokens.list_tokens(), "scopes": list(api_tokens.SCOPES)}
+
+
+@app.post("/api/tokens")
+async def api_tokens_create(payload: TokenCreatePayload, request: Request, user: str = Depends(_session_only)):
+    try:
+        rec, plain = api_tokens.create(payload.name, payload.scope, payload.days, payload.ips, created_by=user)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    audit(request, user, "token_create", rec["name"], f"{rec['scope']}, days={payload.days}, ips={','.join(rec['ips'])}"[:300])
+    vi = notify.settings()["lang"] == "vi"
+    notify.on_security((f"API token mới \"{rec['name']}\" (quyền {rec['scope']}) vừa được tạo bởi {user} (IP {get_client_ip(request)})." if vi
+                        else f"A new API token \"{rec['name']}\" ({rec['scope']}) was created by {user} (IP {get_client_ip(request)})."),
+                       {"token": rec["name"], "scope": rec["scope"]})
+    return {"token": plain, "info": rec}
+
+
+@app.post("/api/tokens/delete")
+async def api_tokens_delete(payload: TokenDeletePayload, request: Request, user: str = Depends(_session_only)):
+    rec = api_tokens.delete(payload.id)
+    if not rec:
+        raise HTTPException(status_code=404, detail="Token not found")
+    audit(request, user, "token_delete", rec["name"])
+    return {"ok": True}
+
+
+@app.get("/api/health")
+async def api_health(request: Request):
+    """Không cần đăng nhập: {"status": "ok"} (Uptime Kuma). Kèm token / phiên: thêm phiên bản và số app."""
+    out: dict[str, Any] = {"status": "ok"}
+    try:
+        authed = token_user(request) or get_current_user_optional(request)
+    except HTTPException:
+        authed = None
+    if authed:
+        out["version"] = APP_VERSION
+        try:
+            data = await asyncio.to_thread(list_all_apps, False)
+            out["apps"] = data["summary"]
+            out["last_checked"] = data.get("last_checked", "")
+            out["updates"] = [a["name"] for a in data["apps"] if a.get("has_update")][:100]
+        except Exception as exc:
+            out["status"] = "degraded"
+            out["error"] = f"Docker: {str(exc)[:200]}"
+    return out
+
+
+@app.post("/api/apps/{container_name}/update", status_code=202)
+async def api_update_job(container_name: str, request: Request, payload: Optional[UpdateJobPayload] = None,
+                         user: str = Depends(require_user)):
+    """Cập nhật 1 app (chạy nền). Trả mã việc ngay; xem tiến trình bằng GET /api/jobs/{id}."""
+    tag = ((payload.tag if payload else "") or "").strip()
+    info = await asyncio.to_thread(get_app_by_name, container_name)
+    if not info:
+        raise HTTPException(status_code=404, detail="App not found")
+    if not info.get("can_update"):
+        raise HTTPException(status_code=400, detail="This app cannot be updated by AppManager")
+    if tag:
+        allowed = {c.get("tag") for c in (info.get("channels") or [])}
+        if tag not in allowed and not await _version_tag_allowed(container_name, info, tag):
+            raise HTTPException(status_code=400, detail="This tag is not an available version for this app")
+    if jobs.running("update", container_name):
+        raise HTTPException(status_code=409, detail="This app is already being updated")
+    audit(request, user, "channel_switch" if tag else "update", container_name, ("api " + tag).strip())
+    job = jobs.start("update", container_name, user,
+                     lambda log: update_app_stream(container_name, log, mode="manual", force_tag=tag))
+    return {**job, "url": f"/api/jobs/{job['id']}"}
+
+
+@app.post("/api/update-all", status_code=202)
+async def api_update_all_job(request: Request, user: str = Depends(require_user)):
+    """Cập nhật mọi app có bản mới (trừ app đã loại khỏi Update All), chạy nền."""
+    if jobs.running("update_all"):
+        raise HTTPException(status_code=409, detail="Update all is already running")
+    audit(request, user, "update_all", "", "api")
+
+    async def run(log):
+        summary: dict[str, Any] = {"ok": True}
+
+        async def ev(e: dict) -> None:
+            t = e.get("type")
+            if t == "log":
+                await log(e.get("text", ""))
+            elif t == "app_start":
+                await log(f"\n==> {e.get('name')}\n")
+            elif t == "complete":
+                summary.update(succeeded=e.get("succeeded", 0), failed=e.get("failed", 0), ok=not e.get("failed"))
+        await update_all_apps_stream(ev)
+        return summary
+    job = jobs.start("update_all", "", user, run)
+    return {**job, "url": f"/api/jobs/{job['id']}"}
+
+
+@app.get("/api/jobs")
+async def api_jobs(_: str = Depends(require_user)):
+    return {"jobs": jobs.recent()}
+
+
+@app.get("/api/jobs/{job_id}")
+async def api_job(job_id: str, _: str = Depends(require_user)):
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found (jobs are kept in memory until AppManager restarts)")
+    return job
+
+
+# Tài liệu API (Swagger) — chỉ khi đã đăng nhập
+def _openapi_schema() -> dict:
+    from fastapi.openapi.utils import get_openapi
+
+    if app.openapi_schema:
+        return app.openapi_schema
+    routes = [r for r in app.routes if getattr(r, "path", "").startswith("/api/")]
+    schema = get_openapi(
+        title="AppManager Pro API", version=APP_VERSION, routes=routes,
+        description=(
+            "Send an API token (Settings → API tokens) in the header `Authorization: Bearer amp_…`.\n\n"
+            "Permissions: **read** = every GET; **update** = read + check for updates, update an app, update all, "
+            "start / stop / restart; **full** = everything except account, 2FA, API tokens and registry passwords.\n\n"
+            "Updates run in the background: `POST /api/apps/{name}/update` returns a job; poll `GET /api/jobs/{id}`.\n\n"
+            "`GET /api/health` needs no token (returns only `status`); with a token it also returns the version and app counts."
+        ),
+    )
+    schema.setdefault("components", {}).setdefault("securitySchemes", {})["bearerAuth"] = {
+        "type": "http", "scheme": "bearer", "description": "API token: amp_…"}
+    schema["security"] = [{"bearerAuth": []}]
+    for path, ops in (schema.get("paths") or {}).items():
+        for method, op in ops.items():
+            need = api_tokens.min_scope(method, path.replace("{", "x").replace("}", "x"))
+            note = f"Token permission: **{need}**" if need else "Not available with an API token (web sign-in only)"
+            op["description"] = (op.get("description", "") + "\n\n" + note).strip()
+            parts = path.split("/")
+            op["tags"] = [parts[2] if len(parts) > 2 else "api"]
+    app.openapi_schema = schema
+    return schema
+
+
+@app.get("/openapi.json", include_in_schema=False)
+async def openapi_json(request: Request):
+    if not (get_current_user_optional(request) or token_user(request)):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return JSONResponse(_openapi_schema())
+
+
+# Mô tả các API hay dùng cho tự động hoá (hiện ở đầu trang /docs); API khác nằm trong mục "Các API khác"
+_API_GUIDE: list[tuple[str, str, str, str, str]] = [
+    # (method, path, english, tiếng Việt, ví dụ body JSON)
+    ("GET", "/api/health", "Health check. Without a token: {\"status\": \"ok\"}. With a token: version, app counts and apps that have an update.",
+     "Kiểm tra tình trạng. Không token: {\"status\": \"ok\"}. Có token: phiên bản, số app và các app có bản mới.", ""),
+    ("GET", "/api/apps", "All apps with status, current / latest version and whether an update is available.",
+     "Mọi app: trạng thái, phiên bản hiện tại / mới nhất, có bản cập nhật hay không.", ""),
+    ("GET", "/api/apps/{container_name}/details", "One app in detail (image, ports, mounts, changelog).",
+     "Chi tiết một app (image, cổng, thư mục, changelog).", ""),
+    ("GET", "/api/apps/{container_name}/versions", "Versions you can switch to for one app.",
+     "Các phiên bản có thể chuyển sang của một app.", ""),
+    ("POST", "/api/updates/check", "Check every app for new versions now.", "Kiểm tra bản mới cho mọi app ngay.", ""),
+    ("POST", "/api/apps/{container_name}/update", "Update one app in the background (health check + automatic rollback). Returns a job; optional body selects a version from /versions.",
+     "Cập nhật một app (chạy nền, có kiểm tra sức khoẻ + tự quay lại). Trả về mã việc; body tuỳ chọn để chọn phiên bản trong /versions.", '{"tag": ""}'),
+    ("POST", "/api/update-all", "Update every app that has an update (except apps excluded from Update All), in the background.",
+     "Cập nhật mọi app có bản mới (trừ app đã loại khỏi Update All), chạy nền.", ""),
+    ("GET", "/api/jobs/{job_id}", "Progress of a background job: status (running / success / failed), result and log.",
+     "Tiến trình một việc chạy nền: trạng thái (running / success / failed), kết quả và nhật ký.", ""),
+    ("GET", "/api/jobs", "Recent background jobs (kept until AppManager restarts).", "Các việc chạy nền gần đây (giữ tới khi AppManager khởi động lại).", ""),
+    ("POST", "/api/apps/{container_id}/{action}", "Container action: start, stop or restart (kill needs full access).",
+     "Thao tác container: start, stop, restart (kill cần toàn quyền).", ""),
+    ("GET", "/api/settings", "Settings and the last 30 update history entries.", "Cài đặt và 30 mục lịch sử cập nhật gần nhất.", ""),
+    ("GET", "/api/backups", "App configuration backups.", "Các bản sao lưu cấu hình app.", ""),
+    ("POST", "/api/backups/restore", "Restore an app configuration backup.", "Khôi phục bản sao lưu cấu hình app.", '{"app": "<app>", "file": "<backup file>"}'),
+    ("GET", "/api/system/storage", "Docker disk usage and reclaimable space.", "Dung lượng Docker và phần có thể dọn.", ""),
+    ("GET", "/api/audit", "Activity log (who did what, from which IP).", "Nhật ký hoạt động (ai làm gì, từ IP nào).", ""),
+]
+
+
+@app.get("/docs", include_in_schema=False, response_class=HTMLResponse)
+async def api_docs(request: Request):
+    """Tài liệu API gọn cho điện thoại, không cần CDN (chỉ khi đã đăng nhập)."""
+    if not get_current_user_optional(request):
+        return RedirectResponse(url="/login", status_code=302)
+    lang = "vi" if (request.query_params.get("lang") or request.cookies.get("amp_lang") or
+                    (request.headers.get("accept-language") or "")[:2]).lower().startswith("vi") else "en"
+    schema = _openapi_schema()
+    paths = schema.get("paths") or {}
+    base = str(request.base_url).rstrip("/")
+
+    def body_fields(op: dict) -> list[str]:
+        ref = (((op.get("requestBody") or {}).get("content") or {}).get("application/json") or {}).get("schema") or {}
+        name = (ref.get("$ref") or "").rsplit("/", 1)[-1]
+        props = ((schema.get("components") or {}).get("schemas") or {}).get(name, {}).get("properties") or {}
+        return list(props)
+
+    def entry(method: str, path: str, text: str = "", example: str = "") -> dict:
+        op = (paths.get(path) or {}).get(method.lower()) or {}
+        need = api_tokens.min_scope(method, path.replace("{", "x").replace("}", "x"))
+        params = [x.get("name") for x in op.get("parameters") or [] if x.get("in") == "query"]
+        curl = f'curl{"" if method == "GET" else " -X " + method} -H "Authorization: Bearer amp_…"'
+        if example:
+            curl += f" -H \"Content-Type: application/json\" -d '{example}'"
+        return {"method": method, "path": path, "text": text or op.get("summary", ""), "scope": need,
+                "params": params, "body": body_fields(op), "curl": f"{curl} {base}{path}"}
+
+    guide = [entry(m, pth, vi if lang == "vi" else en, ex) for m, pth, en, vi, ex in _API_GUIDE]
+    seen = {(g["method"], g["path"]) for g in guide}
+    others = [entry(m.upper(), pth) for pth, ops in sorted(paths.items()) for m in ops
+              if (m.upper(), pth) not in seen]
+    return templates.TemplateResponse(request, "api_docs.html", {
+        "version": APP_VERSION, "lang": lang, "guide": guide, "others": others, "base": base})
 
 
 # ---------------- Chuyển container docker run -> Docker Compose ----------------

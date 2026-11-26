@@ -2286,6 +2286,59 @@
           </div>
         </template>
 
+        <!-- API TOKEN (0.17): token cho Home Assistant, script, Uptime Kuma -->
+        <template x-if="settingsModal.tab === 'tokens'">
+          <div class="space-y-3.5">
+            <div class="glass-inset rounded-2xl p-3.5 space-y-2.5">
+              <p class="text-[11.5px] text-muted leading-relaxed" x-text="t('tkIntro')"></p>
+              <div class="grid grid-cols-2 gap-2">
+                <button type="button" @click="openTokenForm()" class="glass-btn-primary py-2.5 rounded-xl text-xs font-semibold" x-text="t('tkCreate')"></button>
+                <a :href="'/docs?lang=' + lang" target="_blank" rel="noopener" class="glass-btn py-2.5 rounded-xl text-xs font-semibold text-center text-sky-400" x-text="t('tkDocs')"></a>
+              </div>
+            </div>
+
+            <div x-show="tokenState.loading && !tokenState.loaded" class="py-6 text-center text-xs text-muted">…</div>
+            <p x-show="tokenState.loaded && !tokenState.items.length" class="text-center text-xs text-muted py-3" x-text="t('tkNone')"></p>
+            <template x-for="tk in tokenState.items" :key="tk.id">
+              <div class="glass-inset rounded-2xl p-3.5 space-y-2" :class="tk.expired ? 'opacity-70' : ''">
+                <div class="flex items-start justify-between gap-2">
+                  <div class="min-w-0">
+                    <p class="text-[13px] font-semibold truncate" x-text="tk.name"></p>
+                    <p class="font-mono-code text-[11px] text-subtle" x-text="tk.hint"></p>
+                  </div>
+                  <span class="shrink-0 px-2 py-0.5 rounded-md text-[10.5px] font-semibold" :class="tokenScope(tk.scope).cls" x-text="tokenScope(tk.scope).title"></span>
+                </div>
+                <div class="text-[11px] text-muted space-y-0.5">
+                  <p :class="tk.expired ? 'text-rose-300' : ''" x-text="t('tkCreated') + ' ' + formatTs(tk.created) + ' · ' + tokenExpiry(tk)"></p>
+                  <p x-text="tk.last_used ? t('tkLastUsed') + ' ' + formatTs(tk.last_used) + (tk.last_ip ? ' · ' + tk.last_ip : '') : t('tkNeverUsed')"></p>
+                </div>
+                <div x-show="tk.ips.length" class="flex flex-wrap gap-1">
+                  <span class="text-[10.5px] text-subtle self-center" x-text="t('tkOnlyFrom')"></span>
+                  <template x-for="ip in tk.ips" :key="ip"><span class="px-1.5 py-0.5 rounded-md bg-white/5 font-mono-code text-[10px] text-muted" x-text="ip"></span></template>
+                </div>
+                <button type="button" @click="confirmDeleteToken(tk)" class="glass-btn w-full py-2 rounded-xl text-[11px] font-semibold text-rose-400" x-text="t('tkDelete')"></button>
+              </div>
+            </template>
+
+            <div class="glass-inset rounded-2xl p-3.5 space-y-2.5">
+              <button type="button" @click="tokenState.examples = !tokenState.examples" class="w-full flex items-center justify-between text-left">
+                <span class="text-xs font-semibold" x-text="t('tkExamples')"></span>
+                <svg class="w-4 h-4 text-subtle transition-transform" :class="tokenState.examples ? 'rotate-90' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+              </button>
+              <template x-if="tokenState.examples">
+                <div class="space-y-2.5">
+                  <template x-for="ex in tokenExamples()" :key="ex.title">
+                    <div class="space-y-1">
+                      <p class="text-[11px] font-semibold text-muted" x-text="ex.title"></p>
+                      <pre class="glass-terminal font-mono-code rounded-xl p-2.5 text-[10.5px] whitespace-pre-wrap break-all" x-text="ex.code"></pre>
+                    </div>
+                  </template>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+
         <template x-if="settingsModal.tab === 'history'">
           <div class="space-y-2.5">
             <div x-show="updateHistory.length === 0" class="text-center py-8 text-xs text-muted" x-text="t('noHistory')"></div>
@@ -2914,6 +2967,88 @@
                 :disabled="dataSetup.busy || !dataSetup.selected.length || (dataSetup.status && !dataSetup.status.can_apply)"
                 class="glass-btn-update py-2.5 px-3 rounded-xl text-xs font-semibold disabled:opacity-50"
                 x-text="dataSetup.busy ? '…' : t('dataApplyBtn')"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- POPUP: tạo API token — token chỉ hiện MỘT lần -->
+  <div x-show="tokenState.form.open" x-cloak x-transition.opacity
+       class="fixed inset-0 z-[57] flex items-center justify-center p-4 sm:p-5 bg-black/70 backdrop-blur-md">
+    <div class="glass-panel w-full max-w-md rounded-[26px] p-5 space-y-4 shadow-2xl max-h-[88dvh] flex flex-col">
+      <div class="flex items-center gap-2.5 shrink-0">
+        <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border bg-sky-500/15 border-sky-400/35 text-sky-400">
+          <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z"/></svg>
+        </div>
+        <h3 class="font-bold text-[15px] leading-tight" x-text="tokenState.created ? t('tkCreatedTitle') : t('tkCreate')"></h3>
+      </div>
+
+      <div class="overflow-y-auto min-h-0 space-y-3 text-[11.5px]">
+        <!-- Đã tạo: hiện token một lần -->
+        <template x-if="tokenState.created">
+          <div class="space-y-2.5">
+            <div class="rounded-xl px-3 py-2 bg-amber-500/10 border border-amber-400/30 text-amber-200 leading-snug" x-text="t('tkOnce')"></div>
+            <div class="glass-inset rounded-xl p-3 font-mono-code text-[12px] break-all select-all" x-text="tokenState.created"></div>
+            <button type="button" @click="copyText(tokenState.created)" class="glass-btn-primary w-full py-2.5 rounded-xl text-xs font-semibold" x-text="t('tkCopy')"></button>
+            <p class="text-muted leading-snug" x-text="t('tkHowUse')"></p>
+          </div>
+        </template>
+
+        <!-- Biểu mẫu -->
+        <template x-if="!tokenState.created">
+          <div class="space-y-3">
+            <label class="block space-y-1">
+              <span class="text-[10.5px] text-subtle" x-text="t('tkName')"></span>
+              <input type="text" x-model="tokenState.form.name" maxlength="40" :placeholder="t('tkNamePh')"
+                     class="glass-input w-full rounded-xl px-3 py-2 text-xs" />
+            </label>
+            <div class="space-y-1.5">
+              <span class="text-[10.5px] text-subtle" x-text="t('tkScope')"></span>
+              <template x-for="sc in tokenScopes()" :key="sc.id">
+                <button type="button" @click="tokenState.form.scope = sc.id"
+                        class="w-full text-left rounded-xl p-2.5 border transition flex gap-2.5 items-start"
+                        :class="tokenState.form.scope === sc.id ? 'border-sky-400/50 bg-sky-500/10' : 'border-[var(--glass-border)]'">
+                  <span class="mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center"
+                        :class="tokenState.form.scope === sc.id ? 'border-sky-400' : 'border-slate-500/70'">
+                    <span x-show="tokenState.form.scope === sc.id" class="w-2 h-2 rounded-full bg-sky-400"></span>
+                  </span>
+                  <span class="min-w-0">
+                    <span class="block text-xs font-semibold" x-text="sc.title"></span>
+                    <span class="block text-[10.5px] text-muted leading-snug" x-text="sc.desc"></span>
+                  </span>
+                </button>
+              </template>
+            </div>
+            <div class="space-y-1">
+              <span class="text-[10.5px] text-subtle" x-text="t('tkExpiry')"></span>
+              <div class="glass-dock p-1 rounded-xl grid grid-cols-4 gap-1">
+                <template x-for="o in [[30, t('tk30d')], [90, t('tk90d')], [365, t('tk1y')], [0, t('tkNever')]]" :key="o[0]">
+                  <button type="button" @click="tokenState.form.days = o[0]" class="py-1.5 rounded-lg text-[11px] font-semibold transition"
+                          :class="tokenState.form.days === o[0] ? 'glass-btn-primary' : 'text-muted'" x-text="o[1]"></button>
+                </template>
+              </div>
+            </div>
+            <label class="block space-y-1">
+              <span class="text-[10.5px] text-subtle" x-text="t('tkIps')"></span>
+              <input type="text" x-model="tokenState.form.ips" placeholder="192.168.1.0/24, 192.168.1.50"
+                     autocapitalize="off" autocorrect="off" spellcheck="false" class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
+              <span class="block text-[10.5px] text-subtle leading-snug" x-text="t('tkIpsHint')"></span>
+            </label>
+          </div>
+        </template>
+        <div x-show="tokenState.error" class="rounded-xl px-3 py-2 bg-rose-500/12 border border-rose-500/30 text-[11px] text-rose-300 break-words" x-text="tokenState.error"></div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2.5 pt-1 shrink-0">
+        <template x-if="!tokenState.created">
+          <button @click="closeTokenForm()" :disabled="tokenState.busy" class="glass-btn py-2.5 px-3 rounded-xl text-xs font-semibold" x-text="t('cancel')"></button>
+        </template>
+        <template x-if="!tokenState.created">
+          <button @click="createToken()" :disabled="tokenState.busy || !tokenState.form.name.trim()"
+                  class="glass-btn-primary py-2.5 px-3 rounded-xl text-xs font-semibold disabled:opacity-50" x-text="tokenState.busy ? '…' : t('tkCreateBtn')"></button>
+        </template>
+        <template x-if="tokenState.created">
+          <button @click="closeTokenForm()" class="glass-btn py-2.5 px-3 rounded-xl text-xs font-semibold col-span-2" x-text="t('tkSavedClose')"></button>
+        </template>
       </div>
     </div>
   </div>
