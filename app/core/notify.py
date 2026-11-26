@@ -31,8 +31,8 @@ CHANNEL_TYPES = ("telegram", "discord", "slack", "teams", "googlechat", "matterm
 EVENTS = ("update_available", "update_success", "update_failed", "self_update", "app_unhealthy", "disk_low", "security")
 CRITICAL = {"update_failed", "app_unhealthy", "disk_low", "security"}
 SECRET_FIELDS = {"telegram": ("bot_token",), "discord": ("webhook_url",), "ntfy": ("token",), "gotify": ("app_token",),
-                 "webhook": ("secret",), "slack": ("webhook_url",), "teams": ("webhook_url",), "googlechat": ("webhook_url",),
-                 "mattermost": ("webhook_url",), "matrix": ("access_token",), "signal": (), "bark": ("device_key",),
+                 "webhook": ("secret", "enc_key"), "slack": ("webhook_url",), "teams": ("webhook_url",), "googlechat": ("webhook_url",),
+                 "mattermost": ("webhook_url",), "matrix": ("access_token",), "signal": (), "bark": ("device_key", "enc_key", "enc_iv"),
                  "pushover": ("app_token", "user_key"), "pushbullet": ("access_token",), "email": ("password",),
                  "apprise": ("urls",)}
 REQUIRED = {"telegram": ("bot_token", "chat_id"), "discord": ("webhook_url",), "ntfy": ("topic",),
@@ -41,6 +41,7 @@ REQUIRED = {"telegram": ("bot_token", "chat_id"), "discord": ("webhook_url",), "
             "signal": ("server", "number", "recipients"), "bark": ("device_key",), "pushover": ("app_token", "user_key"),
             "pushbullet": ("access_token",), "email": ("host", "sender", "to"), "apprise": ("server",)}
 EMAIL_SECURITY = ("starttls", "ssl", "none")
+ENCRYPTABLE = ("bark", "webhook")  # app nhận tự giải mã được (Bark trên iPhone, máy chủ webhook của bạn)
 
 T = {
     "en": {
@@ -48,7 +49,7 @@ T = {
         "rolled_back": "↩️ Update failed — rolled back", "self_update": "🔄 AppManager Pro", "app_unhealthy": "⚠️ App problem",
         "app_recovered": "✅ App running again", "disk_low": "💾 Disk almost full", "security": "🔒 Security",
         "test": "🔔 Test notification", "digest": "🕘 While notifications were quiet",
-        "test_body": "AppManager Pro can reach this channel.", "used": "used", "free": "free",
+        "test_body": "AppManager Pro can reach this channel.", "private_body": "Open AppManager Pro to see the details.", "used": "used", "free": "free",
         "config": "settings applied", "recovery": "recovered after an interruption",
     },
     "vi": {
@@ -56,7 +57,7 @@ T = {
         "rolled_back": "↩️ Cập nhật lỗi — đã quay về bản cũ", "self_update": "🔄 AppManager Pro", "app_unhealthy": "⚠️ App gặp sự cố",
         "app_recovered": "✅ App đã chạy lại bình thường", "disk_low": "💾 Ổ đĩa sắp đầy", "security": "🔒 Bảo mật",
         "test": "🔔 Tin thử", "digest": "🕘 Trong giờ im lặng",
-        "test_body": "AppManager Pro gửi được tới kênh này.", "used": "đã dùng", "free": "còn trống",
+        "test_body": "AppManager Pro gửi được tới kênh này.", "private_body": "Mở AppManager Pro để xem chi tiết.", "used": "đã dùng", "free": "còn trống",
         "config": "đã áp dụng cấu hình", "recovery": "đã phục hồi sau sự cố",
     },
 }
@@ -125,9 +126,20 @@ def upsert_channel(data: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("Enter valid e-mail addresses")
     if ctype == "apprise" and not (cfg.get("urls") or cfg.get("key")):
         raise ValueError("Enter Apprise URLs or a configuration key")
+    if cfg.get("encrypt") == "1":
+        if ctype not in ENCRYPTABLE:
+            raise ValueError("Content encryption is only available for Bark and Webhook")
+        key = cfg.get("enc_key", "")
+        if ctype == "bark":
+            if len(key.encode()) not in (16, 24, 32) or len(cfg.get("enc_iv", "").encode()) != 16:
+                raise ValueError("Bark encryption: the key must be 16, 24 or 32 characters (AES128/192/256) and the IV 16 characters")
+        elif len(key) < 16:
+            raise ValueError("Webhook encryption: use a key of at least 16 characters")
+    else:
+        cfg.pop("encrypt", None)
     ch = {
         "id": cid, "type": ctype, "name": (data.get("name") or ctype.title()).strip()[:60],
-        "enabled": bool(data.get("enabled", True)),
+        "enabled": bool(data.get("enabled", True)), "private": bool(data.get("private", False)),
         "events": [e for e in (data.get("events") or list(EVENTS)) if e in EVENTS],
         "config": cfg, "last": (old or {}).get("last") or {},
     }
@@ -222,6 +234,9 @@ async def _send(ch: dict[str, Any], title: str, body: str, event: str, data: dic
 
     cfg = ch.get("config") or {}
     t = ch["type"]
+    if ch.get("private") and event != "test":  # chế độ riêng tư: chỉ tiêu đề chung, không tên app / IP / chi tiết
+        body, data = tr("private_body"), {}
+    enc = cfg.get("encrypt") == "1" and t in ENCRYPTABLE
     text = f"{title}\n{body}".strip()
     if t == "email":
         try:
@@ -272,8 +287,18 @@ async def _send(ch: dict[str, Any], title: str, body: str, event: str, data: dic
                              json={"message": text, "number": cfg["number"], "recipients": _split(cfg["recipients"])})
         elif t == "bark":
             server = (cfg.get("server") or "https://api.day.app").rstrip("/")
-            r = await c.post(f"{server}/push", json={"device_key": cfg["device_key"], "title": title, "body": body or title,
-                                                    "group": "AppManager Pro", "level": "timeSensitive" if crit else "active"})
+            level = "timeSensitive" if crit else "active"
+            if enc:  # app Bark tự giải mã (AES-CBC, PKCS7) bằng Khoá + IV đã nhập trong app
+                import base64
+
+                from app.core import aes
+                plain = json.dumps({"title": title, "body": body or title, "group": "AppManager Pro", "level": level}, ensure_ascii=False)
+                ct = aes.cbc_encrypt(cfg["enc_key"].encode(), cfg["enc_iv"].encode(), plain.encode("utf-8"))
+                payload = {"device_key": cfg["device_key"], "ciphertext": base64.b64encode(ct).decode(), "iv": cfg["enc_iv"],
+                           "group": "AppManager Pro", "level": level}
+            else:
+                payload = {"device_key": cfg["device_key"], "title": title, "body": body or title, "group": "AppManager Pro", "level": level}
+            r = await c.post(f"{server}/push", json=payload)
         elif t == "pushover":
             r = await c.post("https://api.pushover.net/1/messages.json",
                              data={"token": cfg["app_token"], "user": cfg["user_key"], "title": title[:250],
@@ -291,6 +316,14 @@ async def _send(ch: dict[str, Any], title: str, body: str, event: str, data: dic
                 r = await c.post(f"{server}/notify", json={**payload, "urls": cfg["urls"]})
         else:  # webhook
             payload = {"event": event, "title": title, "message": body, "data": data, "time": int(time.time()), "source": "appmanager-pro"}
+            if enc:  # AES-256-GCM, khoá = SHA-256(chuỗi khoá); body = nonce(12) + bản mã + tag(16), base64
+                import base64
+
+                from app.core import aes
+                nonce = secrets.token_bytes(12)
+                ct = aes.gcm_encrypt(hashlib.sha256(cfg["enc_key"].encode()).digest(), nonce,
+                                     json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+                payload = {"encrypted": base64.b64encode(nonce + ct).decode(), "alg": "AES-256-GCM", "source": "appmanager-pro"}
             raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
             headers = {"Content-Type": "application/json"}
             if cfg.get("secret"):

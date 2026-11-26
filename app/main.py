@@ -1303,6 +1303,7 @@ class NotifyChannelPayload(BaseModel):
     type: str
     name: str = ""
     enabled: bool = True
+    private: bool = False  # chế độ riêng tư: chỉ gửi tiêu đề chung, không chi tiết
     events: list[str] = []
     config: dict[str, Any] = {}
 

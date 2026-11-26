@@ -2274,7 +2274,7 @@
                     </span>
                     <span class="min-w-0 flex-1">
                       <span class="block text-xs font-semibold truncate" x-text="ch.name"></span>
-                      <span class="block text-[10.5px] text-muted truncate" x-text="notifyTypeLabel(ch.type) + ' • ' + t('notifyEventsCount').replace('{n}', ch.events.length)"></span>
+                      <span class="block text-[10.5px] text-muted truncate" x-text="notifyTypeLabel(ch.type) + ' • ' + t('notifyEventsCount').replace('{n}', ch.events.length) + (ch.config?.encrypt === '1' ? ' • 🔒 ' + t('encShort') : '') + (ch.private ? ' • ' + t('privShort') : '')"></span>
                     </span>
                     <label class="inline-flex items-center cursor-pointer shrink-0">
                       <input type="checkbox" :checked="ch.enabled" @change="toggleNotifyChannel(ch, $event.target.checked)" class="sr-only peer" />
@@ -2346,6 +2346,49 @@
                     </label>
                   </template>
                   <p class="text-[10px] text-subtle leading-snug" x-text="t('nh_' + notifyState.edit.type)"></p>
+                  <!-- Bảo mật nội dung: mã hoá (Bark, Webhook) + chế độ riêng tư (mọi kênh) -->
+                  <div class="rounded-xl border border-[var(--glass-border)] p-2.5 space-y-2.5">
+                    <div class="flex items-center justify-between gap-3">
+                      <span class="min-w-0">
+                        <span class="block text-[11.5px] font-semibold" x-text="t('encTitle')"></span>
+                        <span class="block text-[10.5px] text-subtle leading-snug" x-text="notifyCanEncrypt(notifyState.edit.type) ? t('encDesc_' + notifyState.edit.type) : t(notifyState.edit.type === 'signal' ? 'encSignal' : 'encNo')"></span>
+                      </span>
+                      <button x-show="notifyCanEncrypt(notifyState.edit.type)" type="button" role="switch" :aria-checked="notifyState.edit.config.encrypt === '1'" @click="notifyState.edit.config.encrypt = notifyState.edit.config.encrypt === '1' ? '' : '1'; if (notifyState.edit.config.encrypt && !notifyState.edit.config.enc_key && !notifyState.edit.config.has_enc_key) genNotifyKey()"
+                              class="relative w-11 h-6 rounded-full transition shrink-0" :class="notifyState.edit.config.encrypt === '1' ? 'bg-emerald-500' : 'bg-slate-600'">
+                        <span class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition" :class="notifyState.edit.config.encrypt === '1' ? 'translate-x-5' : ''"></span>
+                      </button>
+                    </div>
+                    <template x-if="notifyCanEncrypt(notifyState.edit.type) && notifyState.edit.config.encrypt === '1'">
+                      <div class="space-y-2">
+                        <label class="block space-y-1">
+                          <span class="text-[10.5px] font-semibold text-muted" x-text="t('encKey')"></span>
+                          <input type="text" x-model="notifyState.edit.config.enc_key" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+                                 :placeholder="notifyState.edit.config.has_enc_key ? '•••••••• (' + t('notifySaved') + ')' : ''" class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
+                        </label>
+                        <label x-show="notifyState.edit.type === 'bark'" class="block space-y-1">
+                          <span class="text-[10.5px] font-semibold text-muted" x-text="t('encIv')"></span>
+                          <input type="text" x-model="notifyState.edit.config.enc_iv" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+                                 :placeholder="notifyState.edit.config.has_enc_iv ? '•••••••• (' + t('notifySaved') + ')' : ''" class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
+                        </label>
+                        <div class="grid grid-cols-2 gap-2">
+                          <button type="button" @click="genNotifyKey()" class="glass-btn py-1.5 rounded-lg text-[11px] font-semibold" x-text="t('encGen')"></button>
+                          <button type="button" @click="copyText(notifyState.edit.type === 'bark' ? 'Key: ' + notifyState.edit.config.enc_key + '\nIV: ' + notifyState.edit.config.enc_iv : notifyState.edit.config.enc_key)"
+                                  :disabled="!notifyState.edit.config.enc_key" class="glass-btn py-1.5 rounded-lg text-[11px] font-semibold text-sky-300 disabled:opacity-40" x-text="t('encCopy')"></button>
+                        </div>
+                        <p class="text-[10.5px] text-amber-200 leading-snug" x-text="t('encHow_' + notifyState.edit.type)"></p>
+                      </div>
+                    </template>
+                    <div class="flex items-center justify-between gap-3 pt-2 border-t border-[var(--glass-border)]">
+                      <span class="min-w-0">
+                        <span class="block text-[11.5px] font-semibold" x-text="t('privTitle')"></span>
+                        <span class="block text-[10.5px] text-subtle leading-snug" x-text="t('privDesc')"></span>
+                      </span>
+                      <button type="button" role="switch" :aria-checked="notifyState.edit.private" @click="notifyState.edit.private = !notifyState.edit.private"
+                              class="relative w-11 h-6 rounded-full transition shrink-0" :class="notifyState.edit.private ? 'bg-emerald-500' : 'bg-slate-600'">
+                        <span class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition" :class="notifyState.edit.private ? 'translate-x-5' : ''"></span>
+                      </button>
+                    </div>
+                  </div>
                   <p class="text-[10.5px] font-semibold text-muted pt-1" x-text="t('notifyEvents')"></p>
                   <template x-for="ev in notifyState.events" :key="ev">
                     <label class="flex items-center justify-between gap-3 cursor-pointer py-0.5">

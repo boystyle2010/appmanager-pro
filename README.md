@@ -268,6 +268,10 @@ docker compose pull && docker compose up -d
 | Push to your phone | **ntfy**, **Bark** (iPhone only), **Pushover**, **Pushbullet**, **Gotify** | ✅ ntfy, Bark, Pushover — ❌ Gotify (Android / web only), Pushbullet (mainly Android / browser) |
 | Other | **Email** (SMTP: STARTTLS / SSL / none), **Apprise API** (100+ more services: WhatsApp, LINE, SMS…), generic **Webhook** (JSON, optional HMAC signature in `X-AppManager-Signature`) | ✅ Email, Apprise |
 
+**Privacy options (per channel):**
+- **Encrypt message content** — Bark (AES-128/192/256-CBC, decrypted by the Bark app on your iPhone; enter the same key and IV in Bark → Push Encryption) and Webhook (AES-256-GCM, key = SHA-256 of your passphrase, body `{"encrypted": base64(nonce + ciphertext + tag), "alg": "AES-256-GCM"}`). Other apps cannot decrypt messages, so they rely on transport encryption (HTTPS / TLS).
+- **Private mode** — any channel: only a generic title (e.g. "❌ Update failed") is sent, without app names, IP addresses or details.
+
 Self-hosted ntfy + iPhone: add `upstream-base-url: "https://ntfy.sh"` to the ntfy `server.yml` so iPhones are woken up instantly (only a wake-up signal goes through ntfy.sh; the message stays on your server).
 
 Events:

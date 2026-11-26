@@ -2046,6 +2046,14 @@
                    matrix: 'Matrix', signal: 'Signal', ntfy: 'ntfy', gotify: 'Gotify', bark: 'Bark', pushover: 'Pushover', pushbullet: 'Pushbullet',
                    email: 'Email', apprise: 'Apprise', webhook: 'Webhook' }[t] || t;
         },
+        notifyCanEncrypt(t) { return t === 'bark' || t === 'webhook'; },
+        genNotifyKey() {
+          const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+          const rnd = (n) => { const a = new Uint32Array(n); crypto.getRandomValues(a); return [...a].map(x => abc[x % abc.length]).join(''); };
+          const c = this.notifyState.edit.config;
+          c.enc_key = rnd(32);
+          if (this.notifyState.edit.type === 'bark') c.enc_iv = rnd(16);
+        },
         notifyIcon(t) { return (window.AMP_NOTIFY_ICONS || {})[t] || { bg: '#475569', svg: '' }; },
         notifyTypeShort(t) {
           return { telegram: 'TG', discord: 'DC', slack: 'SL', teams: 'MT', googlechat: 'GC', mattermost: 'MM', matrix: 'MX', signal: 'SG',
@@ -2075,7 +2083,7 @@
         newNotifyChannel() {
           const n = this.notifyState;
           n.msg = '';
-          n.edit = { id: '', type: 'telegram', name: '', enabled: true, events: [...n.events], config: { server: '', security: 'starttls' } };
+          n.edit = { id: '', type: 'telegram', name: '', enabled: true, private: false, events: [...n.events], config: { server: '', security: 'starttls' } };
         },
         editNotifyChannel(ch) {
           this.notifyState.msg = '';

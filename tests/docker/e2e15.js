@@ -37,9 +37,20 @@ const results = []; const check = (n, c, d = '') => { results.push(!!c); console
   await D("d.notifyState.edit.type = 'ntfy'"); await sleep(300);
   check('ntfy hint explains upstream-base-url for iPhone', (await p.textContent('body')).includes('upstream-base-url'));
   await shot('n5-ntfy.png');
+  // Mã hoá (Bark) + chế độ riêng tư
+  await D("d.notifyState.edit.type = 'bark'; d.notifyState.edit.config.encrypt = '1'; d.genNotifyKey(); d.notifyState.edit.private = true"); await sleep(400);
+  const kv = await D('return [d.notifyState.edit.config.enc_key.length, d.notifyState.edit.config.enc_iv.length]');
+  check('Bark: encryption on generates a 32-char key + 16-char IV', kv[0] === 32 && kv[1] === 16, JSON.stringify(kv));
+  await p.evaluate(() => [...document.querySelectorAll('span')].find(x => x.textContent.trim() === 'Mã hoá nội dung tin')?.scrollIntoView({ block: 'start' })); await sleep(300);
+  await p.screenshot({ path: OUT + '/n7-bark-encrypt.png' });
+  await D("d.notifyState.edit.type = 'telegram'"); await sleep(300);
+  check('Telegram: no encryption switch, explains HTTPS + private mode', (await p.textContent('body')).includes('không tự giải mã được') && await p.evaluate(() => [...document.querySelectorAll('button[role=switch]')].filter(b => b.getBoundingClientRect().width > 0).length) >= 1);
+  await p.evaluate(() => [...document.querySelectorAll('span')].find(x => x.textContent.trim() === 'Mã hoá nội dung tin')?.scrollIntoView({ block: 'start' })); await sleep(300);
+  await p.screenshot({ path: OUT + '/n8-telegram-private.png' });
   // danh sách kênh đã lưu cũng dùng icon
-  await D("d.notifyState.edit = null"); await D("return d._postJson('/api/notify/channels', { type: 'bark', name: 'iPhone của mình', config: { device_key: 'K' }, events: d.notifyState.events })"); await D('return d.loadNotify()'); await sleep(800);
+  await D("d.notifyState.edit = null"); await D("return d._postJson('/api/notify/channels', { type: 'bark', name: 'iPhone của mình', private: true, config: { device_key: 'K', encrypt: '1', enc_key: 'K'.repeat(32), enc_iv: '0123456789abcdef' }, events: d.notifyState.events })"); await D('return d.loadNotify()'); await sleep(800);
   await p.evaluate(() => window.scrollTo(0, 0)); await p.screenshot({ path: OUT + '/n6-list.png' });
+  check('Saved channel keeps Private mode + encryption (shown in the list)', (await p.textContent('body')).includes('mã hoá') && (await p.textContent('body')).includes('riêng tư'));
   check('Saved channel list uses the app icon', await p.evaluate(() => [...document.querySelectorAll('svg')].some(x => x.getAttribute('x-html') === 'notifyIcon(ch.type).svg' && x.innerHTML.length > 20)));
   check('No JavaScript errors', !errs.length, errs.join(' | '));
   console.log(`SUMMARY ${results.filter(Boolean).length} / ${results.length}`);
