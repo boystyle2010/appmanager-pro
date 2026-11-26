@@ -59,10 +59,10 @@ Test kịch bản trên Docker thật (20 bộ, ~2,5 giờ): làm đúng theo **
 
 ## Việc còn mở
 - Trivy: `golang.org/x/net` v0.60.0 trong `docker-compose` (CVE-2026-78661, tạm bỏ qua trong `.trivyignore` tới 2027-02-28) — chờ Docker Compose phát hành bản dùng x/net ≥ 0.62.0 (v5.8.0 và nhánh main ngày 2026-11-18 vẫn là v0.60.0).
-- Phiên bản đã phát hành gần nhất: **v0.17.0** (2026-11-26: API token, API cập nhật chạy nền, `/api/health`, trang `/docs`, Cài đặt dạng danh sách, quản lý thư mục dữ liệu). Trước đó v0.16.0 (thông báo), v0.14.1 (gồm phần chống giới hạn API định làm 0.15.0 — bỏ qua số 0.15.0).
-- 0.17.0 đã test thật trên Docker trong sandbox: 18 bộ `tests/docker/` đều đạt (bộ 2 = 41/42, `P4` là điều kiện test đã biết). Chưa thử với Home Assistant / Uptime Kuma thật và máy CasaOS của chủ repo.
+- Phiên bản đã phát hành gần nhất: **v0.18.0** (2026-11-26: quản lý nhiều máy chủ qua REST API + API Token, API Docs mở trong app, viết hoa Token / Script / API Docs). Trước đó v0.17.0 (API token, `/api/health`, `/docs`, Cài đặt dạng danh sách, thư mục dữ liệu), v0.16.0 (thông báo), v0.14.1 (gồm phần chống giới hạn API định làm 0.15.0 — bỏ qua số 0.15.0).
+- 0.18.0 đã test thật trên Docker trong sandbox: 20 bộ `tests/docker/` (0.18 chạy lại bộ 7, 13–20; bộ 1–6, 8–12 không đổi từ 0.17.0, bộ 2 = 41/42 với `P4` là điều kiện test đã biết). Chưa thử: Home Assistant / Uptime Kuma thật, hai máy thật khác nhau / Tailscale / reverse proxy thật, máy CasaOS của chủ repo.
 
 ### Lộ trình tiếp theo (đã thống nhất với chủ repo)
 - ~~0.17 — API token~~: đã xong (v0.17.0).
-- **0.18+ — quản lý nhiều máy chủ** (mô hình agent): mỗi máy chạy AppManager; một máy "chính" thêm máy khác bằng địa chỉ + API token, gộp danh sách app, bấm cập nhật/khôi phục từ xa; việc thật vẫn do AppManager từng máy làm; KHÔNG mở Docker socket ra mạng.
+- ~~0.18 — quản lý nhiều máy chủ~~: đã xong (v0.18.0). Có thể mở rộng sau: thông báo khi máy phụ mất kết nối, xem log / khôi phục từ xa, gộp tất cả máy vào một danh sách.
 - Ý tưởng khác: sao lưu/khôi phục cấu hình AppManager; tìm & tải log container; Podman/GPU/ARM thật/Docker cũ chưa test được trong sandbox (cần chủ repo thử trên máy thật).
