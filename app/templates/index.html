@@ -2301,7 +2301,7 @@
                         <template x-for="tp in g.types" :key="tp">
                           <button type="button" @click="notifyState.edit.type = tp; if (tp === 'email' && !notifyState.edit.config.security) notifyState.edit.config.security = 'starttls'"
                                   :disabled="!!notifyState.edit.id && notifyState.edit.type !== tp"
-                                  class="relative py-1.5 px-1 rounded-lg text-[10px] font-semibold border transition disabled:opacity-40 truncate"
+                                  class="relative min-h-[30px] py-1 px-0.5 rounded-lg text-[10px] leading-tight font-semibold border transition disabled:opacity-40 break-words"
                                   :class="notifyState.edit.type === tp ? 'border-sky-400/60 bg-sky-500/15 text-sky-200' : 'border-[var(--glass-border)] text-muted'">
                             <span x-text="notifyTypeLabel(tp)"></span>
                           </button>

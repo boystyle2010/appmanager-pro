@@ -18,6 +18,12 @@ const results = []; const check = (n, c, d = '') => { results.push(!!c); console
   check('16 channel types in 3 groups', types.length === 16, JSON.stringify(types));
   check('Telegram shows 6 platform icons, no dots on the picker', await p.evaluate(() => [...document.querySelectorAll('svg')].filter(x => x.getAttribute('x-html') === 'platformIcon(pf)' && x.getBoundingClientRect().width > 0).length) === 6
         && await p.evaluate(() => [...document.querySelectorAll('button')].filter(b => /Telegram|Discord|Bark|Signal/.test(b.textContent) && b.querySelector('.rounded-full')).length) === 0);
+  for (const w of [390, 320]) {  // iPhone thường và iPhone SE: tên kênh không bị cắt
+    await p.setViewportSize({ width: w, height: 844 }); await sleep(300);
+    const cut = await p.evaluate(() => [...document.querySelectorAll('button')].filter(b => b.getAttribute('x-text') === null && b.querySelector('span') && /^(Telegram|Discord|Slack|Teams|Google Chat|Mattermost|Matrix|Signal|ntfy|Bark|Pushover|Pushbullet|Gotify|Email|Apprise|Webhook)$/.test(b.textContent.trim()) && (b.scrollWidth > b.clientWidth + 1 || b.querySelector('span').scrollWidth > b.querySelector('span').clientWidth + 1)).map(b => b.textContent.trim()));
+    check(`Channel names not cut at ${w}px`, cut.length === 0, JSON.stringify(cut));
+  }
+  await p.setViewportSize({ width: 390, height: 844 }); await sleep(300);
   await shot('n1-types-telegram.png');
   await D("d.notifyState.edit.type = 'gotify'"); await sleep(300);
   check('Gotify: Android + Web icons and a no-iPhone hint', (await p.textContent('body')).toLowerCase().includes('không có app iphone') && JSON.stringify(await D('return d.notifyPlatforms("gotify")')) === '["android","web"]');
