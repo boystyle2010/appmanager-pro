@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.20.0
+
+*Released: 2026-11-26*
+
+### 📦 Component & Version Matrix
+
+- **App Release:** Bumped from `v0.19.0` ➡️ `v0.20.0`
+- **Supported Architectures:** `linux/amd64` (x86_64), `linux/arm64` (ARM64) & `linux/arm/v7` (ARMv7 32-bit) *(Multi-arch GHCR Image)*
+- **Python Base Image:** `python 3.15.2`
+- **Docker CLI:** `docker 29.10.1`
+- **Core Python Stack:** `FastAPI 0.165.0` • `Uvicorn 0.54.0` • `Docker SDK 7.2.0` • `ruamel.yaml 0.19.1` • `Argon2 25.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.29.0` • `APScheduler 3.11.3` • `segno 1.6.6`
+- **Frontend Libraries:** `Alpine.js 3.17.5` • `Tailwind CSS 4.3.5` • `marked 18.3.0` • `DOMPurify 3.5.0`
+
+### 🚀 What's Changed
+
+- Auto-update rules per app (update window → Auto-Update this app): install every version, only minor versions or only patches (larger upgrades wait for you), wait N days after AppManager first sees a new version, and pick the weekdays and time (empty = the shared auto-update time). Updates missed while the server was off run later the same day; each app updates at most once a day.
+- The app card shows why a new version is being held back (e.g. "auto-update in 3 days", "major version 2.0 — waiting for you to update by hand"), and the rules warn when scheduled auto-update is turned off in Settings.
+- Release channels now include the other variant of the stable channel with the same prefix (e.g. `latest` ↔ `latest-full` for Glances), so you can switch between the full and plain image from the update window; test channels (dev / beta) still only show for the variant that has them, and switching variant shows a warning that features may differ.
+
 ## 0.19.0
 
 *Released: 2026-11-26*
