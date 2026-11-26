@@ -2294,7 +2294,6 @@
               <template x-if="notifyState.edit">
                 <div class="rounded-xl border border-sky-400/40 bg-sky-500/5 p-3 space-y-2.5">
                   <p class="text-xs font-semibold" x-text="notifyState.edit.id ? t('notifyEditTitle') : t('notifyAddTitle')"></p>
-                  <p x-show="!notifyState.edit.id" class="text-[10px] text-subtle flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span><span x-text="t('npLegend')"></span></p>
                   <template x-for="g in notifyGroups()" :key="g.id">
                     <div x-show="!notifyState.edit.id || g.types.includes(notifyState.edit.type)" class="space-y-1">
                       <p class="text-[10px] font-semibold uppercase tracking-wider text-subtle" x-text="t('ng_' + g.id)"></p>
@@ -2305,14 +2304,29 @@
                                   class="relative py-1.5 px-1 rounded-lg text-[10px] font-semibold border transition disabled:opacity-40 truncate"
                                   :class="notifyState.edit.type === tp ? 'border-sky-400/60 bg-sky-500/15 text-sky-200' : 'border-[var(--glass-border)] text-muted'">
                             <span x-text="notifyTypeLabel(tp)"></span>
-                            <span x-show="notifyPlatforms(tp).includes('ios')" class="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-400" :title="t('npIos')"></span>
                           </button>
                         </template>
                       </div>
                     </div>
                   </template>
-                  <p class="text-[10.5px] leading-snug" :class="notifyPlatforms(notifyState.edit.type).includes('ios') || notifyState.edit.type === 'webhook' ? 'text-emerald-300' : 'text-amber-300'"
-                     x-text="notifyState.edit.type === 'webhook' ? t('npWebhook') : t('npOn') + ' ' + notifyPlatforms(notifyState.edit.type).map(x => t('np_' + x)).join(' · ') + (notifyPlatforms(notifyState.edit.type).includes('ios') ? '' : ' — ' + t('npNoIos'))"></p>
+                  <!-- Nền tảng nhận được thông báo của kênh đang chọn -->
+                  <div class="rounded-xl border border-[var(--glass-border)] px-2.5 py-2 flex flex-col gap-1.5">
+                    <template x-if="notifyPlatforms(notifyState.edit.type).length">
+                      <div class="flex flex-wrap items-center gap-1.5">
+                        <span class="text-[10.5px] font-semibold text-muted mr-0.5" x-text="t('npSupport')"></span>
+                        <template x-for="pf in notifyPlatforms(notifyState.edit.type)" :key="pf">
+                          <span class="inline-flex items-center gap-1 h-6 px-2 rounded-lg bg-white/[0.06] border border-[var(--glass-border)] text-[10.5px] font-semibold">
+                            <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" aria-hidden="true" x-html="platformIcon(pf)"></svg>
+                            <span x-text="platformLabel(pf)"></span>
+                          </span>
+                        </template>
+                      </div>
+                    </template>
+                    <p x-show="!notifyPlatforms(notifyState.edit.type).length" class="text-[10.5px] text-muted leading-snug"
+                       x-text="notifyState.edit.type === 'apprise' ? t('npApprise') : t('npWebhook')"></p>
+                    <p x-show="notifyPlatforms(notifyState.edit.type).length && !notifyPlatforms(notifyState.edit.type).includes('ios')"
+                       class="text-[10.5px] text-amber-300 leading-snug" x-text="t('npNoIosHint')"></p>
+                  </div>
                   <input type="text" x-model="notifyState.edit.name" :placeholder="t('notifyName')" class="glass-input w-full rounded-xl px-3 py-2 text-xs" />
                   <template x-for="f in notifyFields(notifyState.edit.type)" :key="notifyState.edit.type + f.k">
                     <label class="block space-y-1">

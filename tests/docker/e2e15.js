@@ -16,9 +16,11 @@ const results = []; const check = (n, c, d = '') => { results.push(!!c); console
   const shot = async (name) => { await p.evaluate(() => document.querySelector('[x-model="notifyState.edit.name"]')?.parentElement?.scrollIntoView({ block: 'start' })); await sleep(300); await p.screenshot({ path: OUT + '/' + name }); };
   const types = await D('return d.notifyGroups().flatMap(g => g.types)');
   check('16 channel types in 3 groups', types.length === 16, JSON.stringify(types));
+  check('Telegram shows 6 platform icons, no dots on the picker', await p.evaluate(() => [...document.querySelectorAll('svg')].filter(x => x.getAttribute('x-html') === 'platformIcon(pf)' && x.getBoundingClientRect().width > 0).length) === 6
+        && await p.evaluate(() => [...document.querySelectorAll('button')].filter(b => /Telegram|Discord|Bark|Signal/.test(b.textContent) && b.querySelector('.rounded-full')).length) === 0);
   await shot('n1-types-telegram.png');
   await D("d.notifyState.edit.type = 'gotify'"); await sleep(300);
-  check('Gotify says there is no iPhone app', (await p.textContent('body')).includes('không có app iPhone'));
+  check('Gotify: Android + Web icons and a no-iPhone hint', (await p.textContent('body')).toLowerCase().includes('không có app iphone') && JSON.stringify(await D('return d.notifyPlatforms("gotify")')) === '["android","web"]');
   await shot('n2-gotify-no-ios.png');
   await D("d.notifyState.edit.type = 'bark'"); await sleep(300); await shot('n3-bark.png');
   await D("d.notifyState.edit.type = 'email'; d.notifyState.edit.config.security = 'starttls'"); await sleep(300);
