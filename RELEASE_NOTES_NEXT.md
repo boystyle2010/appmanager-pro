@@ -1,1 +1,3 @@
 # Ghi chú cho bản phát hành kế tiếp — mỗi dòng bắt đầu bằng "- "
+- Auto-update rules per app (update window → Auto-Update this app): install every version, only minor versions or only patches (larger upgrades wait for you), wait N days after AppManager first sees a new version, and pick the weekdays and time (empty = the shared auto-update time). Updates missed while the server was off run later the same day; each app updates at most once a day.
+- The app card shows why a new version is being held back (e.g. "auto-update in 3 days", "major version 2.0 — waiting for you to update by hand"), and the rules warn when scheduled auto-update is turned off in Settings.

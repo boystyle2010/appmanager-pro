@@ -117,6 +117,23 @@ def version_from_labels(labels: dict[str, str]) -> str:
     return ""
 
 
+def _policy_of(pref: dict[str, Any]) -> dict[str, Any]:
+    from app.core import update_policy
+    try:
+        return update_policy.parse(pref.get("policy") or "")
+    except ValueError:
+        return dict(update_policy.DEFAULT)
+
+
+def _auto_hold(pref: dict[str, Any], cached: dict[str, Any], has_update: bool) -> Optional[dict[str, Any]]:
+    """Vì sao tự cập nhật đang giữ bản mới lại (quy tắc của app); None = sẽ tự cập nhật theo lịch."""
+    if not (has_update and pref.get("auto_update")):
+        return None
+    from app.core import update_policy
+    return update_policy.hold_reason(_policy_of(pref), str(cached.get("current_version") or ""),
+                                     str(cached.get("remote_version") or ""), str(cached.get("first_seen") or ""))
+
+
 def _parse_channels(raw: Any) -> list[dict[str, Any]]:
     try:
         data = json.loads(raw) if raw else []
@@ -457,6 +474,8 @@ def list_all_apps(include_cache: bool = True) -> dict[str, Any]:
                 "source_url": pref.get("custom_repo") or cached.get("source_url") or source_url,
                 "custom_repo": pref.get("custom_repo") or "",
                 "auto_update": bool(pref.get("auto_update", 0)),
+                "policy": _policy_of(pref),
+                "auto_hold": _auto_hold(pref, cached, has_update),
                 "is_self": is_self,
                 "has_update": has_update,
                 "raw_has_update": raw_has_update,

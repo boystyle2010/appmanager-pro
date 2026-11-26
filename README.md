@@ -249,7 +249,7 @@ docker compose pull && docker compose up -d
 | Setting | Default | Description |
 |---|---|---|
 | Periodic check | 6 h | How often registries are checked in the background. |
-| Scheduled auto-update | off | Daily time to update apps that have *Auto-Update* enabled. |
+| Scheduled auto-update | off | Daily time to update apps that have *Auto-Update* enabled. Each app can have its own **rules** (update window → Auto-Update this app): all versions / minor only / patches only, wait N days after a new version appears, weekdays and its own time. Missed runs (server off) catch up later the same day. |
 | Auto-clean old images | on | Remove the previous image after a successful update. |
 | Auto-rollback | on | Restore the previous version if the update fails the health check. |
 | Health check time | 25 s | How long the new container is watched (10–120 s). |

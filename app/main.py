@@ -217,6 +217,7 @@ class AppPrefPayload(BaseModel):
     auto_update: Optional[bool] = None
     custom_repo: Optional[str] = None
     skipped_digest: Optional[str] = None
+    policy: Optional[dict[str, Any]] = None  # 0.20: quy tắc tự cập nhật của app
 
 
 class SettingsPayload(BaseModel):
@@ -506,6 +507,8 @@ async def api_list_apps(_: str = Depends(require_user)):
         for a in data.get("apps") or []:
             a["dup_compose"], a["dup_skipped"] = dups.get(a["name"], (0, False))
         data["update_all_excluded"] = get_update_all_excluded()
+        cfg = get_public_settings()
+        data["auto_update"] = {"enabled": cfg["auto_update_enabled"], "time": cfg["auto_update_time"]}
         return JSONResponse(content=data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Docker socket error: {e}")
@@ -648,11 +651,20 @@ async def api_image_tags(image: str, _: str = Depends(require_user)):
 async def api_save_app_prefs(
     container_name: str, payload: AppPrefPayload, _: str = Depends(require_user)
 ):
+    policy_json = None
+    if payload.policy is not None:
+        from app.core import update_policy
+        try:
+            pol = update_policy.normalize(payload.policy)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        policy_json = "" if update_policy.is_default(pol) else json.dumps(pol)
     pref = save_app_pref(
         container_name,
         auto_update=payload.auto_update,
         custom_repo=payload.custom_repo,
         skipped_digest=payload.skipped_digest,
+        policy=policy_json,
     )
     if payload.custom_repo is not None:
         await check_one_app_by_name(container_name)
