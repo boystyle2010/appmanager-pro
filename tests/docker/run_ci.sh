@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Các bộ test Docker chạy được trên GitHub Actions (không cần proxy / tắt-bật dockerd / trình duyệt).
-# Thoát mã 1 nếu có dòng FAIL, Traceback hoặc thiếu dòng SUMMARY. Chạy từ gốc repo, sau ci_setup.sh.
+# Thoát mã 1 nếu có dòng FAIL, Traceback thật của Python, thiếu dòng SUMMARY hoặc SUMMARY a / b với a != b. Chạy từ gốc repo, sau ci_setup.sh.
 set -uo pipefail
 : "${S:?set S}"
 OUT="$S/ci.out"; : > "$OUT"
@@ -10,8 +10,11 @@ suite() {  # suite "<tên>" <lệnh...>
   local log="$S/suite.log"
   ( "$@" ) > "$log" 2>&1
   grep -E "^(PASS|FAIL|SKIP|SUMMARY)|Traceback|Error" "$log" | tee -a "$OUT" >/dev/null
-  grep -E "^(FAIL|SUMMARY)|Traceback" "$log"
-  if grep -qE "^FAIL|Traceback" "$log" || ! grep -q "^SUMMARY" "$log"; then
+  grep -E "^(FAIL|SUMMARY)|^Traceback \(most recent call last\)" "$log"
+  # Traceback thật của Python luôn bắt đầu dòng bằng "Traceback (most recent call last)" (không bắt chữ trong tên test);
+  # SUMMARY a / b với a != b cũng là hỏng
+  if grep -qE "^FAIL|^Traceback \(most recent call last\)" "$log" || ! grep -q "^SUMMARY" "$log" \
+     || grep -E "^SUMMARY" "$log" | awk '{ if ($2 != $4) bad = 1 } END { exit !bad }'; then
     echo "::error title=$name::failed — log:"; tail -60 "$log"; FAILED=1
   fi
 }

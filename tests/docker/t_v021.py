@@ -42,7 +42,7 @@ try:
     r = main.get("/api/apps/lg/logs").json()
     check("L1 last hour: all 7 lines, timestamps kept", r["matched"] == 7 and r["text"].count("\n") == 7 and r["text"][:4].isdigit(), r)
     r = main.get("/api/apps/lg/logs", params={"level": "error"}).json()
-    check("L2 errors only: ERROR + Traceback + its indented continuation line",
+    check("L2 errors only: the ERROR line + the stack trace that follows it (with its indented line)",
           r["matched"] == 3 and "cannot connect db" in r["text"] and "File x.py" in r["text"] and "WARNING" not in r["text"], r)
     r = main.get("/api/apps/lg/logs", params={"level": "warn"}).json()
     check("L2 warnings = warnings + errors (4 lines)", r["matched"] == 4 and "WARNING disk" in r["text"], r)
