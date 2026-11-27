@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.21.0
+
+*Released: 2026-11-27*
+
+### 📦 Component & Version Matrix
+
+- **App Release:** Bumped from `v0.20.0` ➡️ `v0.21.0`
+- **Supported Architectures:** `linux/amd64` (x86_64), `linux/arm64` (ARM64) & `linux/arm/v7` (ARMv7 32-bit) *(Multi-arch GHCR Image)*
+- **Python Base Image:** `python 3.15.2`
+- **Docker CLI:** `docker 29.10.1`
+- **Core Python Stack:** `FastAPI 0.165.0` • `Uvicorn 0.54.0` • `Docker SDK 7.2.0` • `ruamel.yaml 0.19.1` • `Argon2 25.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.29.0` • `APScheduler 3.11.3` • `segno 1.6.6`
+- **Frontend Libraries:** `Alpine.js 3.17.5` • `Tailwind CSS 4.3.5` • `marked 18.3.0` • `DOMPurify 3.5.0`
+
+### 🚀 What's Changed
+
+- After AppManager is updated, a page left open (e.g. a Safari tab) reloads itself once so the interface matches the new version; static files are versioned by build, so a new `latest` image never shows an old interface.
+- Logs: besides Live, pick a time range (15 minutes to 7 days, or all), search (several words = all of them, `-word` = hide), show only warnings or errors (a stack trace stays with its error line) and download the result as a .txt file. Times are shown short (day/month hour:minute:second); the download keeps the full timestamps. New API: `GET /api/apps/{name}/logs` and `/logs/download` (read-only API Tokens can use them).
+- Multiple servers: an "All servers" view lists the apps of this server and every added server together, with the server name on each card and a search that also matches server names.
+- Multiple servers: view and download the logs of an app on another server, and restore its configuration backups from the main server (the other server needs AppManager 0.21 or newer; restoring needs an API Token with Update permission, which now includes restoring backups).
+- New notification event "Another server unreachable / back online": AppManager checks the other servers every 3 minutes, alerts after two failed checks in a row and again when the server is back (with how long it was unreachable). It is turned on for existing channels automatically.
+
 ## 0.20.0
 
 *Released: 2026-11-26*
