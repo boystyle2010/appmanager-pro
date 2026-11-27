@@ -15,3 +15,5 @@
 - First run: no separate "create admin" screen any more — the normal sign-in page is shown and the administrator account is created in the Create account tab (marked with a dot while the machine has no account). Once an administrator exists, Create account explains how to get an account here or on another machine (ask its administrator for an account or an API Token for Settings → Servers).
 - README: new "Accounts & signing in" guide (first run, adding people and roles, single sign-on, managing another machine, resetting the administrator password with RESET_AUTH).
 - Security: the first administrator can only be created while the machine has no account at all (fresh install, or after RESET_AUTH); the check and the creation now happen in one database transaction, so simultaneous requests cannot create two administrators.
+- Home Screen app (PWA): the status bar now has its own strip and the glass header starts right below it, so the Dynamic Island / notch no longer cuts into the header and no extra empty space is added.
+- Sign-in page on computers: no more empty area below the page after the window is made smaller.

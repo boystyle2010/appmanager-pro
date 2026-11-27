@@ -37,7 +37,9 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   await p3.locator('.lp-power').click(); await sleep(1400);
   await p3.locator('.lp-dot').nth(1).click(); await sleep(600);
   await p3.screenshot({ path: OUT + '/l6-desktop-cyan.png' });
+  await p3.setViewportSize({ width: 1280, height: 1400 }); await sleep(400);
   await p3.setViewportSize({ width: 1280, height: 520 }); await sleep(400); await p3.mouse.wheel(0, 400); await sleep(500);
+  const fit = await p3.evaluate(() => ({ sh: document.documentElement.scrollHeight, room: Math.ceil(document.querySelector('.lp-room').getBoundingClientRect().height) }));
   const bm = await p3.evaluate(() => { const r = document.querySelector('[x-ref=mouth]').getBoundingClientRect(); return { y: r.top + r.height / 2 + window.scrollY, cy: Alpine.$data(document.body).beam.cy, sy: window.scrollY }; });
   // không có JS -> ô đăng nhập vẫn hiện
   const ctx4 = await b.newContext({ viewport: { width: 390, height: 844 }, javaScriptEnabled: false });
@@ -73,6 +75,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   check('"Or continue with": SSO off -> hint how an administrator turns it on', hint);
   check('Create account tab explains accounts are created by an administrator (no open sign-up form)', su);
   check('Light beam scrolls with the projector (short window)', bm.sy > 0 && Math.abs(bm.y - bm.cy) < 3, JSON.stringify(bm));
+  check('Window made smaller: the page ends with the content (no extra empty area)', fit.sh <= fit.room + 2, JSON.stringify(fit));
   if (first) {
     check('First run: same Sign in / Create account page (no separate "create admin" screen)', first.tabs === 2 && first.noConfirm, JSON.stringify(first));
     check('First run: signing in explains there is no account yet', first.noAcc);

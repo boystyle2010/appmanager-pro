@@ -21,6 +21,7 @@
   <style>
     /* Trang đăng nhập (0.25.1): phòng máy tối, bấm nút nguồn máy chủ -> máy chiếu hologram chiếu sáng ô đăng nhập.
        Không có JS / Alpine lỗi -> ô đăng nhập vẫn hiện (chỉ ẩn khi body có lp-ready + lp-off). */
+    html:has(body.lp) { background: #040507; }
     body.lp { position: relative; }
     body.lp { background: radial-gradient(120% 90% at 30% 20%, #10131b 0%, #07080c 60%, #040507 100%) fixed; color: #e8eaf0; min-height: 100lvh; overflow-x: hidden; }
     .lp { --lamp: 242 244 248; --lamp-ink: #0b0d12; }
@@ -104,7 +105,7 @@
     </button>
   </div>
 
-  <div class="lp-room min-h-[100lvh] flex flex-col md:flex-row items-center justify-center gap-2 md:gap-44 px-5 pb-10 safe-bottom"
+  <div x-ref="room" class="lp-room min-h-[100lvh] flex flex-col md:flex-row items-center justify-center gap-2 md:gap-44 px-5 pb-10 safe-bottom"
        style="padding-top: calc(4.25rem + env(safe-area-inset-top));">
     <!-- Máy chủ + máy chiếu hologram (tự vẽ) -->
     <div class="flex flex-col items-center self-start md:self-center ml-2 md:ml-0 md:mt-0">
@@ -455,7 +456,8 @@
           const [mx, my] = c(M);
           const far = Math.max(...pts.map(p => Math.hypot(p[0] - mx, p[1] - my)));
           this.beam = { points: hull(pts).map(p => p.map(v => v.toFixed(1)).join(',')).join(' '), cx: mx, cy: my, r: far,
-                        h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) };
+                        // chiều cao theo NỘI DUNG (không dùng scrollHeight: chùm sáng tự kéo dài trang, thu nhỏ cửa sổ thì trang không co lại)
+                        h: Math.ceil(Math.max(window.innerHeight, (this.$refs.room?.getBoundingClientRect().bottom || 0) + Y)) };
         },
         async init() {
           // Lỗi SSO quay về trang đăng nhập dạng ?sso_error=... (máy chủ đã ghi nhật ký)

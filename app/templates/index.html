@@ -1842,7 +1842,7 @@
   <div x-show="settingsModal.open" x-cloak x-transition.opacity.duration.200ms
        class="fixed inset-0 z-50 flex flex-col settings-screen"
        @keydown.escape.window="if (!confirmModal.open) settingsModal.open = false">
-    <div class="w-full h-full flex flex-col" style="padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);">
+    <div class="w-full h-full flex flex-col" style="padding-top: var(--sat); padding-bottom: var(--sab);">
       <!-- Thanh trên -->
       <div class="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-3 pb-2.5 shrink-0" :class="settingsModal.tab !== 'home' && 'border-b border-[var(--glass-border)]'">
         <div x-show="settingsModal.tab === 'home'" class="flex items-center justify-between gap-3">

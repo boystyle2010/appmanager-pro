@@ -109,17 +109,30 @@ body {
   -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000 20%, transparent 75%);
 }
 
+/* Vùng an toàn của iPhone (tai thỏ / Dynamic Island, thanh Home) qua biến: dùng chung mọi nơi + test giả lập được */
+:root { --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px); }
+
 .glass-header {
   background: var(--header-bg);
   backdrop-filter: blur(30px) saturate(185%);
   -webkit-backdrop-filter: blur(30px) saturate(185%);
   border-bottom: 1px solid var(--glass-border);
-  padding-top: env(safe-area-inset-top);
+  padding-top: var(--sat);
 }
 /* Mở từ biểu tượng trên màn hình chính (PWA): thanh trạng thái trong suốt nằm đè lên trang -> header chừa thêm khoảng
    dưới Dynamic Island / tai thỏ. */
-html.pwa .glass-header { padding-top: calc(env(safe-area-inset-top) + 12px); }
-@media (display-mode: standalone), (display-mode: fullscreen) { .glass-header { padding-top: calc(env(safe-area-inset-top) + 12px); } }
+/* PWA (mở từ màn hình chính, thanh trạng thái trong suốt): thanh trạng thái có DẢI NỀN RIÊNG (màu nền trang), header kính bắt
+   đầu ngay dưới nó — không bị tai thỏ / Dynamic Island "cắn" vào, không phải chừa thêm khoảng trống. Nội dung cuộn qua
+   cũng không lộ dưới giờ / pin. */
+html.pwa .glass-header { top: var(--sat); padding-top: 0; }
+html.pwa .page-layer { padding-top: var(--sat); }
+html.pwa body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: var(--sat); z-index: 41;
+  background: var(--bg-base); pointer-events: none; }
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  .glass-header { top: var(--sat); padding-top: 0; }
+  .page-layer { padding-top: var(--sat); }
+  body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: var(--sat); z-index: 41; background: var(--bg-base); pointer-events: none; }
+}
 
 .glass-panel {
   background: var(--glass-bg-elevated);
