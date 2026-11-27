@@ -857,6 +857,50 @@
         // Nội dung hiển thị: xem trực tiếp thì lọc ngay trên trình duyệt; theo khoảng thời gian thì máy chủ đã lọc
         logView() { return this._logShortTimes(this._logFiltered()); },
 
+        // Log có mã màu ANSI (Portainer, Go, Node…) -> HTML có màu. Mọi chữ được escape trước; chỉ thêm <span style> của mình.
+        logHtml() {
+          const text = this.logView();
+          return text ? this._ansiToHtml(text) : '';
+        },
+
+        _ansiToHtml(text) {
+          const esc = t => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const base = ['#4b5563', '#f87171', '#4ade80', '#facc15', '#60a5fa', '#e879f9', '#22d3ee', '#e5e7eb'];
+          const bright = ['#9ca3af', '#fca5a5', '#86efac', '#fde047', '#93c5fd', '#f0abfc', '#67e8f9', '#ffffff'];
+          const c256 = n => {
+            if (n < 8) return base[n];
+            if (n < 16) return bright[n - 8];
+            if (n >= 232) { const v = 8 + (n - 232) * 10; return `rgb(${v},${v},${v})`; }
+            n -= 16; const k = [0, 95, 135, 175, 215, 255];
+            return `rgb(${k[Math.floor(n / 36)]},${k[Math.floor(n / 6) % 6]},${k[n % 6]})`;
+          };
+          let st = {}, out = '';
+          // Bỏ mã điều khiển không phải màu (con trỏ, xoá dòng, tiêu đề OSC); giữ lại mã màu SGR "ESC[...m"
+          const clean = text.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '').replace(/\x1b\[[0-9;?]*[ -\/]*[@-ln-~]/g, '').replace(/\x1b[@-Z\\-_]/g, '');
+          const parts = clean.split(/\x1b\[([0-9;]*)m/);
+          for (let i = 0; i < parts.length; i++) {
+            if (i % 2) {
+              const codes = parts[i] === '' ? [0] : parts[i].split(';').map(Number);
+              for (let j = 0; j < codes.length; j++) {
+                const c = codes[j];
+                if (c === 0) st = {};
+                else if (c === 1) st.b = 1; else if (c === 2) st.d = 1; else if (c === 3) st.i = 1; else if (c === 4) st.u = 1;
+                else if (c === 22) { delete st.b; delete st.d; } else if (c === 23) delete st.i; else if (c === 24) delete st.u;
+                else if (c >= 30 && c <= 37) st.fg = base[c - 30]; else if (c >= 90 && c <= 97) st.fg = bright[c - 90];
+                else if (c === 39) delete st.fg;
+                else if (c === 38 && codes[j + 1] === 5) { st.fg = c256(codes[j + 2] || 0); j += 2; }
+                else if (c === 38 && codes[j + 1] === 2) { st.fg = `rgb(${codes[j + 2] || 0},${codes[j + 3] || 0},${codes[j + 4] || 0})`; j += 4; }
+                else if (c === 48) j += codes[j + 1] === 5 ? 2 : codes[j + 1] === 2 ? 4 : 0;  // nền: bỏ qua (nền tối của cửa sổ log)
+              }
+              continue;
+            }
+            if (!parts[i]) continue;
+            const css = [st.fg && `color:${st.fg}`, st.b && 'font-weight:700', st.d && 'opacity:.6', st.i && 'font-style:italic', st.u && 'text-decoration:underline'].filter(Boolean).join(';');
+            out += css ? `<span style="${css}">${esc(parts[i])}</span>` : esc(parts[i]);
+          }
+          return out;
+        },
+
         // Thời gian Docker (2026-11-26T22:33:48.414222022Z) -> giờ máy ngắn gọn "26/11 22:33:48" cho màn hình điện thoại
         _logShortTimes(text) {
           if (!text) return text;
@@ -874,7 +918,7 @@
           const inc = words.filter(w => !(w.startsWith('-') && w.length > 1)), exc = words.filter(w => w.startsWith('-') && w.length > 1).map(w => w.slice(1));
           let prev = '';
           return m.lines.split('\n').filter(line => {
-            const text = line.replace(/^\d{4}-\d\d-\d\dT[\d:.]+Z?\s?/, '');
+            const text = line.replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]/g, '').replace(/^\d{4}-\d\d-\d\dT[\d:.]+Z?\s?/, '');
             let lv = this._logLevelOf(text);
             if (!lv && /^[ \t]/.test(text) && prev) lv = prev;
             prev = lv;

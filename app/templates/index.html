@@ -3065,7 +3065,7 @@
       </div>
       <pre x-ref="logBox"
            class="glass-terminal font-mono-code rounded-2xl p-4 mt-2 flex-1 overflow-auto text-[11px] sm:text-xs text-emerald-300/95 leading-relaxed whitespace-pre-wrap break-all"
-           x-text="logView() || (logModal.loading ? t('logLoading') : logModal.mode === 'live' && !logModal.lines ? t('connectingLogs') : t('logNoMatch'))"></pre>
+           x-html="logHtml() || _ansiToHtml(logModal.loading ? t('logLoading') : logModal.mode === 'live' && !logModal.lines ? t('connectingLogs') : t('logNoMatch'))"></pre>
     </div>
   </div>
 

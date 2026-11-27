@@ -32,6 +32,9 @@ LOG_CMD = ('echo "INFO started"; echo "WARNING disk almost full"; echo "ERROR ca
            'echo "another line about dogs"; sleep 3600')
 sh('pkill -f "port 878[23]"; sleep 1')  # tiến trình sót lại từ lần chạy hỏng trước
 sh("docker rm -f lg; docker run -d --name lg mirror.gcr.io/library/busybox:latest sh -c '" + LOG_CMD + "'")
+sh("docker rm -f lgc; docker run -d --name lgc mirror.gcr.io/library/busybox:latest sh -c "
+   "'printf \"\\033[90m2026/11/26 10:31AM\\033[0m \\033[32mINF\\033[0m \\033[1mmain.go:705\\033[0m\\033[36m >\\033[0m starting Portainer | \\033[36mversion=\\033[0m2.45.4\\n\"; "
+   "printf \"\\033[31mERR\\033[0m failed to load settings\\n\"; sleep 3600'")
 try:
     start(8783, f"{S}/v21_main"); start(8782, f"{S}/v21_rem")
     check("2 AppManager instances up (main + remote)", wait(MAIN) and wait(REM))
@@ -59,6 +62,14 @@ try:
     check("L5 download: .txt attachment named after the app, header line + matching lines only",
           d.status_code == 200 and 'attachment; filename="lg-logs-all-' in cd and cd.endswith('.txt"')
           and d.text.startswith("# AppManager Pro — logs of lg") and "about cats" in d.text and "about dogs" in d.text and "ERROR" not in d.text, (cd, d.text[:300]))
+    # mã màu ANSI (vd log Portainer: ESC[32mINF ESC[0m ...): giữ cho giao diện tô màu, bỏ khi tìm / lọc / tải về
+    r = main.get("/api/apps/lgc/logs", params={"q": "starting Portainer"}).json()
+    check("L7 colored log (ANSI): search matches the real words across color codes, colors kept for display",
+          r["matched"] == 1 and "\x1b[32m" in r["text"], r)
+    r = main.get("/api/apps/lgc/logs", params={"level": "error"}).json()
+    check("L7 colored log: level filter reads the text without color codes", r["matched"] == 1 and "failed to load" in r["text"], r)
+    d = main.get("/api/apps/lgc/logs/download", params={"range": "all"})
+    check("L7 download has no terminal color codes", d.status_code == 200 and "\x1b" not in d.text and "INF main.go:705 > starting Portainer" in d.text, repr(d.text[:300]))
     au = main.get("/api/audit").json()
     au = au.get("items", au) if isinstance(au, dict) else au
     check("L5 download is written to the activity log", any(a.get("action") == "logs_download" and a.get("target") == "lg" for a in au), au[:3])
@@ -123,7 +134,7 @@ try:
     check("M6 path tricks in the backup file name are refused by the remote", rs3.status_code == 400, rs3.text)
 finally:
     for p in procs: p.terminate()
-    sh("docker rm -f lg")
+    sh("docker rm -f lg lgc")
 
 # ---------------- W: theo dõi máy phụ (chạy trong tiến trình test, máy phụ thật :8782 đã tắt ở trên -> bật lại)
 tmp = tempfile.mkdtemp()

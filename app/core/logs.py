@@ -5,6 +5,7 @@ Log container (0.21): xem theo khoảng thời gian, tìm chữ, lọc mức (l�
 - Tìm: không phân biệt hoa thường; nhiều từ cách nhau bằng dấu cách = dòng phải có đủ các từ; "-từ" = bỏ dòng có từ đó.
 - Mức: nhận theo chữ thường gặp trong log (ERROR / FATAL / Traceback…, WARN…). Dòng nằm trong một khối lỗi
   (vd các dòng tiếp theo của Traceback, bắt đầu bằng khoảng trắng) được tính theo dòng lỗi phía trên.
+- Mã màu ANSI: giữ nguyên trong `text` (giao diện tô màu), bỏ khi tìm / lọc và trong file tải về.
 - Giới hạn để không làm chậm máy: xem tối đa MAX_SCAN dòng mới nhất mỗi lần, trả về tối đa `limit` dòng khớp;
   tải về tối đa MAX_DOWNLOAD byte.
 """
@@ -31,6 +32,12 @@ _ERR = re.compile(r"\b(error|err|fatal|fail(?:ed|ure)?|crit(?:ical)?|panic|emerg
                   r"|\[(?:e|err|error|fatal|crit)\]|\blevel=(?:error|fatal|crit)", re.I)
 _WARN = re.compile(r"\b(warn(?:ing)?|deprecated)\b|\[(?:w|warn|warning)\]|\blevel=warn", re.I)
 _TS = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z?)\s?")
+# Mã điều khiển terminal (màu ANSI "ESC[32m", di chuyển con trỏ, tiêu đề cửa sổ OSC…) mà nhiều app ghi vào log
+ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]")
+
+
+def strip_ansi(text: str) -> str:
+    return ANSI_RE.sub("", text)
 
 
 class LogError(Exception):
@@ -88,6 +95,7 @@ class _Filter:
         self.prev_level = ""
 
     def match(self, line: str) -> bool:
+        line = strip_ansi(line)  # tìm / lọc trên chữ thật, không dính mã màu
         m = _TS.match(line)
         text = line[m.end():] if m else line
         lv = level_of(text)
@@ -152,16 +160,17 @@ def download(name: str, rng: str = "24h", q: str = "", level: str = "") -> tuple
             for chunk in stream:
                 buf += chunk
                 *done, buf = buf.split(b"\n")
-                out = [ln for ln in done if flt.match(ln.decode("utf-8", errors="replace"))]
+                out = [strip_ansi(t) for t in (ln.decode("utf-8", errors="replace") for ln in done) if flt.match(t)]
                 if out:
-                    data = b"\n".join(out) + b"\n"
+                    data = ("\n".join(out) + "\n").encode("utf-8")  # file .txt không chứa mã màu terminal
                     if sent + len(data) > MAX_DOWNLOAD:
                         yield b"\n# ... stopped: the file reached 50 MB. Choose a shorter range or a search.\n"
                         return
                     sent += len(data)
                     yield data
-            if buf and flt.match(buf.decode("utf-8", errors="replace")):
-                yield buf + b"\n"
+            tail = buf.decode("utf-8", errors="replace")
+            if tail and flt.match(tail):
+                yield (strip_ansi(tail) + "\n").encode("utf-8")
         finally:
             try:
                 stream.close()

@@ -32,6 +32,18 @@ const results = []; const check = (n, c, d = '') => { results.push(!!c); console
   check('Download gives a .txt named after the app and range', /^lg-logs-1h-\d{8}-\d{4}\.txt$/.test(name), name);
   await D('d.closeLogs()'); await sleep(500);
 
+  // Log có mã màu ANSI (container lgc, kiểu Portainer): hiện màu thật, không còn ký tự lạ
+  await D("d.openLogs(d.apps.find(a => a.name === 'lgc'))"); await sleep(2500);
+  const html = await p.evaluate(() => document.querySelector('pre[x-ref="logBox"]').innerHTML);
+  const txt = await p.evaluate(() => document.querySelector('pre[x-ref="logBox"]').textContent);
+  check('ANSI colors rendered as colored text (no escape characters shown)',
+        !txt.includes('\x1b') && !txt.includes('[32m') && txt.includes('INF main.go:705 > starting Portainer')
+        && /<span style="color:#4ade80">INF<\/span>/.test(html) && /color:#f87171/.test(html), html.slice(0, 400));
+  await p.screenshot({ path: OUT + '/g0-logs-ansi.png' });
+  await p.getByRole('button', { name: 'Lỗi', exact: true }).click(); await sleep(400);
+  check('Live + Errors on a colored log keeps the ERR line only', (await D('return d.logView()')).includes('failed to load') && !(await D('return d.logView()')).includes('Portainer'));
+  await D('d.closeLogs()'); await sleep(400);
+
   // Danh sách gộp mọi máy
   await p.getByRole('button', { name: 'Tất cả máy', exact: true }).click(); await sleep(4500);
   const data = await D('return { n: d.remote.data?.apps?.length || 0, local: d.apps.length, servers: d.remote.data?.servers, names: [...new Set((d.remote.data?.apps || []).map(a => a._serverName))] }');
