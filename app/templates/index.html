@@ -67,6 +67,18 @@
       document.documentElement.classList.toggle('light', isLight);
       document.documentElement.classList.toggle('dark', !isLight);
       document.getElementById('meta-theme-color').setAttribute('content', isLight ? '#e5eef9' : '#090f1d');
+      // Giao diện (Cài đặt → Giao diện): áp dụng trước khi vẽ trang để không nháy màu
+      try {
+        const u = JSON.parse(localStorage.getItem('amp_ui') || '{}'), h = document.documentElement;
+        h.dataset.accent = u.accent || 'sky';
+        if (u.text && u.text !== 'm') h.dataset.text = u.text;
+        if (u.radius && u.radius !== 'round') h.dataset.radius = u.radius;
+        if (u.appIcon && u.appIcon !== 'default') {
+          const src = '/assets/icon-' + u.appIcon + '.png';
+          document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]').forEach(l => l.href = src);
+          document.querySelector('link[rel="manifest"]').href = '/manifest.json?icon=' + u.appIcon;
+        }
+      } catch (e) {}
     })();
   </script>
 </head>
@@ -79,7 +91,7 @@
       <div class="max-w-7xl mx-auto px-3.5 sm:px-4 h-[60px] flex items-center justify-between gap-3">
         <div class="flex items-center gap-2.5 min-w-0">
           <div class="brand-squircle w-9 h-9 shrink-0">
-            <img src="/assets/icon.png?v=2" alt="App Manager Pro" />
+            <img src="/assets/icon.png?v=2" :src="appIconSrc()" alt="App Manager Pro" />
           </div>
           <div class="min-w-0">
             <div class="flex items-center gap-1.5">
@@ -1826,50 +1838,43 @@
     </div>
   </div>
 
-  <!-- MODAL 5: Settings, Docker Storage/Prune SSD & History -->
-  <div x-show="settingsModal.open" x-cloak x-transition.opacity
-       class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/65 backdrop-blur-md"
-       @click.self="settingsModal.open = false" @keydown.escape.window="if (!confirmModal.open) settingsModal.open = false">
-    <div class="glass-panel w-full max-w-xl rounded-t-[28px] sm:rounded-[28px] p-5 sm:p-6 flex flex-col max-h-[90dvh]"
-         style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
-      <div class="sheet-handle sm:hidden"></div>
-      <div class="flex items-center justify-between pb-3.5" :class="settingsModal.tab !== 'home' && 'border-b border-[var(--glass-border)]'">
-        <div class="flex items-center gap-2 min-w-0">
-          <button x-show="settingsModal.tab !== 'home'" @click="settingsModal.tab = 'home'" :aria-label="t('back')"
-                  class="glass-btn w-8 h-8 rounded-full flex items-center justify-center text-muted hover:text-[var(--text-primary)] shrink-0">
+  <!-- MODAL 5: Cài đặt — toàn màn hình (kiểu Cài đặt iOS): trang đầu tiêu đề lớn ngang nút X, trang con tiêu đề ở giữa -->
+  <div x-show="settingsModal.open" x-cloak x-transition.opacity.duration.200ms
+       class="fixed inset-0 z-50 flex flex-col settings-screen"
+       @keydown.escape.window="if (!confirmModal.open) settingsModal.open = false">
+    <div class="w-full h-full flex flex-col" style="padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);">
+      <!-- Thanh trên -->
+      <div class="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-3 pb-2.5 shrink-0" :class="settingsModal.tab !== 'home' && 'border-b border-[var(--glass-border)]'">
+        <div x-show="settingsModal.tab === 'home'" class="flex items-center justify-between gap-3">
+          <h2 class="text-[30px] font-bold leading-tight tracking-tight" x-text="t('settingsTitle')"></h2>
+          <button @click="settingsModal.open = false" :aria-label="t('close')"
+                  class="glass-btn w-9 h-9 rounded-full flex items-center justify-center text-muted hover:text-[var(--text-primary)] shrink-0">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div x-show="settingsModal.tab !== 'home'" class="grid grid-cols-[2.25rem_1fr_2.25rem] items-center gap-2">
+          <button @click="settingsModal.tab = 'home'" :aria-label="t('back')"
+                  class="glass-btn w-9 h-9 rounded-full flex items-center justify-center text-muted hover:text-[var(--text-primary)]">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
           </button>
-          <h3 x-show="settingsModal.tab !== 'home'" class="font-bold text-base truncate" x-text="settingsSectionTitle()"></h3>
-        </div>
-        <div class="flex items-center gap-2 shrink-0">
-        <button x-show="settingsModal.tab === 'home'" @click="openSettingsSection('about')" :aria-label="t('tabAbout')" :title="t('tabAbout')"
-                class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition"
-                :class="settingsModal.tab === 'about' ? 'glass-btn-primary' : 'glass-btn text-muted hover:text-[var(--text-primary)]'">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"/>
-          </svg>
-        </button>
-        <button @click="settingsModal.open = false" aria-label="Close"
-                class="glass-btn w-8 h-8 rounded-full flex items-center justify-center text-muted hover:text-[var(--text-primary)] shrink-0">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-          </svg>
-        </button>
+          <h3 class="font-bold text-[16px] text-center truncate" x-text="settingsSectionTitle()"></h3>
+          <button @click="settingsModal.open = false" :aria-label="t('close')"
+                  class="glass-btn w-9 h-9 rounded-full flex items-center justify-center text-muted hover:text-[var(--text-primary)]">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
         </div>
       </div>
 
-      <div class="flex-1 overflow-y-auto space-y-3.5" :class="settingsModal.tab === 'home' ? 'pt-0' : 'pt-4'">
+      <div class="flex-1 overflow-y-auto overscroll-contain">
+      <div class="w-full max-w-2xl mx-auto px-4 sm:px-6 space-y-3.5 pb-6" :class="settingsModal.tab === 'home' ? 'pt-0' : 'pt-4'">
         <!-- TRANG ĐẦU (kiểu Cài đặt iOS): tiêu đề lớn, thẻ nhanh, nhóm có nhãn chữ in hoa, mỗi dòng có icon màu + giá trị hiện tại -->
         <template x-if="settingsModal.tab === 'home'">
           <div class="space-y-5 pb-2">
-            <div class="-mt-1">
-              <h2 class="text-[28px] font-bold leading-tight tracking-tight" x-text="t('settingsTitle')"></h2>
-              <p class="text-[13px] text-muted mt-0.5" x-text="t('setHero')"></p>
-            </div>
+            <p class="text-[13px] text-muted" x-text="t('setHero')"></p>
             <!-- thẻ nhanh: chế độ tối -->
             <button type="button" @click="setTheme(theme === 'dark' ? 'light' : 'dark')" role="switch" :aria-checked="theme === 'dark'"
                     class="glass-inset w-full rounded-[20px] flex items-center gap-3 px-3.5 py-3.5 text-left active:scale-[.99] transition">
-              <span class="w-10 h-10 rounded-[13px] flex items-center justify-center shrink-0 border bg-indigo-500/15 border-indigo-400/35 text-indigo-300">
+              <span class="w-10 h-10 rounded-[13px] flex items-center justify-center shrink-0 border" :class="iconCls('bg-indigo-500/15 border-indigo-400/35 text-indigo-300')">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/></svg>
               </span>
               <span class="min-w-0 flex-1">
@@ -1887,7 +1892,7 @@
                   <template x-for="item in group.items" :key="item.tab">
                     <button type="button" @click="openSettingsSection(item.tab)"
                             class="w-full flex items-center gap-3 px-3.5 py-3 text-left hover:bg-white/[0.03] active:bg-white/[0.06] transition">
-                      <span class="w-9 h-9 rounded-[12px] flex items-center justify-center shrink-0 border" :class="item.color">
+                      <span class="w-9 h-9 rounded-[12px] flex items-center justify-center shrink-0 border" :class="iconCls(item.color)">
                         <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" :d="item.icon"/></svg>
                       </span>
                       <span class="min-w-0 flex-1">
@@ -1900,6 +1905,121 @@
                 </div>
               </section>
             </template>
+          </div>
+        </template>
+
+        <!-- Giao diện (theo thiết bị): xem trước ngay, Lưu / Huỷ ở thanh thay đổi -->
+        <template x-if="settingsModal.tab === 'appearance'">
+          <div class="space-y-5 pb-2">
+            <!-- xem trước -->
+            <div class="glass-inset rounded-[20px] p-3.5">
+              <div class="flex items-center gap-3">
+                <span class="w-11 h-11 rounded-[14px] flex items-center justify-center shrink-0 border" :class="iconCls('bg-sky-500/15 border-sky-400/35 text-sky-400')">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"/></svg>
+                </span>
+                <div class="min-w-0 flex-1">
+                  <p class="text-[14px] font-semibold">Nextcloud</p>
+                  <p class="text-[11.5px] text-muted truncate" x-text="t('uiPreviewSub')"></p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 mt-3">
+                <button type="button" class="glass-btn-primary px-4 py-2 rounded-xl text-[12px] font-semibold" x-text="t('uiPreviewBtn')"></button>
+                <span class="px-2.5 h-6 inline-flex items-center rounded-lg text-[10.5px] font-bold bg-sky-500/15 text-sky-300 border border-sky-400/30">AUTO</span>
+                <span class="ml-auto w-11 h-6 rounded-full relative bg-sky-500"><span class="absolute top-0.5 left-5.5 w-5 h-5 rounded-full bg-white"></span></span>
+              </div>
+            </div>
+            <!-- màu chủ đạo -->
+            <section>
+              <div class="flex items-center justify-between px-1 mb-2">
+                <p class="text-[10.5px] font-bold uppercase tracking-[0.12em] text-subtle" x-text="t('uiThemeColor')"></p>
+                <p class="text-[11.5px] font-semibold text-sky-400" x-text="t('acc_' + ui.accent)"></p>
+              </div>
+              <div class="glass-inset rounded-[20px] px-3 py-3.5 flex items-center justify-between">
+                <template x-for="o in uiOptions().accent" :key="o.id">
+                  <button type="button" @click="setUi('accent', o.id)" :aria-label="t('acc_' + o.id)" :aria-pressed="ui.accent === o.id"
+                          class="keep-round w-11 h-11 rounded-full flex items-center justify-center transition"
+                          :style="ui.accent === o.id ? `box-shadow: 0 0 0 2.5px var(--bg-base), 0 0 0 4.5px ${o.c}` : ''">
+                    <span class="keep-round w-9 h-9 rounded-full block" :style="`background: ${o.c}`"></span>
+                  </button>
+                </template>
+              </div>
+            </section>
+            <!-- cỡ chữ -->
+            <section>
+              <div class="flex items-center justify-between px-1 mb-2">
+                <p class="text-[10.5px] font-bold uppercase tracking-[0.12em] text-subtle" x-text="t('uiTextSize')"></p>
+                <p class="text-[11.5px] font-semibold text-sky-400" x-text="t('txt_' + ui.text)"></p>
+              </div>
+              <div class="glass-inset rounded-[20px] p-2 grid grid-cols-4 gap-2">
+                <template x-for="o in uiOptions().text" :key="o.id">
+                  <button type="button" @click="setUi('text', o.id)" :aria-label="t('txt_' + o.id)" :aria-pressed="ui.text === o.id"
+                          class="h-14 rounded-[14px] font-semibold flex items-center justify-center border transition"
+                          :class="ui.text === o.id ? 'bg-sky-500/15 border-sky-400/60 text-sky-300' : 'border-transparent text-muted hover:bg-white/[0.04]'"
+                          :style="`font-size: ${o.px}px`">Aa</button>
+                </template>
+              </div>
+            </section>
+            <!-- kiểu bo góc -->
+            <section>
+              <div class="flex items-center justify-between px-1 mb-2">
+                <p class="text-[10.5px] font-bold uppercase tracking-[0.12em] text-subtle" x-text="t('uiCorners')"></p>
+                <p class="text-[11.5px] font-semibold text-sky-400" x-text="t('rad_' + ui.radius)"></p>
+              </div>
+              <div class="grid grid-cols-3 gap-2.5">
+                <template x-for="r in uiOptions().radius" :key="r">
+                  <button type="button" @click="setUi('radius', r)" :aria-pressed="ui.radius === r" class="flex flex-col items-center gap-1.5">
+                    <span class="w-full h-16 glass-inset flex items-center justify-center border-2 transition"
+                          :class="ui.radius === r ? 'border-sky-400' : 'border-transparent'"
+                          :style="`border-radius: ${ { round: 20, soft: 13, crisp: 7 }[r] }px`">
+                      <span class="w-14 h-7 bg-sky-500/80" :style="`border-radius: ${ { round: 999, soft: 9, crisp: 4 }[r] }px`"></span>
+                    </span>
+                    <span class="text-[11.5px] font-semibold" :class="ui.radius === r ? 'text-sky-400' : 'text-muted'" x-text="t('rad_' + r)"></span>
+                  </button>
+                </template>
+              </div>
+            </section>
+            <!-- kiểu icon -->
+            <section>
+              <div class="flex items-center justify-between px-1 mb-2">
+                <p class="text-[10.5px] font-bold uppercase tracking-[0.12em] text-subtle" x-text="t('uiIconStyle')"></p>
+                <p class="text-[11.5px] font-semibold text-sky-400" x-text="t('ico_' + ui.icons)"></p>
+              </div>
+              <div class="grid grid-cols-3 gap-2.5">
+                <template x-for="k in uiOptions().icons" :key="k">
+                  <button type="button" @click="setUi('icons', k)" :aria-pressed="ui.icons === k" class="flex flex-col items-center gap-1.5">
+                    <span class="w-full h-16 rounded-[18px] glass-inset flex items-center justify-center gap-2 border-2 transition" :class="ui.icons === k ? 'border-sky-400' : 'border-transparent'">
+                      <template x-for="col in ['bg-amber-500/15 border-amber-400/35 text-amber-400', 'bg-rose-500/15 border-rose-400/35 text-rose-400']" :key="col">
+                        <span class="w-8 h-8 rounded-[10px] flex items-center justify-center border"
+                              :class="k === 'solid' ? 'bg-sky-500 border-sky-400/40 text-white' : (k === 'mono' ? 'bg-white/[0.06] border-[var(--glass-border)] text-[var(--text-secondary)]' : col)">
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/></svg>
+                        </span>
+                      </template>
+                    </span>
+                    <span class="text-[11.5px] font-semibold" :class="ui.icons === k ? 'text-sky-400' : 'text-muted'" x-text="t('ico_' + k)"></span>
+                  </button>
+                </template>
+              </div>
+            </section>
+            <!-- biểu tượng app -->
+            <section>
+              <div class="flex items-center justify-between px-1 mb-2">
+                <p class="text-[10.5px] font-bold uppercase tracking-[0.12em] text-subtle" x-text="t('uiAppIcon')"></p>
+                <p class="text-[11.5px] font-semibold text-sky-400" x-text="t('aic_' + ui.appIcon)"></p>
+              </div>
+              <div class="glass-inset rounded-[20px] p-3 grid grid-cols-3 sm:grid-cols-6 gap-3">
+                <template x-for="v in uiOptions().appIcon" :key="v">
+                  <button type="button" @click="setUi('appIcon', v)" :aria-pressed="ui.appIcon === v" class="flex flex-col items-center gap-1.5">
+                    <span class="w-14 h-14 rounded-[16px] overflow-hidden transition"
+                          :style="ui.appIcon === v ? 'box-shadow: 0 0 0 2.5px var(--bg-base), 0 0 0 4.5px var(--color-sky-400)' : ''">
+                      <img :src="appIconSrc(v)" alt="" class="w-full h-full" loading="lazy" />
+                    </span>
+                    <span class="text-[11px] font-semibold" :class="ui.appIcon === v ? 'text-sky-400' : 'text-muted'" x-text="t('aic_' + v)"></span>
+                  </button>
+                </template>
+              </div>
+              <p class="px-1 mt-2 text-[11px] text-subtle leading-snug" x-text="t('uiAppIconNote')"></p>
+            </section>
+            <p class="px-1 text-[11px] text-subtle" x-text="t('uiDeviceNote')"></p>
           </div>
         </template>
 
@@ -3248,9 +3368,10 @@
           </div>
         </template>
       </div>
-      <!-- Thay đổi chưa lưu (Cài đặt chung / Lưu trữ): kiểu "N thay đổi · Huỷ · Lưu" -->
+      </div>
+      <!-- Thay đổi chưa lưu (Giao diện / Cài đặt chung / Lưu trữ): kiểu "N thay đổi · Huỷ · Lưu" -->
       <div x-show="settingsChanges() > 0" x-cloak x-transition.opacity.duration.200ms
-           class="mt-3 glass-dock rounded-[20px] pl-4 pr-1.5 py-1.5 flex items-center gap-2">
+           class="w-[calc(100%-2rem)] max-w-[calc(42rem-3rem)] mx-auto mb-3 mt-1 glass-dock rounded-[20px] pl-4 pr-1.5 py-1.5 flex items-center gap-2 shrink-0">
         <span class="w-2 h-2 rounded-full bg-amber-400 shrink-0 shadow-[0_0_8px_rgba(251,191,36,.8)]"></span>
         <span class="flex-1 min-w-0 text-[12.5px] font-semibold truncate"
               x-text="settingsChanges() === 1 ? t('pendChange') : t('pendChanges').replace('{n}', settingsChanges())"></span>

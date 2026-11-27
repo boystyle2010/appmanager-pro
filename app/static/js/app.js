@@ -58,6 +58,10 @@
         taskSort: 'cpu',
         settingsModal: { open: false, tab: 'home' },
         settingsBase: null,
+        // Giao diện theo thiết bị (localStorage amp_ui): xem trước ngay, Lưu / Huỷ ở thanh thay đổi
+        ui: (() => { const d = { accent: 'sky', text: 'm', radius: 'round', icons: 'tint', appIcon: 'default' };
+          try { return { ...d, ...JSON.parse(localStorage.getItem('amp_ui') || '{}') }; } catch (_) { return d; } })(),
+        uiBase: null,
         settingsForm: {
           check_interval_hours: 6, auto_update_enabled: false,
           auto_update_time: '03:30', prune_old_images: true, auto_rollback: true, health_wait_seconds: 25,
@@ -641,6 +645,38 @@
         },
 
         setLang(code) { this.lang = code; localStorage.setItem('amp_lang', code); },
+
+        // ---------------- Giao diện ----------------
+        uiOptions() {
+          return {
+            accent: [{ id: 'sky', c: '#38bdf8' }, { id: 'violet', c: '#8b5cf6' }, { id: 'pink', c: '#ec4899' }, { id: 'emerald', c: '#10b981' }, { id: 'amber', c: '#f59e0b' }],
+            text: [{ id: 's', px: 12 }, { id: 'm', px: 15 }, { id: 'l', px: 18 }, { id: 'xl', px: 21 }],
+            radius: ['round', 'soft', 'crisp'], icons: ['tint', 'solid', 'mono'],
+            appIcon: ['default', 'violet', 'pink', 'emerald', 'amber', 'graphite'],
+          };
+        },
+        appIconSrc(v = this.ui.appIcon) { return v && v !== 'default' ? `/assets/icon-${v}.png` : '/assets/icon.png?v=2'; },
+        applyUi() {
+          const h = document.documentElement, u = this.ui;
+          h.dataset.accent = u.accent || 'sky';
+          if (u.text && u.text !== 'm') h.dataset.text = u.text; else delete h.dataset.text;
+          if (u.radius && u.radius !== 'round') h.dataset.radius = u.radius; else delete h.dataset.radius;
+          const src = this.appIconSrc();
+          document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]').forEach(l => { l.href = src; });
+          const m = document.querySelector('link[rel="manifest"]');
+          if (m) m.href = u.appIcon && u.appIcon !== 'default' ? `/manifest.json?icon=${u.appIcon}` : '/manifest.json';
+        },
+        setUi(k, v) { this.ui = { ...this.ui, [k]: v }; this.applyUi(); },
+        uiChanges() { return this.uiBase ? Object.keys(this.ui).filter(k => this.ui[k] !== this.uiBase[k]).length : 0; },
+        uiSummary() {
+          return [this.t('acc_' + this.ui.accent), this.t('txt_' + this.ui.text), this.t('rad_' + this.ui.radius)].join(' · ');
+        },
+        // Icon trên trang Cài đặt theo kiểu đã chọn: màu nhạt (mặc định) / nền đặc màu chủ đạo / đơn sắc
+        iconCls(color) {
+          if (this.ui.icons === 'solid') return 'bg-sky-500 border-sky-400/40 text-white';
+          if (this.ui.icons === 'mono') return 'bg-white/[0.06] border-[var(--glass-border)] text-[var(--text-secondary)]';
+          return color;
+        },
 
         setTheme(mode) {
           this.theme = mode; localStorage.setItem('amp_theme', mode);
@@ -2135,6 +2171,7 @@
         // ---------------- Settings ----------------
         async openSettings() {
           this.settingsModal = { open: true, tab: 'home' };
+          this.uiBase = { ...this.ui };
           if (this.isAdmin()) { this.refreshDataStatus(); this.loadUsers(); this.loadSso(); }
           try {
             const res = await fetch('/api/settings');
@@ -2461,7 +2498,7 @@
 
         settingsSectionTitle() {
           return {
-            home: this.t('settingsTitle'), language: this.t('language'), schedule: this.t('setGeneral'), storage: this.t('setStorage'), users: this.t('setUsers'), sso: this.t('setSso'), config: this.t('setConfig'),
+            home: this.t('settingsTitle'), language: this.t('language'), appearance: this.t('appearance'), schedule: this.t('setGeneral'), storage: this.t('setStorage'), users: this.t('setUsers'), sso: this.t('setSso'), config: this.t('setConfig'),
             notify: this.t('setNotify'), servers: this.t('setServers'), security: this.t('tabSecurity'), tokens: this.t('setTokens'), history: this.t('tabHistory'), about: this.t('tabAbout'),
           }[this.settingsModal.tab] || this.t('settingsTitle');
         },
@@ -2489,7 +2526,8 @@
           I.users = 'M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z';
           const admin = this.isAdmin();
           // Không phải Quản trị: chỉ còn tài khoản của mình (mật khẩu / 2FA), lịch sử cập nhật, giới thiệu
-          const keep = admin ? null : new Set(['language', 'security', 'history', 'about']);
+          const keep = admin ? null : new Set(['appearance', 'language', 'security', 'history', 'about']);
+          I.swatch = 'M4.098 19.902a3.75 3.75 0 005.304 0l6.401-6.402M6.75 21A3.75 3.75 0 013 17.25V4.125C3 3.504 3.504 3 4.125 3h5.25c.621 0 1.125.504 1.125 1.125v4.072M6.75 21a3.75 3.75 0 003.75-3.75V8.197M6.75 21h13.125c.621 0 1.125-.504 1.125-1.125v-5.25c0-.621-.504-1.125-1.125-1.125h-4.072M10.5 8.197l2.88-2.88c.438-.439 1.15-.439 1.59 0l3.712 3.713c.44.44.44 1.152 0 1.59l-2.879 2.88M6.75 17.25h.008v.008H6.75v-.008z';
           I.globe = 'M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418';
           const f = this.settingsForm || {};
           const general = f.auto_update_enabled
@@ -2499,6 +2537,7 @@
           const toks = (this.tokenState.items || []).length;
           const menu = [
             { id: 'pref', label: this.t('grpPersonal'), items: [
+              { tab: 'appearance', title: this.t('appearance'), desc: this.uiSummary(), icon: I.swatch, color: c('violet') },
               { tab: 'language', title: this.t('language'), desc: this.lang === 'vi' ? 'Tiếng Việt' : 'English', icon: I.globe, color: c('sky') },
             ] },
             { id: 'main', label: this.t('grpGeneral'), items: [
@@ -2846,13 +2885,22 @@
           };
         },
         _snapSettings() { this.settingsBase = JSON.parse(JSON.stringify(this.settingsForm)); },
-        settingsChanges() {
+        settingsChanges() { return this.serverSettingsChanges() + this.uiChanges(); },
+        serverSettingsChanges() {
           if (!this.settingsBase) return 0;
           const now = this._settingsPayload(), base = this._settingsPayload(this.settingsBase);
           return Object.keys(now).filter(k => now[k] !== base[k]).length + ((this.settingsForm.github_token || '').trim() ? 1 : 0);
         },
-        discardSettings() { if (this.settingsBase) this.settingsForm = JSON.parse(JSON.stringify(this.settingsBase)); },
+        discardSettings() {
+          if (this.settingsBase) this.settingsForm = JSON.parse(JSON.stringify(this.settingsBase));
+          if (this.uiBase) { this.ui = { ...this.uiBase }; this.applyUi(); }
+        },
         async saveSettings() {
+          if (this.uiChanges()) {
+            try { localStorage.setItem('amp_ui', JSON.stringify(this.ui)); } catch (_) {}
+            this.uiBase = { ...this.ui };
+            if (!this.serverSettingsChanges()) { this.showToast(this.lang === 'vi' ? 'Đã lưu giao diện' : 'Appearance saved'); return; }
+          }
           const f = this.settingsForm;
           const payload = this._settingsPayload();
           if ((f.github_token || '').trim()) payload.github_token = f.github_token.trim();

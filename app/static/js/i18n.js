@@ -1,6 +1,13 @@
 /* AppManager Pro — bảng dịch EN/VI */
 window.AMP_I18N = {
         en: {
+          acc_sky: 'Blue', acc_violet: 'Violet', acc_pink: 'Pink', acc_emerald: 'Green', acc_amber: 'Amber',
+          txt_s: 'Small', txt_m: 'Default', txt_l: 'Large', txt_xl: 'X-Large', rad_round: 'Rounded', rad_soft: 'Soft', rad_crisp: 'Crisp',
+          ico_tint: 'Tinted', ico_solid: 'Solid', ico_mono: 'Mono',
+          aic_default: 'Classic', aic_violet: 'Violet', aic_pink: 'Pink', aic_emerald: 'Green', aic_amber: 'Amber', aic_graphite: 'Graphite',
+          uiThemeColor: 'Theme color', uiTextSize: 'Text size', uiCorners: 'UI style', uiIconStyle: 'Icon style', uiAppIcon: 'App icon',
+          uiAppIconNote: 'To change the icon already on your Home Screen, remove AppManager from the Home Screen and add it again (iPhone keeps the old icon).',
+          uiPreviewSub: 'Update available · 29.0 → 30.0', uiPreviewBtn: 'Update', uiDeviceNote: 'Saved on this device only. Tap Save below to keep the changes.',
           grpPersonal: 'Personalization', grpGeneral: 'General', grpSecurity: 'Security & accounts', grpOther: 'Other',
           sumAuto: 'Auto-update at {t} · check every {h} h', sumCheck: 'Check every {h} h · auto-update off', sumChannels: '{n} channels on',
           sum2faOn: 'Two-factor authentication on', sum2faOff: 'Two-factor authentication off', sumTokens: '{n} Token(s)', sumHistory: '{n} recent entries',
@@ -107,6 +114,13 @@ window.AMP_I18N = {
           pruneContainersWarn: 'This deletes every stopped container, including apps you stopped on purpose. Their data folders are kept; recreate them from their compose file.', segImages: 'Images', segCache: 'Cache', segContainers: 'Containers', segVolumes: 'Volumes'
         },
         vi: {
+          acc_sky: 'Xanh dương', acc_violet: 'Tím', acc_pink: 'Hồng', acc_emerald: 'Xanh lá', acc_amber: 'Cam',
+          txt_s: 'Nhỏ', txt_m: 'Mặc định', txt_l: 'Lớn', txt_xl: 'Rất lớn', rad_round: 'Bo tròn', rad_soft: 'Mềm', rad_crisp: 'Vuông',
+          ico_tint: 'Màu nhạt', ico_solid: 'Nền đặc', ico_mono: 'Đơn sắc',
+          aic_default: 'Cổ điển', aic_violet: 'Tím', aic_pink: 'Hồng', aic_emerald: 'Xanh lá', aic_amber: 'Cam', aic_graphite: 'Than chì',
+          uiThemeColor: 'Màu chủ đạo', uiTextSize: 'Cỡ chữ', uiCorners: 'Kiểu bo góc', uiIconStyle: 'Kiểu icon', uiAppIcon: 'Biểu tượng app',
+          uiAppIconNote: 'Muốn đổi biểu tượng đã có trên màn hình chính: xoá AppManager khỏi màn hình chính rồi thêm lại (iPhone giữ biểu tượng cũ).',
+          uiPreviewSub: 'Có bản cập nhật · 29.0 → 30.0', uiPreviewBtn: 'Cập nhật', uiDeviceNote: 'Chỉ lưu trên thiết bị này. Bấm Lưu ở dưới để giữ thay đổi.',
           grpPersonal: 'Cá nhân hoá', grpGeneral: 'Chung', grpSecurity: 'Bảo mật & tài khoản', grpOther: 'Khác',
           sumAuto: 'Tự cập nhật lúc {t} · kiểm tra mỗi {h} giờ', sumCheck: 'Kiểm tra mỗi {h} giờ · tự cập nhật tắt', sumChannels: '{n} kênh đang bật',
           sum2faOn: 'Xác thực 2 lớp đang bật', sum2faOff: 'Xác thực 2 lớp đang tắt', sumTokens: '{n} Token', sumHistory: '{n} mục gần đây',

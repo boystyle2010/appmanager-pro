@@ -330,8 +330,12 @@ async def service_worker():
                     headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"})
 
 
+APP_ICONS = ("violet", "pink", "emerald", "amber", "graphite")  # assets/icon-<tên>.png (Cài đặt → Giao diện → Biểu tượng app)
+
+
 @app.get("/manifest.json")
-async def pwa_manifest():
+async def pwa_manifest(icon: str = ""):
+    src = f"/assets/icon-{icon}.png" if icon in APP_ICONS else "/assets/icon.png"
     return JSONResponse(
         content={
             "id": "/",
@@ -343,7 +347,7 @@ async def pwa_manifest():
             "background_color": "#090f1d",
             "theme_color": "#090f1d",
             "icons": [
-                {"src": "/assets/icon.png", "sizes": "512x512", "type": "image/png"}
+                {"src": src, "sizes": "512x512", "type": "image/png"}
             ],
         }
     )
