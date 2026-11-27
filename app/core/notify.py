@@ -27,7 +27,7 @@ from app.core.database import get_setting, set_setting
 logger = logging.getLogger(__name__)
 
 CHANNEL_TYPES = ("telegram", "discord", "slack", "teams", "googlechat", "mattermost", "matrix", "signal",
-                 "ntfy", "gotify", "bark", "pushover", "pushbullet", "email", "apprise", "webhook")
+                 "ntfy", "gotify", "bark", "pushover", "pushbullet", "email", "apprise", "webhook", "webpush")
 EVENTS = ("update_available", "update_success", "update_failed", "self_update", "app_unhealthy", "server_offline", "disk_low", "security")
 CRITICAL = {"update_failed", "app_unhealthy", "server_offline", "disk_low", "security"}
 # Sự kiện có từ bản đầu (0.16). Sự kiện thêm sau được tự bật cho kênh đã có (xem channels()).
@@ -36,12 +36,12 @@ SECRET_FIELDS = {"telegram": ("bot_token",), "discord": ("webhook_url",), "ntfy"
                  "webhook": ("secret", "enc_key"), "slack": ("webhook_url",), "teams": ("webhook_url",), "googlechat": ("webhook_url",),
                  "mattermost": ("webhook_url",), "matrix": ("access_token",), "signal": (), "bark": ("device_key", "enc_key", "enc_iv"),
                  "pushover": ("app_token", "user_key"), "pushbullet": ("access_token",), "email": ("password",),
-                 "apprise": ("urls",)}
+                 "apprise": ("urls",), "webpush": ()}
 REQUIRED = {"telegram": ("bot_token", "chat_id"), "discord": ("webhook_url",), "ntfy": ("topic",),
             "gotify": ("server", "app_token"), "webhook": ("url",), "slack": ("webhook_url",), "teams": ("webhook_url",),
             "googlechat": ("webhook_url",), "mattermost": ("webhook_url",), "matrix": ("server", "access_token", "room_id"),
             "signal": ("server", "number", "recipients"), "bark": ("device_key",), "pushover": ("app_token", "user_key"),
-            "pushbullet": ("access_token",), "email": ("host", "sender", "to"), "apprise": ("server",)}
+            "pushbullet": ("access_token",), "email": ("host", "sender", "to"), "apprise": ("server",), "webpush": ()}
 EMAIL_SECURITY = ("starttls", "ssl", "none")
 ENCRYPTABLE = ("bark", "webhook")  # app nhận tự giải mã được (Bark trên iPhone, máy chủ webhook của bạn)
 
@@ -261,6 +261,9 @@ async def _send(ch: dict[str, Any], title: str, body: str, event: str, data: dic
         except Exception as exc:
             return False, f"SMTP: {str(exc)[:180]}"
     crit = event in CRITICAL
+    if t == "webpush":  # 0.25: đẩy tới mọi thiết bị đã bật (trình duyệt / app thêm vào màn hình chính)
+        from app.core import webpush
+        return await webpush.send_all(title, body, urgent=crit, tag=event or "appmanager")
     async with net.client(timeout=15) as c:
         if t == "telegram":
             r = await c.post(f"https://api.telegram.org/bot{cfg['bot_token']}/sendMessage",

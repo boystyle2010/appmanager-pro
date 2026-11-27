@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from app.core import api_tokens, config_backup, jobs, logs as app_logs, oidc, servers, users as users_mod
+from app.core import api_tokens, config_backup, jobs, logs as app_logs, oidc, servers, users as users_mod, webpush
 from app.core.app_backup import delete_backup, list_backups, restore_backup
 from app.core.auth import (
     COOKIE_NAME,
@@ -323,13 +323,22 @@ class DeployFormPayload(BaseModel):
 
 # ---------------- PWA Manifest & Pages ----------------
 
+@app.get("/sw.js", include_in_schema=False)
+async def service_worker():
+    """Service worker cho Web Push (phải nằm ở gốc trang để nhận thông báo cho cả app)."""
+    return Response(content=(BASE_DIR / "static" / "sw.js").read_text(), media_type="application/javascript",
+                    headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"})
+
+
 @app.get("/manifest.json")
 async def pwa_manifest():
     return JSONResponse(
         content={
+            "id": "/",
             "name": "AppManager Pro",
             "short_name": "AppManager",
             "start_url": "/",
+            "scope": "/",
             "display": "standalone",
             "background_color": "#090f1d",
             "theme_color": "#090f1d",
@@ -1763,6 +1772,51 @@ class NotifyIdPayload(BaseModel):
 async def api_notify_get(_: str = Depends(require_user)):
     return {"channels": notify.masked_channels(), "settings": notify.settings(), "events": list(notify.EVENTS),
             "critical": sorted(notify.CRITICAL)}
+
+
+class WebPushSubPayload(BaseModel):
+    subscription: dict[str, Any]
+    name: str = ""
+
+
+class WebPushIdPayload(BaseModel):
+    id: str = ""
+
+
+@app.get("/api/notify/webpush")
+async def api_webpush(_: str = Depends(require_user)):
+    """Khoá VAPID công khai (để trình duyệt đăng ký) + các thiết bị đã bật."""
+    return {"public_key": await asyncio.to_thread(webpush.public_key),
+            "devices": [webpush.public_sub(s) for s in webpush.subscriptions()],
+            "channel": any(c["type"] == "webpush" for c in notify.channels())}
+
+
+@app.post("/api/notify/webpush/subscribe")
+async def api_webpush_subscribe(payload: WebPushSubPayload, request: Request, user: str = Depends(require_user)):
+    try:
+        rec = await asyncio.to_thread(webpush.add, payload.subscription, payload.name, user)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    # Chưa có kênh Web Push -> tạo sẵn (mọi sự kiện), để bật xong là nhận thông báo ngay
+    if not any(c["type"] == "webpush" for c in notify.channels()):
+        notify.upsert_channel({"type": "webpush", "name": "Web Push", "events": list(notify.EVENTS), "config": {}})
+    audit(request, user, "webpush_subscribe", rec["name"], webpush.public_sub(rec)["service"])
+    return {"ok": True, "device": webpush.public_sub(rec)}
+
+
+@app.post("/api/notify/webpush/delete")
+async def api_webpush_delete(payload: WebPushIdPayload, request: Request, user: str = Depends(require_user)):
+    rec = await asyncio.to_thread(webpush.remove, payload.id)
+    if not rec:
+        raise HTTPException(status_code=404, detail="Device not found")
+    audit(request, user, "webpush_delete", rec.get("name", ""))
+    return {"ok": True}
+
+
+@app.post("/api/notify/webpush/test")
+async def api_webpush_test(payload: WebPushIdPayload, _: str = Depends(require_user)):
+    ok, msg = await webpush.send_all(notify.tr("test"), notify.tr("test_body"), only=payload.id or None, tag="test")
+    return {"ok": ok, "message": msg}
 
 
 @app.post("/api/notify/channels")

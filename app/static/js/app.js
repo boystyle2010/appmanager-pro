@@ -93,6 +93,7 @@
         dataFolders: { open: false, mode: 'list', folder: null, newPath: '', check: null, busy: false, error: '' },
         dataSetup: { open: false, step: 'intro', status: null, manualPath: '', busy: false, error: '', candidates: [], selected: [], elapsed: 0, source: '' },
         composeHint: { open: false, app: null, loading: false, busy: false, preview: null, folder: '', yaml: '', log: '', error: '', done: false },
+        wp: { supported: false, secure: false, ios: false, standalone: false, perm: 'default', publicKey: '', devices: [], thisEp: '', name: '', busy: false, msg: '', ok: true, showHttps: false },
         notifyState: { loading: false, channels: [], settings: { quiet_enabled: false, quiet_start: '22:00', quiet_end: '07:00', disk_pct: 90, lang: 'vi' }, events: [], critical: [], edit: null, busy: false, msg: '', ok: true, testing: '' },
         apiStatus: { loading: false, sources: [], logins: [], form: { registry: 'docker.io', custom: '', username: '', token: '' }, busy: false, msg: '', ok: true },
         runCmd: { open: false, app: null, text: '', loading: false, error: '' },
@@ -2133,7 +2134,7 @@
         openSettingsSection(tab) {
           this.settingsModal.tab = tab;
           if (tab === 'storage') { this.loadStorage(); this.loadBackups(); this.refreshDataStatus(); }
-          else if (tab === 'notify') this.loadNotify();
+          else if (tab === 'notify') { this.loadNotify(); this.loadWebPush(); }
           else if (tab === 'security') this.loadSecurity();
           else if (tab === 'tokens') this.loadTokens();
           else if (tab === 'servers') this.loadServers(true);
@@ -2519,7 +2520,7 @@
         notifyGroups() {
           return [
             { id: 'chat', types: ['telegram', 'discord', 'slack', 'teams', 'googlechat', 'mattermost', 'matrix', 'signal'] },
-            { id: 'push', types: ['ntfy', 'bark', 'pushover', 'pushbullet', 'gotify'] },
+            { id: 'push', types: ['webpush', 'ntfy', 'bark', 'pushover', 'pushbullet', 'gotify'] },
             { id: 'other', types: ['email', 'apprise', 'webhook'] },
           ];
         },
@@ -2530,7 +2531,7 @@
             telegram: all, discord: all, slack: all, mattermost: all, matrix: all, email: all,
             teams: 'ios,android,windows,macos,web', googlechat: 'ios,android,web', signal: 'ios,android,windows,macos,linux',
             ntfy: 'ios,android,web', bark: 'ios', pushover: 'ios,android,web', pushbullet: 'android,windows,web', gotify: 'android,web',
-            apprise: '', webhook: '',
+            apprise: '', webhook: '', webpush: all,
           }[t] || '').split(',').filter(Boolean);
         },
         platformLabel(p) { return { ios: 'iOS', android: 'Android', windows: 'Windows', macos: 'macOS', linux: 'Linux', web: 'Web' }[p] || p; },
@@ -2548,7 +2549,7 @@
         notifyTypeLabel(t) {
           return { telegram: 'Telegram', discord: 'Discord', slack: 'Slack', teams: 'Teams', googlechat: 'Google Chat', mattermost: 'Mattermost',
                    matrix: 'Matrix', signal: 'Signal', ntfy: 'ntfy', gotify: 'Gotify', bark: 'Bark', pushover: 'Pushover', pushbullet: 'Pushbullet',
-                   email: 'Email', apprise: 'Apprise', webhook: 'Webhook' }[t] || t;
+                   email: 'Email', apprise: 'Apprise', webhook: 'Webhook', webpush: 'Web Push' }[t] || t;
         },
         // Icon vector cho trạng thái (thay ký hiệu chữ / emoji): danger = X, warn = !, ok = ✓, info = i
         toneIcon(tone) {
@@ -2570,13 +2571,113 @@
         notifyIcon(t) { return (window.AMP_NOTIFY_ICONS || {})[t] || { bg: '#475569', svg: '' }; },
         notifyTypeShort(t) {
           return { telegram: 'TG', discord: 'DC', slack: 'SL', teams: 'MT', googlechat: 'GC', mattermost: 'MM', matrix: 'MX', signal: 'SG',
-                   ntfy: 'NT', gotify: 'GO', bark: 'BK', pushover: 'PO', pushbullet: 'PB', email: '@', apprise: 'AP', webhook: 'WH' }[t] || '?';
+                   ntfy: 'NT', gotify: 'GO', bark: 'BK', pushover: 'PO', pushbullet: 'PB', email: '@', apprise: 'AP', webhook: 'WH', webpush: 'WP' }[t] || '?';
         },
         notifyColor(t) {
           return { telegram: 'bg-sky-500', discord: 'bg-indigo-500', slack: 'bg-fuchsia-700', teams: 'bg-violet-600', googlechat: 'bg-green-600',
                    mattermost: 'bg-blue-700', matrix: 'bg-zinc-700', signal: 'bg-blue-500', ntfy: 'bg-emerald-600', gotify: 'bg-cyan-600',
                    bark: 'bg-orange-500', pushover: 'bg-sky-700', pushbullet: 'bg-teal-600', email: 'bg-rose-600', apprise: 'bg-amber-600',
-                   webhook: 'bg-slate-600' }[t] || 'bg-slate-600';
+                   webhook: 'bg-slate-600', webpush: 'bg-violet-600' }[t] || 'bg-slate-600';
+        },
+
+        // ---------------- Web Push (0.25) ----------------
+        _wpEnv() {
+          const w = this.wp, ua = navigator.userAgent || '';
+          w.secure = !!window.isSecureContext;
+          w.ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+          w.standalone = !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+          w.supported = w.secure && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+          w.perm = ('Notification' in window) ? Notification.permission : 'unsupported';
+          if (!w.name) {
+            const dev = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android' : /Mac OS X/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : 'Device';
+            const br = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : '';
+            w.name = br ? `${dev} · ${br}` : dev;
+          }
+        },
+
+        async _wpHash(text) {
+          const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+          return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+        },
+
+        async loadWebPush() {
+          const w = this.wp;
+          this._wpEnv();
+          try {
+            const res = await fetch('/api/notify/webpush');
+            if (res.ok) { const d = await res.json(); w.publicKey = d.public_key; w.devices = d.devices || []; }
+          } catch (_) {}
+          w.thisEp = '';
+          if (w.supported) {
+            try {
+              const reg = await navigator.serviceWorker.getRegistration('/');
+              const sub = reg && await reg.pushManager.getSubscription();
+              if (sub) w.thisEp = await this._wpHash(sub.endpoint);
+            } catch (_) {}
+          }
+        },
+
+        wpThisDevice() { return this.wp.devices.find(d => d.ep && d.ep === this.wp.thisEp) || null; },
+
+        async enableWebPush() {
+          const w = this.wp;
+          w.busy = true; w.msg = '';
+          try {
+            const perm = await Notification.requestPermission();
+            w.perm = perm;
+            if (perm !== 'granted') throw new Error(this.t('wpDenied'));
+            const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+            await navigator.serviceWorker.ready;
+            const raw = atob(w.publicKey.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - w.publicKey.length % 4) % 4));
+            const key = Uint8Array.from(raw, c => c.charCodeAt(0));
+            let sub = await reg.pushManager.getSubscription();
+            if (sub && sub.options && sub.options.applicationServerKey) {
+              const old = new Uint8Array(sub.options.applicationServerKey);
+              if (old.length !== key.length || old.some((v, i) => v !== key[i])) { await sub.unsubscribe(); sub = null; }  // khoá VAPID đã đổi
+            }
+            sub = sub || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+            const { res, data } = await this._postJson('/api/notify/webpush/subscribe', { subscription: sub.toJSON(), name: w.name });
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            w.ok = true; w.msg = this.t('wpEnabled');
+            await this.loadWebPush(); this.loadNotify();
+          } catch (err) { w.ok = false; w.msg = err.message || String(err); }
+          finally { w.busy = false; }
+        },
+
+        async disableWebPushHere() {
+          const w = this.wp, mine = this.wpThisDevice();
+          w.busy = true; w.msg = '';
+          try {
+            const reg = await navigator.serviceWorker.getRegistration('/');
+            const sub = reg && await reg.pushManager.getSubscription();
+            if (sub) await sub.unsubscribe();
+            if (mine) await this._postJson('/api/notify/webpush/delete', { id: mine.id });
+            w.ok = true; w.msg = this.t('wpDisabled');
+            await this.loadWebPush();
+          } catch (err) { w.ok = false; w.msg = err.message; }
+          finally { w.busy = false; }
+        },
+
+        async testWebPush(dev = null) {
+          const w = this.wp;
+          w.busy = true; w.msg = '';
+          try {
+            const { res, data } = await this._postJson('/api/notify/webpush/test', { id: dev ? dev.id : '' });
+            w.ok = res.ok && data.ok; w.msg = data.message || data.detail || '';
+            await this.loadWebPush();
+          } catch (err) { w.ok = false; w.msg = err.message; }
+          finally { w.busy = false; }
+        },
+
+        confirmDeleteWebPush(dev) {
+          this.askConfirm({
+            tone: 'danger', title: this.t('wpDeleteTitle').replace('{d}', dev.name), message: this.t('wpDeleteMsg'), confirmLabel: this.t('delete'),
+            onConfirm: async () => {
+              const { res, data } = await this._postJson('/api/notify/webpush/delete', { id: dev.id });
+              if (!res.ok) { this.showToast(data.detail || 'Failed'); return; }
+              this.loadWebPush();
+            }
+          });
         },
 
         async loadNotify() {

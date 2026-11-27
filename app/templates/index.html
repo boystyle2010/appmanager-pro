@@ -2713,6 +2713,93 @@
         <!-- TAB: THÔNG BÁO -->
         <template x-if="settingsModal.tab === 'notify'">
           <div class="space-y-3.5">
+            <!-- Web Push (0.25): thông báo đẩy thẳng tới trình duyệt / iPhone đã thêm vào màn hình chính -->
+            <div class="glass-inset rounded-2xl p-4 space-y-3">
+              <div class="flex items-center gap-3">
+                <span class="w-9 h-9 rounded-xl shrink-0 flex items-center justify-center bg-violet-600 text-white">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/></svg>
+                </span>
+                <div class="min-w-0">
+                  <p class="font-semibold text-[13px]" x-text="t('wpTitle')"></p>
+                  <p class="text-[10.5px] text-muted leading-snug" x-text="t('wpDesc')"></p>
+                </div>
+              </div>
+              <!-- Trạng thái thiết bị đang dùng -->
+              <template x-if="!wp.secure">
+                <div class="rounded-xl px-3 py-2.5 bg-amber-500/10 border border-amber-400/30 text-[11px] text-amber-100 leading-relaxed space-y-1.5">
+                  <p class="font-semibold text-amber-200" x-text="t('wpNeedHttps')"></p>
+                  <p x-text="t('wpNeedHttpsDesc')"></p>
+                  <button type="button" @click="wp.showHttps = !wp.showHttps" class="text-sky-300 font-semibold" x-text="wp.showHttps ? t('wpHideGuide') : t('wpShowGuide')"></button>
+                </div>
+              </template>
+              <template x-if="wp.secure && wp.ios && !wp.standalone">
+                <div class="rounded-xl px-3 py-2.5 bg-sky-500/10 border border-sky-400/30 text-[11px] text-sky-100 leading-relaxed">
+                  <p class="font-semibold text-sky-200" x-text="t('wpIosTitle')"></p>
+                  <p x-text="t('wpIosDesc')"></p>
+                </div>
+              </template>
+              <template x-if="wp.secure && !(wp.ios && !wp.standalone) && !wp.supported">
+                <p class="text-[11px] text-amber-200" x-text="t('wpUnsupported')"></p>
+              </template>
+              <template x-if="wp.supported && wp.perm === 'denied'">
+                <p class="rounded-xl px-3 py-2 bg-rose-500/10 border border-rose-400/30 text-[11px] text-rose-200" x-text="t('wpBlocked')"></p>
+              </template>
+              <template x-if="wp.supported && wp.perm !== 'denied'">
+                <div class="space-y-2">
+                  <template x-if="!wpThisDevice()">
+                    <div class="flex gap-2">
+                      <input type="text" x-model="wp.name" maxlength="60" class="glass-input flex-1 min-w-0 rounded-xl px-3 py-2 text-xs" :placeholder="t('wpDeviceName')" />
+                      <button @click="enableWebPush()" :disabled="wp.busy" class="glass-btn-primary px-3 rounded-xl text-[11.5px] font-semibold shrink-0 disabled:opacity-50"
+                              x-text="wp.busy ? '…' : t('wpEnable')"></button>
+                    </div>
+                  </template>
+                  <template x-if="wpThisDevice()">
+                    <div class="flex items-center justify-between gap-2 rounded-xl px-3 py-2 bg-emerald-500/10 border border-emerald-400/30">
+                      <span class="text-[11.5px] text-emerald-200 flex items-center gap-1.5 min-w-0">
+                        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" x-html="toneIcon('ok')"></svg>
+                        <span class="truncate" x-text="t('wpOnHere').replace('{d}', wpThisDevice().name)"></span>
+                      </span>
+                      <button @click="disableWebPushHere()" :disabled="wp.busy" class="glass-btn px-2.5 py-1 rounded-lg text-[11px] shrink-0 disabled:opacity-50" x-text="t('wpDisable')"></button>
+                    </div>
+                  </template>
+                </div>
+              </template>
+              <!-- Hướng dẫn HTTPS -->
+              <template x-if="wp.showHttps">
+                <div class="space-y-2 text-[11px] text-muted leading-relaxed">
+                  <template x-for="g in ['tailscale', 'proxy', 'cloudflare']" :key="g">
+                    <div class="rounded-xl px-3 py-2.5 bg-[var(--glass-surface)] space-y-1">
+                      <p class="font-semibold text-[12px] text-[var(--text-primary)]" x-text="t('wpHttps_' + g)"></p>
+                      <p x-text="t('wpHttps_' + g + '_desc')"></p>
+                      <code x-show="g === 'tailscale'" class="block glass-terminal rounded-lg px-2.5 py-1.5 text-[10.5px] font-mono-code text-emerald-300 break-all">tailscale serve --bg 8098</code>
+                    </div>
+                  </template>
+                  <p class="text-[10.5px] text-subtle" x-text="t('wpHttpsNote')"></p>
+                </div>
+              </template>
+              <!-- Thiết bị đã bật -->
+              <div x-show="wp.devices.length" class="space-y-1.5">
+                <p class="text-[10.5px] font-semibold text-muted" x-text="t('wpDevices').replace('{n}', wp.devices.length)"></p>
+                <template x-for="d in wp.devices" :key="d.id">
+                  <div class="rounded-xl px-3 py-2 bg-[var(--glass-surface)] flex items-center gap-2">
+                    <div class="min-w-0 flex-1">
+                      <p class="text-[12px] font-semibold truncate">
+                        <span x-text="d.name"></span>
+                        <span x-show="d.ep && d.ep === wp.thisEp" class="text-[10px] text-subtle font-normal" x-text="' ' + t('wpThis')"></span>
+                      </p>
+                      <p class="text-[10px] truncate" :class="d.last_error ? 'text-rose-300' : 'text-subtle'"
+                         x-text="d.last_error ? d.last_error : (d.service + (d.user ? ' · ' + d.user : '') + (d.last_ok ? ' · ' + t('wpLastOk').replace('{t}', formatTs(d.last_ok)) : ''))"></p>
+                    </div>
+                    <button @click="testWebPush(d)" :disabled="wp.busy" class="glass-btn px-2.5 py-1 rounded-lg text-[11px] text-sky-400 shrink-0 disabled:opacity-50" x-text="t('wpTest')"></button>
+                    <button @click="confirmDeleteWebPush(d)" :aria-label="t('delete')" class="glass-btn w-7 h-7 rounded-lg flex items-center justify-center text-rose-400 shrink-0">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24" x-html="toneIcon('danger')"></svg>
+                    </button>
+                  </div>
+                </template>
+              </div>
+              <p x-show="wp.msg" class="text-[11px] break-words" :class="wp.ok ? 'text-emerald-300' : 'text-rose-300'" x-text="wp.msg"></p>
+              <p class="text-[10.5px] text-subtle leading-snug" x-text="t('wpEventsNote')"></p>
+            </div>
             <div class="glass-inset rounded-2xl p-3.5 space-y-2.5">
               <div class="flex items-center justify-between gap-2">
                 <div class="min-w-0">

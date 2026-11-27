@@ -1,5 +1,5 @@
 /* Biểu tượng kênh thông báo. Logo hãng: Simple Icons (CC0, https://simpleicons.org) — nhãn hiệu thuộc về chủ sở hữu.
-   Slack, Teams, Pushover, Gotify, Bark, Apprise, Email, Webhook: biểu tượng chung do AppManager tự vẽ (không phải logo của hãng). */
+   Slack, Teams, Pushover, Gotify, Bark, Apprise, Email, Webhook, Web Push: biểu tượng chung do AppManager tự vẽ (không phải logo của hãng). */
 window.AMP_NOTIFY_ICONS = {
 "telegram": {
 "bg": "#26A5E4",
@@ -60,6 +60,10 @@ window.AMP_NOTIFY_ICONS = {
 "email": {
 "bg": "#E11D48",
 "svg": "<g fill=\"none\" stroke=\"#fff\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"5.5\" width=\"18\" height=\"13\" rx=\"2\"/><path d=\"M3.5 7l8.5 6.5L20.5 7\"/></g>"
+},
+"webpush": {
+"bg": "#7C3AED",
+"svg": "<g fill=\"none\" stroke=\"#fff\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M6 9a6 6 0 0 1 12 0v4l1.5 3h-15L6 13z\"/><path d=\"M10 19a2 2 0 0 0 4 0\"/><path d=\"M19.5 4.5a5 5 0 0 1 1.5 3.5M4.5 4.5A5 5 0 0 0 3 8\"/></g>"
 },
 "webhook": {
 "bg": "#475569",
