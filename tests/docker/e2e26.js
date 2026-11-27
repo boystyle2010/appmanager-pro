@@ -63,9 +63,13 @@ const R = []; const check = (n, c, d = '') => { R.push(!!c); console.log((c ? 'P
   const bad = await p.evaluate(async () => (await (await fetch('/manifest.json?icon=../x')).json()).icons[0].src);
   const img = await p.evaluate(async () => (await fetch('/assets/icon-emerald.png')).status);
   check('Manifest serves the chosen icon (unknown names fall back)', mf === '/assets/icon-emerald.png' && bad === '/assets/icon.png' && img === 200, mf + ' ' + bad + ' ' + img);
-  // Bộ nhớ đệm: trang riêng (thiết bị này + máy chủ)
+  // Bộ nhớ đệm: trang riêng (thiết bị này + máy chủ); trang con mở ở đầu trang, quay lại về đúng chỗ
   await D('d.openSettings()'); await sleep(1000);
+  await p.evaluate(() => document.querySelector('[x-ref=settingsScroll]').scrollTo(0, 5000)); await sleep(300);
+  const homeY = await p.evaluate(() => document.querySelector('[x-ref=settingsScroll]').scrollTop);
   await p.getByText('Bộ nhớ đệm', { exact: true }).click(); await sleep(1200);
+  const subY = await p.evaluate(() => document.querySelector('[x-ref=settingsScroll]').scrollTop);
+  check('Sub-page opens at the top (not at the bottom of the list)', homeY > 200 && subY === 0, homeY + ' ' + subY);
   const st = await D('return d.cacheState.stats');
   check('Cache page shows server caches with counts (network, changelogs, SSO, CPU/RAM)', st && st.http && st.updates && st.resources && st.sso, JSON.stringify(st));
   await p.screenshot({ path: OUT + '/c7-cache.png' });
@@ -76,6 +80,10 @@ const R = []; const check = (n, c, d = '') => { R.push(!!c); console.log((c ? 'P
   await D('d.confirmModal.onConfirm(); d.confirmModal.open = false'); await sleep(1500);
   const st2 = await D('return d.cacheState.stats');
   check('Network cache cleared on the server', st2.http.count === 0, JSON.stringify(st2.http));
+  await D('d.settingsBack()'); await sleep(500);
+  const backY = await p.evaluate(() => document.querySelector('[x-ref=settingsScroll]').scrollTop);
+  check('Back returns to the same place on the Settings list', Math.abs(backY - homeY) < 5, backY + ' vs ' + homeY);
+  await D("d.openSettingsSection('cache')"); await sleep(800);
   await rowBtn('uireset').click(); await sleep(300); await D('d.confirmModal.onConfirm(); d.confirmModal.open = false'); await sleep(400);
   check('Reset appearance on this device -> defaults', (await p.evaluate(() => document.documentElement.dataset.accent)) === 'sky' && (await p.evaluate(() => localStorage.getItem('amp_ui'))) === null);
   await D("d.setUi('accent', 'emerald')"); await D('d.saveSettings()'); await sleep(500);

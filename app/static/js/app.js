@@ -2224,6 +2224,7 @@
         async openSettings() {
           this.settingsModal = { open: true, tab: 'home' };
           this.uiBase = { ...this.ui };
+          this._homeScroll = 0; this._scrollSettings(0);
           if (this.isAdmin()) { this.refreshDataStatus(); this.loadUsers(); this.loadSso(); }
           try {
             const res = await fetch('/api/settings');
@@ -2239,8 +2240,25 @@
           fetch('/api/auth/security').then(r => r.ok ? r.json() : null).then(d => { if (d) this.security.totp_enabled = !!d.totp_enabled; }).catch(() => {});
         },
 
+        // Trang con mở ở ĐẦU trang (dùng chung thanh cuộn với trang đầu); quay lại thì về đúng chỗ đang xem ở trang đầu
+        _homeScroll: 0,
+        _scrollSettings(y) { this.$nextTick(() => { const el = this.$refs.settingsScroll; if (el) el.scrollTop = y; }); },
+        settingsBack() { this.settingsModal.tab = 'home'; this._scrollSettings(this._homeScroll); },
+        displayInfo() {
+          const h = document.documentElement;
+          let sat = '?', pad = '?';
+          try {
+            const pr = document.createElement('div'); pr.style.cssText = 'position:fixed;visibility:hidden;padding-top:env(safe-area-inset-top)';
+            document.body.appendChild(pr); sat = getComputedStyle(pr).paddingTop; pr.remove();
+            pad = getComputedStyle(document.querySelector('.glass-header')).paddingTop;
+          } catch (_) {}
+          const pwa = h.classList.contains('pwa') || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+          return `${pwa ? 'PWA' : 'Browser'} · safe-area ${sat} · header ${pad} · build ${document.querySelector('meta[name="amp-build"]')?.content || '?'}`;
+        },
         openSettingsSection(tab) {
+          if (this.settingsModal.tab === 'home') this._homeScroll = this.$refs.settingsScroll?.scrollTop || 0;
           this.settingsModal.tab = tab;
+          this._scrollSettings(0);
           if (tab === 'storage') { this.loadStorage(); this.loadBackups(); this.refreshDataStatus(); }
           else if (tab === 'notify') { this.loadNotify(); this.loadWebPush(); }
           else if (tab === 'security') this.loadSecurity();

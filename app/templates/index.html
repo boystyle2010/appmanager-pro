@@ -1853,7 +1853,7 @@
           </button>
         </div>
         <div x-show="settingsModal.tab !== 'home'" class="grid grid-cols-[2.25rem_1fr_2.25rem] items-center gap-2">
-          <button @click="settingsModal.tab = 'home'" :aria-label="t('back')"
+          <button @click="settingsBack()" :aria-label="t('back')"
                   class="glass-btn w-9 h-9 rounded-full flex items-center justify-center text-muted hover:text-[var(--text-primary)]">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
           </button>
@@ -1865,7 +1865,7 @@
         </div>
       </div>
 
-      <div class="flex-1 overflow-y-auto overscroll-contain">
+      <div class="flex-1 overflow-y-auto overscroll-contain" x-ref="settingsScroll">
       <div class="w-full max-w-2xl mx-auto px-4 sm:px-6 space-y-3.5 pb-6" :class="settingsModal.tab === 'home' ? 'pt-0' : 'pt-4'">
         <!-- TRANG ĐẦU (kiểu Cài đặt iOS): tiêu đề lớn, thẻ nhanh, nhóm có nhãn chữ in hoa, mỗi dòng có icon màu + giá trị hiện tại -->
         <template x-if="settingsModal.tab === 'home'">
@@ -3420,6 +3420,8 @@
                 <span x-show="selfApp && !selfApp.has_update && selfApp.checked_at" class="text-[10.5px] px-2 py-0.5 rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-400/30" x-text="t('upToDate')"></span>
               </div>
               <p x-show="selfApp?.image" class="font-mono-code text-[10.5px] text-subtle break-all" x-text="selfApp?.image"></p>
+              <!-- chẩn đoán hiển thị (PWA / vùng an toàn / build) — giúp tìm lỗi header trên iPhone -->
+              <p class="font-mono-code text-[10px] text-subtle break-all" x-text="displayInfo()"></p>
               <button x-show="selfApp?.has_update" type="button" @click="settingsModal.open = false; openUpdateModal(selfApp)"
                       class="glass-btn-update mt-1 px-4 py-2 rounded-xl text-xs font-semibold" x-text="t('updateNow')"></button>
             </div>
