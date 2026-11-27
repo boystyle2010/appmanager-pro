@@ -64,6 +64,7 @@ It runs as a single container, ships a mobile-first "liquid glass" UI in English
 - **Update history** — every update, rollback and cleanup is logged.
 - **Settings backups** — before each update the app's **settings files** are archived (json / yaml / conf / env / xml, small databases with their `-wal`/`-shm`, certificates, small text/JSON settings files) from the folders it mounts from `/DATA/AppData` — never media, storage, downloads, sync folders, caches or logs — together with the image (digest) and `docker-compose.yml`. Apps without a config folder still get an image + compose backup.
 - **Restore** — a *Restore* button on every app card lets you pick the backup (newest preselected) and shows progress and each step. If the old image was removed, it is pulled again by digest (or version tag). Current logs and all other data are kept.
+- **Vulnerability scan (optional)** — Settings → Vulnerability scan installs [Trivy](https://trivy.dev) on request (from the official `aquasec/trivy` image; ~200 MB with its database) and scans every app image daily, weekly or on demand, plus right after each update (unchanged images are skipped). Cards show a shield badge with the count at the severities you choose (critical + high by default); tap it for each CVE with package, installed / fixed version and link, filter by severity or *Fixable*. A *New vulnerabilities* notification is sent once per new finding. Off by default; Trivy can be removed again (results are kept).
 
 ### Security & UI
 - **Admin account** with Argon2id password hashing, signed session cookies (`HttpOnly`, `SameSite=Lax`, `Secure` over HTTPS) and **IP lockout** after 5 failed logins (15 minutes, persisted across restarts). Proxy headers are only trusted from configured proxies, so the lockout cannot be bypassed with fake IPs.
@@ -284,6 +285,7 @@ Every machine running AppManager has its own accounts. To manage another machine
 | Scheduled SSD cleanup | off | Daily / weekly / monthly cleanup of images & build cache. |
 | Back up app data before updates | on | Archive the app's settings files + image + compose before each update (max per file, total size and number kept are configurable). |
 | GitHub token | — | Optional; raises the GitHub API limit (60 → 5,000 requests/hour) and allows private repos. |
+| Vulnerability scan | off | Install Trivy, schedule (daily / weekly / only on demand), re-scan after updates, severities to show and notify, fixable only. |
 | Security tab | — | Two-factor authentication, password change, activity log. |
 
 ### Notifications

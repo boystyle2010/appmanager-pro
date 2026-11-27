@@ -389,7 +389,7 @@
 
         async init() {
           this.$watch(() => [this.confirmModal, this.actionSheet, this.logModal, this.batchModal, this.deployModal, this.updateModal,
-                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker, this.restoreRun, this.updateAllPicker, this.versionPicker, this.dupPopup, this.dataSetup, this.dataFolders, this.tokenState.form, this.apiDocs, this.srv.form, this.remoteJob, this.composeHint, this.runCmd, this.usersState.form].some(m => m && m.open), (open) => {
+                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker, this.restoreRun, this.updateAllPicker, this.versionPicker, this.dupPopup, this.dataSetup, this.dataFolders, this.tokenState.form, this.apiDocs, this.srv.form, this.remoteJob, this.composeHint, this.runCmd, this.usersState.form, this.vuln.modal].some(m => m && m.open), (open) => {
             const b = document.body, h = document.documentElement;
             if (open) {
               this._lockY = window.scrollY || 0;
@@ -807,6 +807,7 @@
             if (data.auto_update) this.autoCfg = data.auto_update;
             this.apps = data.apps;
             this._syncAppBadge();
+            if (!this._vulnLoaded) { this._vulnLoaded = true; this.loadVulns(); }
             this.lastChecked = data.last_checked || '';
             this.checkingUpdates = !!data.checking_updates;
             if (this.remote.id === '*' && this.remote.data) this._mergeLocal();
@@ -945,6 +946,80 @@
         },
 
         // Kiểm tra bản mới cho riêng một app (menu ⋯)
+        // ---------------- Quét lỗ hổng (0.26, Trivy) ----------------
+        vuln: { data: null, modal: { open: false, app: null, detail: null, loading: false, sev: 'ALL', fixable: false }, timer: null },
+        _vulnLoaded: false,
+        async loadVulns() {
+          try {
+            const r = await fetch('/api/vulns'); if (!r.ok) return;
+            const prevRunning = this.vuln.data?.state?.running;
+            this.vuln.data = await r.json();
+            const st = this.vuln.data.state || {};
+            clearTimeout(this.vuln.timer);
+            if (st.running || st.installing) this.vuln.timer = setTimeout(() => this.loadVulns(), 2500);
+            else if (prevRunning && this.vuln.modal.open && this.vuln.modal.app) this.openVulns(this.vuln.modal.app, true);
+          } catch (_) {}
+        },
+        vulnBadge(app) {
+          const d = this.vuln.data; const r = d?.apps?.[app.name];
+          if (!r || r.error || !d.settings) return null;
+          const src = d.settings.fixable_only ? r.fixable : r.counts;
+          const n = d.settings.severities.reduce((t, s) => t + (src?.[s] || 0), 0);
+          if (!n) return null;
+          const crit = (src?.CRITICAL || 0) > 0;
+          return { n, crit, title: this.t('vulnBadgeTitle').replace('{n}', n) };
+        },
+        vulnSevLabel(s) { return this.t('sev_' + s); },
+        vulnSevCls(s) {
+          return { CRITICAL: 'bg-rose-500/20 text-rose-300 border-rose-400/45', HIGH: 'bg-orange-500/20 text-orange-300 border-orange-400/45',
+                   MEDIUM: 'bg-amber-500/15 text-amber-300 border-amber-400/35', LOW: 'bg-sky-500/15 text-sky-300 border-sky-400/30',
+                   UNKNOWN: 'bg-white/5 text-muted border-[var(--glass-border)]' }[s] || '';
+        },
+        async openVulns(app, silent = false) {
+          const m = this.vuln.modal;
+          if (!silent) Object.assign(m, { open: true, app, detail: null, loading: true, sev: 'ALL', fixable: false });
+          try {
+            const r = await fetch(`/api/vulns/${encodeURIComponent(app.name)}`);
+            m.detail = r.ok ? await r.json() : null;
+          } catch (_) { m.detail = null; }
+          m.loading = false;
+        },
+        vulnFindings() {
+          const m = this.vuln.modal; const f = m.detail?.findings || [];
+          return f.filter(x => (m.sev === 'ALL' || x.severity === m.sev) && (!m.fixable || x.fixed));
+        },
+        async scanVulns(name = '') {
+          const { res, data } = await this._postJson('/api/vulns/scan', { name, force: true });
+          if (!res.ok) { this.showToast(data.detail || 'Failed'); return; }
+          this.showToast(data.busy ? this.t('vulnBusy') : this.t('vulnStarted'));
+          this.loadVulns();
+        },
+        async saveVulnSettings(patch) {
+          const { res, data } = await this._postJson('/api/vulns/settings', patch);
+          if (!res.ok) { this.showToast(data.detail || 'Failed'); return; }
+          if (this.vuln.data) this.vuln.data.settings = data.settings;
+        },
+        async installTrivy() {
+          const { res, data } = await this._postJson('/api/vulns/install', {});
+          if (!res.ok) { this.showToast(data.detail || 'Failed'); return; }
+          this.loadVulns();
+        },
+        uninstallTrivy() {
+          this.askConfirm({ tone: 'danger', title: this.t('vulnUninstall'), message: this.t('vulnUninstallMsg'), confirmLabel: this.t('vulnUninstall'),
+            onConfirm: async () => {
+              const { res, data } = await this._postJson('/api/vulns/uninstall', {});
+              if (!res.ok) this.showToast(data.detail || 'Failed');
+              this.loadVulns();
+            } });
+        },
+        vulnApps() {
+          const d = this.vuln.data; if (!d?.apps) return [];
+          const byName = Object.fromEntries((this.apps || []).map(a => [a.name, a]));
+          const rank = (r) => -((r.counts?.CRITICAL || 0) * 1e6 + (r.counts?.HIGH || 0) * 1e3 + (r.counts?.MEDIUM || 0));
+          return Object.entries(d.apps).map(([name, r]) => ({ name, r, app: byName[name] || { name, title: name } }))
+            .sort((x, y) => rank(x.r) - rank(y.r));
+        },
+
         async checkOneApp(app) {
           if (this.checkingOne[app.name]) return;
           this.checkingOne = { ...this.checkingOne, [app.name]: true };
@@ -2270,6 +2345,7 @@
           else if (tab === 'sso') this.loadSso();
           else if (tab === 'config') this.loadConfigBackup();
           else if (tab === 'cache' && this.isAdmin()) this.loadCaches();
+          else if (tab === 'vuln') this.loadVulns();
         },
 
         // ---------------- Nhiều máy chủ (0.18) ----------------
@@ -2571,7 +2647,7 @@
 
         settingsSectionTitle() {
           return {
-            home: this.t('settingsTitle'), language: this.t('language'), appearance: this.t('appearance'), cache: this.t('setCache'), schedule: this.t('setGeneral'), storage: this.t('setStorage'), users: this.t('setUsers'), sso: this.t('setSso'), config: this.t('setConfig'),
+            home: this.t('settingsTitle'), language: this.t('language'), appearance: this.t('appearance'), cache: this.t('setCache'), vuln: this.t('setVuln'), schedule: this.t('setGeneral'), storage: this.t('setStorage'), users: this.t('setUsers'), sso: this.t('setSso'), config: this.t('setConfig'),
             notify: this.t('setNotify'), servers: this.t('setServers'), security: this.t('tabSecurity'), tokens: this.t('setTokens'), history: this.t('tabHistory'), about: this.t('tabAbout'),
           }[this.settingsModal.tab] || this.t('settingsTitle');
         },
@@ -2620,6 +2696,8 @@
               { tab: 'servers', title: this.t('setServers'), desc: this.srv.list.length ? this.t('svCount').replace('{n}', this.srv.list.length) : this.t('setServersDesc'), icon: I.servers, color: c('violet') },
             ] },
             { id: 'safety', label: this.t('grpSecurity'), items: [
+              { tab: 'vuln', title: this.t('setVuln'), desc: this.vuln.data?.settings?.enabled ? this.t('vulnOnDesc').replace('{s}', this.t('vulnSched_' + this.vuln.data.settings.schedule)) : this.t('vulnOffDesc'),
+                icon: 'M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z', color: c('emerald') },
               { tab: 'security', title: this.t('tabSecurity'), desc: this.security.totp_enabled ? this.t('sum2faOn') : this.t('sum2faOff'), icon: I.lock, color: c('rose') },
               { tab: 'sso', title: this.t('setSso'), desc: this.ssoState.cfg?.enabled ? this.t('ssoOnWith').replace('{p}', this.ssoState.cfg.label || 'SSO') : this.t('setSsoDesc'), icon: I.sso, color: c('violet') },
               { tab: 'users', title: this.t('setUsers'), desc: this.usersState.list.length > 1 ? this.t('usCount').replace('{n}', this.usersState.list.length) : this.t('setUsersDesc'), icon: I.users, color: c('emerald') },

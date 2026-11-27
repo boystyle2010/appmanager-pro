@@ -516,7 +516,15 @@
 
                 <div class="flex items-center justify-between gap-2 min-w-0">
                   <p class="font-mono-code text-[10.5px] text-subtle truncate min-w-0" :title="app.image" x-text="shortImage(app.image)"></p>
-                  <div x-show="channelBadge(app) || app.auto_update || app.dup_compose" class="flex items-center gap-1 shrink-0">
+                  <div x-show="channelBadge(app) || app.auto_update || app.dup_compose || vulnBadge(app)" class="flex items-center gap-1 shrink-0">
+                    <template x-if="vulnBadge(app)">
+                      <button type="button" @click.stop="openVulns(app)" :title="vulnBadge(app).title" :aria-label="vulnBadge(app).title"
+                              class="inline-flex items-center justify-center gap-0.5 h-[18px] px-1.5 rounded-md text-[9px] leading-none font-bold border"
+                              :class="vulnBadge(app).crit ? 'bg-rose-500/20 text-rose-300 border-rose-400/50' : 'bg-orange-500/15 text-orange-300 border-orange-400/45'">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0-10.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.75c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285zM12 15.75h.008v.008H12v-.008z"/></svg>
+                        <span x-text="vulnBadge(app).n"></span>
+                      </button>
+                    </template>
                     <button x-show="app.dup_compose" type="button" @click.stop="app.dup_skipped ? openDupPopup(app) : openEditModal(app)"
                             :title="t(app.dup_skipped ? 'dupComposeSkippedBadge' : 'dupComposeBadge')" :aria-label="t(app.dup_skipped ? 'dupComposeSkippedBadge' : 'dupComposeBadge')"
                             class="inline-flex items-center justify-center gap-0.5 h-[18px] px-1.5 rounded-md text-[9px] leading-none font-bold border"
@@ -870,6 +878,14 @@
             <span x-text="t('updateAndChangelog')"></span>
           </span>
           <span x-show="actionSheet.app?.has_update" class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300">NEW</span>
+        </button>
+
+        <button x-show="vuln.data?.trivy?.installed || vuln.data?.apps?.[actionSheet.app?.name]" @click="const a = actionSheet.app; closeActionSheet(); openVulns(a)" class="ios-row">
+          <span class="flex items-center gap-3">
+            <svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>
+            <span x-text="t('vulnMenu')"></span>
+          </span>
+          <span x-show="actionSheet.app && vulnBadge(actionSheet.app)" class="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300" x-text="actionSheet.app && vulnBadge(actionSheet.app)?.n"></span>
         </button>
 
         <button x-show="canUpdate()" @click="const a = actionSheet.app; closeActionSheet(); checkOneApp(a)" class="ios-row">
@@ -2023,6 +2039,130 @@
               <p class="px-1 mt-2 text-[11px] text-subtle leading-snug" x-text="t('uiAppIconNote')"></p>
             </section>
             <p class="px-1 text-[11px] text-subtle" x-text="t('uiDeviceNote')"></p>
+          </div>
+        </template>
+
+        <!-- Quét lỗ hổng (0.26, Trivy): giải thích, cài Trivy, bật / lịch / mức báo, quét ngay, kết quả từng app -->
+        <template x-if="settingsModal.tab === 'vuln'">
+          <div class="space-y-5 pb-2">
+            <div class="glass-inset rounded-[20px] p-3.5 flex gap-3">
+              <span class="w-9 h-9 rounded-[12px] flex items-center justify-center shrink-0 border bg-emerald-500/15 border-emerald-400/35 text-emerald-400">
+                <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>
+              </span>
+              <div class="min-w-0">
+                <p class="text-[13.5px] font-semibold" x-text="t('vulnIntroTitle')"></p>
+                <p class="text-[11.5px] text-muted leading-relaxed mt-0.5" x-text="t('vulnIntro')"></p>
+              </div>
+            </div>
+            <!-- Trivy -->
+            <section>
+              <p class="px-3.5 mb-1.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-subtle">Trivy</p>
+              <div class="glass-inset rounded-[20px] p-3.5 space-y-2.5" data-vuln="trivy">
+                <template x-if="vuln.data?.state?.installing">
+                  <div class="flex items-center gap-2.5 text-[12.5px]">
+                    <svg class="w-4 h-4 animate-spin text-sky-400" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" opacity=".25"/><path d="M21 12a9 9 0 00-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+                    <span x-text="t('vulnStep_' + (vuln.data.state.install_step || 'start'))"></span>
+                  </div>
+                </template>
+                <template x-if="!vuln.data?.state?.installing && !vuln.data?.trivy?.installed">
+                  <div class="space-y-2.5">
+                    <p class="text-[11.5px] text-muted leading-relaxed" x-text="t('vulnNotInstalled')"></p>
+                    <p x-show="vuln.data?.state?.install_error" class="text-[11.5px] text-rose-300 leading-snug" x-text="t('vulnInstallFailed') + ': ' + vuln.data?.state?.install_error"></p>
+                    <button type="button" @click="installTrivy()" class="glass-btn-primary w-full py-2.5 rounded-xl text-[12.5px] font-semibold" x-text="t('vulnInstall')"></button>
+                  </div>
+                </template>
+                <template x-if="!vuln.data?.state?.installing && vuln.data?.trivy?.installed">
+                  <div class="flex items-center gap-3">
+                    <p class="flex-1 min-w-0 text-[11.5px] text-muted leading-snug"
+                       x-text="t('vulnVersion').replace('{v}', vuln.data.trivy.version || '?').replace('{d}', vuln.data.trivy.db_updated || '?').replace('{s}', fmtBytes(vuln.data.trivy.size))"></p>
+                    <button type="button" @click="installTrivy()" class="glass-btn shrink-0 px-3 py-2 rounded-xl text-[12px] font-semibold" x-text="t('vulnUpdateTrivy')"></button>
+                    <button type="button" @click="uninstallTrivy()" class="glass-btn shrink-0 px-3 py-2 rounded-xl text-[12px] font-semibold text-rose-300" x-text="t('vulnUninstall')"></button>
+                  </div>
+                </template>
+              </div>
+            </section>
+            <!-- Cài đặt -->
+            <section x-show="vuln.data?.trivy?.installed">
+              <div class="glass-inset rounded-[20px] overflow-hidden divide-y divide-[var(--glass-border)]">
+                <div class="flex items-center gap-3 px-3.5 py-3">
+                  <div class="min-w-0 flex-1"><p class="text-[13.5px] font-semibold" x-text="t('vulnEnable')"></p><p class="text-[11.5px] text-muted leading-snug mt-0.5" x-text="t('vulnEnableDesc')"></p></div>
+                  <button type="button" role="switch" :aria-checked="vuln.data?.settings?.enabled" @click="saveVulnSettings({ enabled: !vuln.data.settings.enabled })"
+                        class="w-11 h-6 rounded-full relative shrink-0 transition" :class="vuln.data?.settings?.enabled ? 'bg-emerald-500' : 'bg-slate-500/50'">
+                  <span class="keep-round absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform" :class="vuln.data?.settings?.enabled && 'translate-x-5'"></span>
+                </button>
+                </div>
+                <div x-show="vuln.data?.settings?.enabled" class="px-3.5 py-3 space-y-2.5">
+                  <p class="text-[13px] font-semibold" x-text="t('vulnSchedule')"></p>
+                  <div class="glass-dock p-0.5 rounded-xl grid grid-cols-3 gap-0.5 text-[11.5px] font-semibold">
+                    <template x-for="sc in ['daily', 'weekly', 'manual']" :key="sc">
+                      <button type="button" @click="saveVulnSettings({ schedule: sc })" class="py-1.5 rounded-[10px] transition"
+                              :class="vuln.data?.settings?.schedule === sc ? 'bg-sky-500/25 text-sky-300' : 'text-muted'" x-text="t('vulnSched_' + sc)"></button>
+                    </template>
+                  </div>
+                  <div x-show="vuln.data?.settings?.schedule !== 'manual'" class="grid grid-cols-2 gap-2">
+                    <label class="space-y-1"><span class="block text-[11px] text-muted" x-text="t('vulnTime')"></span>
+                      <input type="time" :value="vuln.data?.settings?.time" @change="saveVulnSettings({ time: $event.target.value })" class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code text-center" /></label>
+                    <label x-show="vuln.data?.settings?.schedule === 'weekly'" class="space-y-1"><span class="block text-[11px] text-muted" x-text="t('vulnWeekday')"></span>
+                      <select @change="saveVulnSettings({ weekday: +$event.target.value })" class="glass-input w-full rounded-xl px-3 py-2 text-xs">
+                        <template x-for="(d, idx) in t('weekdays')" :key="idx"><option :value="idx" :selected="vuln.data?.settings?.weekday === idx" x-text="d"></option></template>
+                      </select></label>
+                  </div>
+                </div>
+                <div x-show="vuln.data?.settings?.enabled" class="flex items-center gap-3 px-3.5 py-3">
+                  <div class="min-w-0 flex-1"><p class="text-[13.5px] font-semibold" x-text="t('vulnAfterUpdate')"></p><p class="text-[11.5px] text-muted leading-snug mt-0.5" x-text="t('vulnAfterUpdateDesc')"></p></div>
+                  <button type="button" role="switch" :aria-checked="vuln.data?.settings?.after_update" @click="saveVulnSettings({ after_update: !vuln.data.settings.after_update })"
+                        class="w-11 h-6 rounded-full relative shrink-0 transition" :class="vuln.data?.settings?.after_update ? 'bg-emerald-500' : 'bg-slate-500/50'">
+                  <span class="keep-round absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform" :class="vuln.data?.settings?.after_update && 'translate-x-5'"></span>
+                </button>
+                </div>
+                <div class="px-3.5 py-3 space-y-2">
+                  <p class="text-[13.5px] font-semibold" x-text="t('vulnSeverities')"></p>
+                  <p class="text-[11.5px] text-muted leading-snug" x-text="t('vulnSeveritiesDesc')"></p>
+                  <div class="flex flex-wrap gap-1.5 pt-0.5">
+                    <template x-for="sv in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']" :key="sv">
+                      <button type="button" class="px-2.5 h-7 rounded-lg text-[11.5px] font-semibold border transition"
+                              :class="vuln.data?.settings?.severities?.includes(sv) ? vulnSevCls(sv) : 'border-[var(--glass-border)] text-muted'"
+                              @click="const cur = vuln.data.settings.severities; saveVulnSettings({ severities: cur.includes(sv) ? cur.filter(x => x !== sv) : [...cur, sv] })"
+                              x-text="vulnSevLabel(sv)"></button>
+                    </template>
+                  </div>
+                </div>
+                <div class="flex items-center gap-3 px-3.5 py-3">
+                  <div class="min-w-0 flex-1"><p class="text-[13.5px] font-semibold" x-text="t('vulnFixable')"></p><p class="text-[11.5px] text-muted leading-snug mt-0.5" x-text="t('vulnFixableDesc')"></p></div>
+                  <button type="button" role="switch" :aria-checked="vuln.data?.settings?.fixable_only" @click="saveVulnSettings({ fixable_only: !vuln.data.settings.fixable_only })"
+                        class="w-11 h-6 rounded-full relative shrink-0 transition" :class="vuln.data?.settings?.fixable_only ? 'bg-emerald-500' : 'bg-slate-500/50'">
+                  <span class="keep-round absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform" :class="vuln.data?.settings?.fixable_only && 'translate-x-5'"></span>
+                </button>
+                </div>
+              </div>
+            </section>
+            <!-- Quét ngay + kết quả -->
+            <section x-show="vuln.data?.trivy?.installed">
+              <div class="flex items-center justify-between px-3.5 mb-1.5">
+                <p class="text-[10.5px] font-bold uppercase tracking-[0.12em] text-subtle" x-text="t('vulnResults')"></p>
+                <button type="button" @click="scanVulns('')" :disabled="vuln.data?.state?.running" class="text-[12px] font-semibold text-sky-400 disabled:opacity-50" x-text="t('vulnScanAll')"></button>
+              </div>
+              <p x-show="vuln.data?.state?.running" class="px-3.5 mb-2 text-[11.5px] text-sky-300"
+                 x-text="t('vulnScanning').replace('{d}', vuln.data?.state?.done).replace('{t}', vuln.data?.state?.total).replace('{c}', vuln.data?.state?.current || '…')"></p>
+              <div class="glass-inset rounded-[20px] overflow-hidden divide-y divide-[var(--glass-border)]">
+                <p x-show="!vulnApps().length" class="px-3.5 py-3 text-[12px] text-muted" x-text="t('vulnNoResults')"></p>
+                <template x-for="row in vulnApps()" :key="row.name">
+                  <button type="button" @click="openVulns(row.app)" class="w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-white/[0.03]">
+                    <span class="min-w-0 flex-1">
+                      <span class="block text-[13px] font-semibold truncate" x-text="row.app.title || row.name"></span>
+                      <span class="block text-[11px] text-muted truncate" x-text="row.r.error ? t('vulnError') : (vulnBadge(row.app) ? '' : t('vulnClean'))"></span>
+                    </span>
+                    <span class="flex items-center gap-1 shrink-0">
+                      <template x-for="sv in ['CRITICAL', 'HIGH', 'MEDIUM']" :key="sv">
+                        <span x-show="row.r.counts?.[sv]" class="px-1.5 h-5 inline-flex items-center rounded-md text-[10px] font-bold border" :class="vulnSevCls(sv)"
+                              x-text="row.r.counts?.[sv] + ' ' + vulnSevLabel(sv).charAt(0)"></span>
+                      </template>
+                    </span>
+                    <svg class="w-4 h-4 text-subtle shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+                  </button>
+                </template>
+              </div>
+            </section>
           </div>
         </template>
 
@@ -3505,6 +3645,72 @@
               x-text="settingsChanges() === 1 ? t('pendChange') : t('pendChanges').replace('{n}', settingsChanges())"></span>
         <button type="button" @click="discardSettings()" class="px-3 py-2 rounded-xl text-[12.5px] font-semibold text-muted hover:text-[var(--text-primary)] transition" x-text="t('discardBtn')"></button>
         <button type="button" @click="saveSettings()" class="glass-btn-primary px-4 py-2 rounded-[14px] text-[12.5px] font-semibold" x-text="t('saveBtn')"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lỗ hổng của một app (0.26) -->
+  <div x-show="vuln.modal.open" x-cloak x-transition.opacity
+       class="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 bg-black/65 backdrop-blur-md"
+       @click.self="vuln.modal.open = false" @keydown.escape.window="vuln.modal.open = false">
+    <div class="glass-panel w-full max-w-2xl rounded-t-[28px] sm:rounded-[28px] p-5 sm:p-6 flex flex-col max-h-[90dvh]"
+         style="padding-bottom: calc(1.25rem + var(--sab));" data-vuln-modal>
+      <div class="flex items-start justify-between gap-3 pb-3 border-b border-[var(--glass-border)]">
+        <div class="min-w-0">
+          <h3 class="font-bold text-base truncate" x-text="t('vulnModalTitle') + ' · ' + (vuln.modal.app?.title || vuln.modal.app?.name || '')"></h3>
+          <p class="font-mono-code text-[10.5px] text-subtle truncate" x-text="vuln.modal.detail?.image || vuln.modal.app?.image"></p>
+          <p x-show="vuln.modal.detail?.scanned_at" class="text-[11px] text-muted" x-text="t('vulnScannedAt').replace('{t}', vuln.modal.detail ? new Date(vuln.modal.detail.scanned_at * 1000).toLocaleString() : '')"></p>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button x-show="canUpdate() && vuln.data?.trivy?.installed" type="button" @click="scanVulns(vuln.modal.app.name)" :disabled="vuln.data?.state?.running"
+                  class="glass-btn px-3 h-8 rounded-full text-[12px] font-semibold text-sky-400 disabled:opacity-50" x-text="vuln.data?.state?.running ? t('vulnStarted') : t('vulnRescan')"></button>
+          <button type="button" @click="vuln.modal.open = false" :aria-label="t('close')" class="glass-btn w-8 h-8 rounded-full flex items-center justify-center text-muted">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="flex-1 overflow-y-auto pt-3 space-y-3">
+        <p x-show="vuln.modal.loading" class="text-[12px] text-muted">…</p>
+        <template x-if="!vuln.modal.loading && !vuln.modal.detail">
+          <p class="text-[12.5px] text-muted" x-text="t('vulnNotScanned') + (vuln.data?.trivy?.installed ? '' : ' ' + t('vulnNeedInstall'))"></p>
+        </template>
+        <template x-if="vuln.modal.detail?.error">
+          <p class="text-[12px] text-rose-300 leading-snug" x-text="t('vulnError') + ': ' + vuln.modal.detail.error"></p>
+        </template>
+        <template x-if="vuln.modal.detail && !vuln.modal.detail.error">
+          <div class="space-y-3">
+            <div class="flex flex-wrap gap-1.5">
+              <button type="button" @click="vuln.modal.sev = 'ALL'" class="px-2.5 h-7 rounded-lg text-[11.5px] font-semibold border"
+                      :class="vuln.modal.sev === 'ALL' ? 'bg-sky-500/20 text-sky-300 border-sky-400/45' : 'border-[var(--glass-border)] text-muted'"
+                      x-text="t('vulnAll') + ' ' + (vuln.modal.detail.findings || []).length"></button>
+              <template x-for="sv in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN']" :key="sv">
+                <button type="button" x-show="vuln.modal.detail.counts?.[sv]" @click="vuln.modal.sev = sv" class="px-2.5 h-7 rounded-lg text-[11.5px] font-semibold border"
+                        :class="vuln.modal.sev === sv ? vulnSevCls(sv) : 'border-[var(--glass-border)] text-muted'"
+                        x-text="vulnSevLabel(sv) + ' ' + vuln.modal.detail.counts[sv]"></button>
+              </template>
+              <button type="button" @click="vuln.modal.fixable = !vuln.modal.fixable" class="px-2.5 h-7 rounded-lg text-[11.5px] font-semibold border"
+                      :class="vuln.modal.fixable ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/45' : 'border-[var(--glass-border)] text-muted'" x-text="t('vulnOnlyFix')"></button>
+            </div>
+            <p class="text-[11px] text-subtle leading-snug" x-text="t('vulnHint')"></p>
+            <p x-show="!vulnFindings().length" class="text-[12.5px] text-emerald-300" x-text="t('vulnNone')"></p>
+            <div class="glass-inset rounded-2xl overflow-hidden divide-y divide-[var(--glass-border)]">
+              <template x-for="f in vulnFindings().slice(0, 300)" :key="f.id + f.pkg + f.installed">
+                <div class="px-3 py-2.5 space-y-1" data-finding>
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span class="px-1.5 h-5 inline-flex items-center rounded-md text-[10px] font-bold border shrink-0" :class="vulnSevCls(f.severity)" x-text="vulnSevLabel(f.severity)"></span>
+                    <a :href="f.url || ('https://nvd.nist.gov/vuln/detail/' + f.id)" target="_blank" rel="noopener" class="font-mono-code text-[12px] text-sky-300 truncate" x-text="f.id"></a>
+                  </div>
+                  <p class="text-[11.5px] leading-snug" x-show="f.title" x-text="f.title"></p>
+                  <p class="font-mono-code text-[10.5px] text-muted break-all">
+                    <span x-text="f.pkg + ' ' + f.installed"></span>
+                    <span x-text="' → '"></span>
+                    <span :class="f.fixed ? 'text-emerald-300' : 'text-subtle'" x-text="f.fixed ? t('vulnFixedIn').replace('{v}', f.fixed) : t('vulnNoFix')"></span>
+                  </p>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
       </div>
     </div>
   </div>

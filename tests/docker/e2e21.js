@@ -21,7 +21,7 @@ const results = []; const check = (n, c, d = '') => { results.push(!!c); console
   const a = await page('admin');
   await a.D('d.openSettings()'); await sleep(1200);
   await a.getByText('Tài khoản & quyền', { exact: true }).click(); await sleep(1000);
-  check('Admin sees the Accounts & permissions section with role explanations', (await a.textContent('body')).includes('Xem + kiểm tra và cài bản mới'));
+  check('Admin sees the Accounts & Permissions section with role explanations', (await a.textContent('body')).includes('Xem + kiểm tra và cài bản mới'));
   for (const [u, role] of [['minh', 'Cập nhật'], ['khach', 'Chỉ xem']]) {
     await a.getByRole('button', { name: 'Thêm tài khoản' }).click(); await sleep(400);
     await a.fill('input[x-model="usersState.form.username"]', u);
