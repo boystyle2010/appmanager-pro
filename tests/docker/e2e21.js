@@ -55,7 +55,7 @@ const results = []; const check = (n, c, d = '') => { results.push(!!c); console
   await v.D('d.closeUpdateModal()'); await sleep(300);
   await v.D('d.openSettings()'); await sleep(1200);
   const menu = await v.D('return d.settingsMenu().flatMap(g => g.items.map(i => i.tab)).join(",")');
-  check('View only: Settings keep only own account, update history and about', menu === 'security,history,about', menu);
+  check('View only: Settings keep only language, own account, update history and about', menu === 'language,security,history,about', menu);
   await v.screenshot({ path: OUT + '/u6-viewer-settings.png' });
 
   // Cập nhật

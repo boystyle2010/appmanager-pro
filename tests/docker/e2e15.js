@@ -16,7 +16,7 @@ const results = []; const check = (n, c, d = '') => { results.push(!!c); console
   const shot = async (name) => { await p.evaluate(() => document.querySelector('[x-model="notifyState.edit.name"]')?.parentElement?.scrollIntoView({ block: 'start' })); await sleep(300); await p.screenshot({ path: OUT + '/' + name }); };
   const types = await D('return d.notifyGroups().flatMap(g => g.types)');
   check('17 channel types in 3 groups', types.length === 17, JSON.stringify(types));
-  check('Telegram shows 6 platform icons, no dots on the picker', await p.evaluate(() => [...document.querySelectorAll('svg')].filter(x => x.getAttribute('x-html') === 'platformIcon(pf)' && x.getBoundingClientRect().width > 0).length) === 6
+  check('Telegram shows 6 platform icons, no dots on the picker', await p.evaluate(() => [...document.querySelectorAll('svg')].filter(x => x.getAttribute('x-html') === 'platformIcon(pf)' && !x.closest('[data-wp]') && x.getBoundingClientRect().width > 0).length) === 6
         && await p.evaluate(() => [...document.querySelectorAll('button')].filter(b => /Telegram|Discord|Bark|Signal/.test(b.textContent) && b.querySelector('.rounded-full')).length) === 0);
   const iconOk = await p.evaluate(() => [...document.querySelectorAll('svg')].filter(x => x.getAttribute('x-html') === 'notifyIcon(tp).svg' && x.innerHTML.length > 20).length);
   check('Every channel button shows its icon (17)', iconOk === 17, iconOk);
