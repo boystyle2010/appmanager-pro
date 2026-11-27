@@ -245,6 +245,30 @@ def create_admin_user(username: str, password_hash: str) -> None:
     create_user(username, password_hash, "admin", "")
 
 
+def create_first_admin(username: str, password_hash: str) -> bool:
+    """Tạo Quản trị ĐẦU TIÊN — chỉ khi bảng users còn trống (máy mới cài, hoặc sau RESET_AUTH).
+    Kiểm tra + thêm trong MỘT giao dịch ghi (BEGIN IMMEDIATE): hai yêu cầu cùng lúc không thể cùng tạo. False = đã có tài khoản."""
+    conn = get_connection()
+    try:
+        conn.isolation_level = None
+        conn.execute("BEGIN IMMEDIATE")
+        if conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] > 0:
+            conn.execute("ROLLBACK")
+            return False
+        conn.execute("INSERT INTO users (username, password_hash, role, created_by) VALUES (?, ?, 'admin', '')",
+                     (username, password_hash))
+        conn.execute("COMMIT")
+        return True
+    except Exception:
+        try:
+            conn.execute("ROLLBACK")
+        except Exception:
+            pass
+        raise
+    finally:
+        conn.close()
+
+
 def create_user(username: str, password_hash: str, role: str, created_by: str) -> None:
     conn = get_connection()
     try:

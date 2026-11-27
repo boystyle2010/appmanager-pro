@@ -38,6 +38,7 @@ fresh d34; suite "34. SSO / OIDC (mock provider, RS256 / ES256, every error case
 fresh d35; suite "35. SSO with a real Keycloak 26" env S=$S timeout 600 python -u $S/t_sso_keycloak.py
 fresh d37; suite "37. AppManager configuration backup / restore" env S=$S bash -c "bash $S/setup.sh >/dev/null 2>&1; timeout 600 python -u $S/t_config.py"
 fresh d39; suite "39. Web Push (RFC 8291 / VAPID, fake push service)" env S=$S timeout 600 python -u $S/t_webpush.py
+fresh d43; suite "43. First administrator only on a fresh install (race, RESET_AUTH)" env S=$S timeout 300 python -u $S/t_setup.py
 fresh d25; suite "25. Release channels" env APP_DATA_DIR=$S/d25 timeout 300 python -u $S/t_channels.py
 echo; echo "Result:"; grep -E "^(===|SUMMARY|FAIL)" "$OUT"
 exit $FAILED

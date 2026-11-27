@@ -20,7 +20,7 @@ from app.core.database import (
     add_login_failure,
     clear_login_failures,
     count_recent_failures,
-    create_admin_user,
+    create_first_admin,
     get_setting,
     get_user_by_username,
     has_admin_user,
@@ -371,7 +371,8 @@ def setup_first_admin(username: str, password: str) -> None:
             status_code=400,
             detail="Username must be at least 3 chars and password at least 8 chars",
         )
-    create_admin_user(username, hash_password(password))
+    if not create_first_admin(username, hash_password(password)):  # có người vừa tạo trước (yêu cầu song song)
+        raise HTTPException(status_code=400, detail="Admin already configured")
 
 
 def validate_new_password(password: str) -> None:

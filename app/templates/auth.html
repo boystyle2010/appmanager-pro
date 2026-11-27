@@ -346,6 +346,7 @@
           otherMachineTitle: 'Want to manage another machine?', otherMachineDesc: 'Each machine running AppManager has its own accounts. Ask the administrator of that machine for an account, or for an API Token so you can add it under Settings → Servers here.',
           setupTitle: 'Create the administrator account', setupNote: 'This machine has no account yet. The first account is the administrator (full access): it can add other accounts, give them roles and turn on single sign-on.',
           noAccountYet: 'This machine has no account yet — create the administrator account in the Sign up tab.',
+          adminExists: 'This machine already has an administrator. The administrator account can only be created right after AppManager is installed — ask the administrator for an account.',
           haveAccount: 'I already have an account', orContinue: 'Or continue with',
           ssoOffHint: 'Google, Authentik, Keycloak, Authelia… can be turned on by an administrator in Settings → Single sign-on.'
         },
@@ -367,6 +368,7 @@
           otherMachineTitle: 'Muốn quản lý một máy khác?', otherMachineDesc: 'Mỗi máy chạy AppManager có tài khoản riêng. Hãy nhờ Quản trị viên của máy đó cấp tài khoản, hoặc cấp API Token để bạn thêm máy đó vào Cài đặt → Máy chủ ở đây.',
           setupTitle: 'Tạo tài khoản Quản trị', setupNote: 'Máy này chưa có tài khoản nào. Tài khoản đầu tiên là Quản trị (toàn quyền): tạo thêm tài khoản, phân vai trò và bật đăng nhập một lần (SSO).',
           noAccountYet: 'Máy này chưa có tài khoản — hãy tạo tài khoản Quản trị ở tab Đăng ký.',
+          adminExists: 'Máy này đã có Quản trị. Tài khoản Quản trị chỉ tạo được ngay sau khi cài AppManager — hãy nhờ Quản trị viên cấp tài khoản.',
           haveAccount: 'Tôi đã có tài khoản', orContinue: 'Hoặc tiếp tục với',
           ssoOffHint: 'Google, Authentik, Keycloak, Authelia… — Quản trị bật trong Cài đặt → Đăng nhập một lần (SSO).'
         }
@@ -490,6 +492,11 @@
               body: JSON.stringify(body)
             });
             const data = await res.json();
+            // Trang mở từ trước, trong lúc đó máy đã có Quản trị -> không cho tạo nữa, chuyển về trạng thái thường
+            if (!res.ok && this.creating() && /already configured/i.test(data.detail || '')) {
+              this.isSetup = false; this.mode = 'signup'; this.password = this.confirmPassword = '';
+              throw new Error(this.t('adminExists'));
+            }
             if (!res.ok) throw new Error(res.status === 403 && this.lang === 'vi' && /disabled/.test(data.detail || '') ? 'Tài khoản này đã bị khoá. Hãy nhờ Quản trị mở lại.' : (data.detail || 'Authentication failed'));
             if (data.otp_required) {
               this.otpStep = true;
