@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.22.0
+
+*Released: 2026-11-27*
+
+### 📦 Component & Version Matrix
+
+- **App Release:** Bumped from `v0.21.0` ➡️ `v0.22.0`
+- **Supported Architectures:** `linux/amd64` (x86_64), `linux/arm64` (ARM64) & `linux/arm/v7` (ARMv7 32-bit) *(Multi-arch GHCR Image)*
+- **Python Base Image:** `python 3.15.2`
+- **Docker CLI:** `docker 29.10.1`
+- **Core Python Stack:** `FastAPI 0.165.0` • `Uvicorn 0.54.0` • `Docker SDK 7.2.0` • `ruamel.yaml 0.19.1` • `Argon2 25.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.29.0` • `APScheduler 3.11.3` • `segno 1.6.6`
+- **Frontend Libraries:** `Alpine.js 3.17.5` • `Tailwind CSS 4.3.5` • `marked 18.3.0` • `DOMPurify 3.5.0`
+
+### 🚀 What's Changed
+
+- Logs: color codes written by many apps (e.g. Portainer, Go and Node apps) are shown as real colors instead of odd characters like `[32m`; search and filters ignore them and downloaded logs are plain text.
+- Multiple accounts with roles (Settings → Accounts & permissions): Admin (everything), Update (view + check for and install updates, start / stop / restart, restore backups, per-app update rules) and View only (apps, versions, changelogs, logs, history). Permissions are enforced by the server for every request and WebSocket; the interface hides what your role cannot do. Accounts created before this version are Admins.
+- Admins add accounts, change roles, reset passwords, disable or delete accounts; changes take effect at once (that person is signed out on every device). There is always at least one active Admin. Changing your own password now signs out only your other devices, not other people.
+- Activity log can be filtered by person (accounts and API Tokens). New API: `GET /api/auth/me`, `/api/users` (admins signed in on the web only), `GET /api/audit?user=`.
+
 ## 0.21.0
 
 *Released: 2026-11-27*
