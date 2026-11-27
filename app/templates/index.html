@@ -3424,7 +3424,7 @@
               </div>
               <p x-show="selfApp?.image" class="font-mono-code text-[10.5px] text-subtle break-all" x-text="selfApp?.image"></p>
               <!-- chẩn đoán hiển thị (PWA / vùng an toàn / build) — giúp tìm lỗi header trên iPhone -->
-              <p class="font-mono-code text-[10px] text-subtle break-all" x-text="displayInfo()"></p>
+              <p class="font-mono-code text-[10px] text-subtle break-words" x-text="displayInfo()"></p>
               <button x-show="selfApp?.has_update" type="button" @click="settingsModal.open = false; openUpdateModal(selfApp)"
                       class="glass-btn-update mt-1 px-4 py-2 rounded-xl text-xs font-semibold" x-text="t('updateNow')"></button>
             </div>
