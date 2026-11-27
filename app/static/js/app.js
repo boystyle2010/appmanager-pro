@@ -405,6 +405,7 @@
           try {
             const q = new URLSearchParams(location.search);
             if (q.get('filter') === 'updates') { this.filter = 'updates'; history.replaceState(null, '', location.pathname); }
+            else if (q.has('r')) history.replaceState(null, '', location.pathname);  // sau "Xoá bộ nhớ đệm"
           } catch (e) {}
           await this.loadMe();
           await this.loadApps();
@@ -645,6 +646,55 @@
         },
 
         setLang(code) { this.lang = code; localStorage.setItem('amp_lang', code); },
+
+        // Xoá bộ nhớ đệm giao diện (PWA / Safari đôi khi giữ bản cũ): xoá Cache Storage, tải lại các file giao diện
+        // bỏ qua bộ nhớ đệm HTTP, cập nhật Service Worker (KHÔNG gỡ — Web Push cần nó), rồi tải lại trang.
+        // Giữ nguyên: đăng nhập (cookie), cài đặt Giao diện / ngôn ngữ (localStorage), thiết bị nhận Web Push.
+        cacheBusy: false,
+        cacheState: { stats: null, busy: '' },
+        fmtBytes(b) { b = b || 0; return b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1) + ' KB' : (b / 1048576).toFixed(1) + ' MB'; },
+        async loadCaches() {
+          try { const r = await fetch('/api/system/caches'); if (r.ok) this.cacheState.stats = await r.json(); } catch (_) {}
+        },
+        // Bộ đệm trên máy chủ (Quản trị): có hộp xác nhận + nói rõ sẽ mất gì / giữ gì
+        clearServerCache(kind) {
+          this.askConfirm({ tone: kind === 'resources' ? 'danger' : 'primary', title: this.t('cc_' + kind), message: this.t('ccConfirm_' + kind),
+            confirmLabel: this.t('ccClearBtn'), onConfirm: async () => {
+              this.cacheState.busy = kind;
+              try {
+                const { res, data } = await this._postJson('/api/system/caches/clear', { kind });
+                if (!res.ok) throw new Error(data.detail || 'Failed');
+                this.showToast(this.t('ccDone').replace('{n}', data.cleared ?? 0));
+                if (kind === 'updates') this.checkUpdates(true);
+                if (kind === 'http' && this.loadApiStatus) this.loadApiStatus();
+              } catch (e) { this.showToast(e.message); }
+              finally { this.cacheState.busy = ''; this.loadCaches(); }
+            } });
+        },
+        // Đưa Giao diện trên thiết bị này + đèn trang đăng nhập về mặc định (không đụng cài đặt trên máy chủ)
+        resetDeviceUi() {
+          this.askConfirm({ tone: 'primary', title: this.t('ccUiReset'), message: this.t('ccConfirm_ui'), confirmLabel: this.t('ccResetBtn'), onConfirm: () => {
+            ['amp_ui', 'amp_lamp_on', 'amp_lamp_color', 'amp_banner_dismissed'].forEach(k => { try { localStorage.removeItem(k); } catch (_) {} });
+            this.ui = { accent: 'sky', text: 'm', radius: 'soft', icons: 'tint', appIcon: 'default' };
+            this.uiBase = { ...this.ui }; this.applyUi();
+            this.showToast(this.t('ccUiResetDone'));
+          } });
+        },
+        async clearCache() {
+          if (this.cacheBusy) return;
+          this.cacheBusy = true;
+          try { if (window.caches) for (const k of await caches.keys()) await caches.delete(k); } catch (_) {}
+          try {
+            const urls = [...document.querySelectorAll('link[rel="stylesheet"][href^="/static/"], script[src^="/static/"]')]
+              .map(el => el.getAttribute('href') || el.getAttribute('src'));
+            urls.push('/', '/login', '/manifest.json', '/sw.js');
+            await Promise.all(urls.map(u => fetch(u, { cache: 'reload', credentials: 'same-origin' }).catch(() => null)));
+          } catch (_) {}
+          try { const reg = await navigator.serviceWorker?.getRegistration('/'); await reg?.update(); } catch (_) {}
+          try { sessionStorage.removeItem('amp_reload_for'); } catch (_) {}
+          this.showToast(this.t('clearCacheDone'));
+          setTimeout(() => window.location.replace('/?r=' + Date.now()), 700);
+        },
 
         // ---------------- Giao diện ----------------
         uiOptions() {
@@ -2199,6 +2249,7 @@
           else if (tab === 'users') this.loadUsers();
           else if (tab === 'sso') this.loadSso();
           else if (tab === 'config') this.loadConfigBackup();
+          else if (tab === 'cache' && this.isAdmin()) this.loadCaches();
         },
 
         // ---------------- Nhiều máy chủ (0.18) ----------------
@@ -2500,7 +2551,7 @@
 
         settingsSectionTitle() {
           return {
-            home: this.t('settingsTitle'), language: this.t('language'), appearance: this.t('appearance'), schedule: this.t('setGeneral'), storage: this.t('setStorage'), users: this.t('setUsers'), sso: this.t('setSso'), config: this.t('setConfig'),
+            home: this.t('settingsTitle'), language: this.t('language'), appearance: this.t('appearance'), cache: this.t('setCache'), schedule: this.t('setGeneral'), storage: this.t('setStorage'), users: this.t('setUsers'), sso: this.t('setSso'), config: this.t('setConfig'),
             notify: this.t('setNotify'), servers: this.t('setServers'), security: this.t('tabSecurity'), tokens: this.t('setTokens'), history: this.t('tabHistory'), about: this.t('tabAbout'),
           }[this.settingsModal.tab] || this.t('settingsTitle');
         },
@@ -2528,7 +2579,7 @@
           I.users = 'M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z';
           const admin = this.isAdmin();
           // Không phải Quản trị: chỉ còn tài khoản của mình (mật khẩu / 2FA), lịch sử cập nhật, giới thiệu
-          const keep = admin ? null : new Set(['appearance', 'language', 'security', 'history', 'about']);
+          const keep = admin ? null : new Set(['appearance', 'language', 'security', 'history', 'about', 'cache']);
           I.swatch = 'M4.098 19.902a3.75 3.75 0 005.304 0l6.401-6.402M6.75 21A3.75 3.75 0 013 17.25V4.125C3 3.504 3.504 3 4.125 3h5.25c.621 0 1.125.504 1.125 1.125v4.072M6.75 21a3.75 3.75 0 003.75-3.75V8.197M6.75 21h13.125c.621 0 1.125-.504 1.125-1.125v-5.25c0-.621-.504-1.125-1.125-1.125h-4.072M10.5 8.197l2.88-2.88c.438-.439 1.15-.439 1.59 0l3.712 3.713c.44.44.44 1.152 0 1.59l-2.879 2.88M6.75 17.25h.008v.008H6.75v-.008z';
           I.globe = 'M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418';
           const f = this.settingsForm || {};
@@ -2558,6 +2609,8 @@
             { id: 'about', label: this.t('grpOther'), items: [
               { tab: 'history', title: this.t('tabHistory'), desc: (this.updateHistory || []).length ? this.t('sumHistory').replace('{n}', this.updateHistory.length) : this.t('setHistoryDesc'), icon: I.clock, color: c('violet') },
               { tab: 'about', title: this.t('tabAbout'), desc: this.t('setAboutDesc'), icon: I.info, color: c('slate') },
+              { tab: 'cache', title: this.t('setCache'), desc: this.t('setCacheDesc'),
+                icon: 'M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99', color: c('sky') },
             ] },
           ];
           if (!keep) return menu;

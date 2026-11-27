@@ -673,3 +673,44 @@ def get_update_log(history_id: int) -> Optional[dict[str, Any]]:
         return dict(row) if row else None
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------- bộ nhớ đệm (Cài đặt → Bộ nhớ đệm)
+def cache_stats() -> dict[str, Any]:
+    conn = get_connection()
+    try:
+        out: dict[str, Any] = {}
+        try:
+            r = conn.execute("SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(body)), 0) AS b FROM http_cache").fetchone()
+            out["http"] = {"count": r["n"], "bytes": r["b"]}
+        except sqlite3.OperationalError:  # chưa có bảng (chưa gọi mạng lần nào)
+            out["http"] = {"count": 0, "bytes": 0}
+        r = conn.execute("SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(changelog)), 0) AS b FROM update_cache WHERE changelog != ''").fetchone()
+        out["updates"] = {"count": r["n"], "bytes": r["b"]}
+        r = conn.execute("SELECT COUNT(*) AS n FROM resource_samples").fetchone()
+        out["resources"] = {"count": r["n"]}
+        return out
+    finally:
+        conn.close()
+
+
+def clear_update_notes() -> int:
+    """Xoá changelog / ghi chú phát hành / lỗi đã lưu — GIỮ phiên bản, digest, mốc first_seen (quy tắc "đợi N ngày")."""
+    conn = get_connection()
+    try:
+        n = conn.execute("UPDATE update_cache SET changelog = '', release_tag = '', release_url = '', published_at = '', error = '' "
+                         "WHERE changelog != '' OR release_tag != '' OR error != ''").rowcount
+        conn.commit()
+        return n
+    finally:
+        conn.close()
+
+
+def clear_resource_samples() -> int:
+    conn = get_connection()
+    try:
+        n = conn.execute("DELETE FROM resource_samples").rowcount
+        conn.commit()
+        return n
+    finally:
+        conn.close()

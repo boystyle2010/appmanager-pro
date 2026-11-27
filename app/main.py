@@ -1918,6 +1918,39 @@ async def api_net_cache_clear(request: Request, user: str = Depends(require_user
     return {"ok": True, "cleared": n}
 
 
+class CacheClearPayload(BaseModel):
+    kind: str  # http | updates | resources | sso
+
+
+@app.get("/api/system/caches")
+async def api_caches(user: str = Depends(require_user)):
+    """Cài đặt → Bộ nhớ đệm: số mục / dung lượng các bộ đệm trên máy chủ (Quản trị)."""
+    from app.core import database as db
+    stats = await asyncio.to_thread(db.cache_stats)
+    stats["sso"] = {"count": len(oidc._DISCOVERY_CACHE) + len(oidc._JWKS_CACHE)}
+    return stats
+
+
+@app.post("/api/system/caches/clear")
+async def api_caches_clear(payload: CacheClearPayload, request: Request, user: str = Depends(require_user)):
+    from app.core import database as db
+    kind = payload.kind
+    if kind == "http":
+        n = await asyncio.to_thread(net.clear_cache)
+    elif kind == "updates":  # changelog / ghi chú đã lưu + bộ đệm mạng -> lần kiểm tra kế tiếp lấy mới hoàn toàn
+        n = await asyncio.to_thread(db.clear_update_notes)
+        await asyncio.to_thread(net.clear_cache)
+    elif kind == "resources":
+        n = await asyncio.to_thread(db.clear_resource_samples)
+    elif kind == "sso":
+        n = len(oidc._DISCOVERY_CACHE) + len(oidc._JWKS_CACHE)
+        oidc._DISCOVERY_CACHE.clear(); oidc._JWKS_CACHE.clear()
+    else:
+        raise HTTPException(status_code=400, detail="Unknown cache")
+    audit(request, user, "cache_clear", kind, str(n))
+    return {"ok": True, "kind": kind, "cleared": n}
+
+
 class DuplicateComposePayload(BaseModel):
     action: str  # "merge" | "skip"
 

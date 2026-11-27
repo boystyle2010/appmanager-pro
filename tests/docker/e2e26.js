@@ -63,6 +63,26 @@ const R = []; const check = (n, c, d = '') => { R.push(!!c); console.log((c ? 'P
   const bad = await p.evaluate(async () => (await (await fetch('/manifest.json?icon=../x')).json()).icons[0].src);
   const img = await p.evaluate(async () => (await fetch('/assets/icon-emerald.png')).status);
   check('Manifest serves the chosen icon (unknown names fall back)', mf === '/assets/icon-emerald.png' && bad === '/assets/icon.png' && img === 200, mf + ' ' + bad + ' ' + img);
+  // Bộ nhớ đệm: trang riêng (thiết bị này + máy chủ)
+  await D('d.openSettings()'); await sleep(1000);
+  await p.getByText('Bộ nhớ đệm', { exact: true }).click(); await sleep(1200);
+  const st = await D('return d.cacheState.stats');
+  check('Cache page shows server caches with counts (network, changelogs, SSO, CPU/RAM)', st && st.http && st.updates && st.resources && st.sso, JSON.stringify(st));
+  await p.screenshot({ path: OUT + '/c7-cache.png' });
+  const rowBtn = (key) => p.locator(`[data-cache="${key}"] button`);
+  check('Each cache explains what it is for ("Nên xoá khi")', await p.locator('[data-cache]').count() === 7 && (await p.textContent('body')).includes('Bộ nhớ đệm là gì?'));
+  await rowBtn('http').click(); await sleep(400);
+  check('Server cache asks for confirmation first', await D('return d.confirmModal.open'));
+  await D('d.confirmModal.onConfirm(); d.confirmModal.open = false'); await sleep(1500);
+  const st2 = await D('return d.cacheState.stats');
+  check('Network cache cleared on the server', st2.http.count === 0, JSON.stringify(st2.http));
+  await rowBtn('uireset').click(); await sleep(300); await D('d.confirmModal.onConfirm(); d.confirmModal.open = false'); await sleep(400);
+  check('Reset appearance on this device -> defaults', (await p.evaluate(() => document.documentElement.dataset.accent)) === 'sky' && (await p.evaluate(() => localStorage.getItem('amp_ui'))) === null);
+  await D("d.setUi('accent', 'emerald')"); await D('d.saveSettings()'); await sleep(500);
+  await rowBtn('ui').click();
+  await p.waitForURL(/\/(\?r=\d+)?$/, { timeout: 8000 }).catch(() => {}); await sleep(2500);
+  const after2 = await p.evaluate(() => ({ url: location.href, me: !!document.querySelector('.glass-header'), accent: document.documentElement.dataset.accent }));
+  check('"Clear & reload" reloads the page, keeps the sign-in and the appearance, cleans the address', after2.me && after2.accent === 'emerald' && !after2.url.includes('?r='), JSON.stringify(after2));
   check('No JavaScript errors', !errs.length, errs.join(' | '));
   console.log(`SUMMARY ${R.filter(Boolean).length} / ${R.length}`);
   await b.close();

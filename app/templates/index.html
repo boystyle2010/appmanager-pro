@@ -1890,7 +1890,7 @@
                 <p class="px-3.5 mb-1.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-subtle" x-text="group.label"></p>
                 <div class="glass-inset rounded-[20px] overflow-hidden divide-y divide-[var(--glass-border)]">
                   <template x-for="item in group.items" :key="item.tab">
-                    <button type="button" @click="openSettingsSection(item.tab)"
+                    <button type="button" @click="item.action ? item.action() : openSettingsSection(item.tab)"
                             class="w-full flex items-center gap-3 px-3.5 py-3 text-left hover:bg-white/[0.03] active:bg-white/[0.06] transition">
                       <span class="w-9 h-9 rounded-[12px] flex items-center justify-center shrink-0 border" :class="iconCls(item.color)">
                         <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" :d="item.icon"/></svg>
@@ -2020,6 +2020,129 @@
               <p class="px-1 mt-2 text-[11px] text-subtle leading-snug" x-text="t('uiAppIconNote')"></p>
             </section>
             <p class="px-1 text-[11px] text-subtle" x-text="t('uiDeviceNote')"></p>
+          </div>
+        </template>
+
+        <!-- Bộ nhớ đệm: giải thích + thiết bị này (mọi người) + trên máy chủ (Quản trị); mỗi mục có "Nên xoá khi" -->
+        <template x-if="settingsModal.tab === 'cache'">
+          <div class="space-y-5 pb-2">
+            <div class="glass-inset rounded-[20px] p-3.5 flex gap-3">
+              <span class="w-9 h-9 rounded-[12px] flex items-center justify-center shrink-0 border bg-sky-500/15 border-sky-400/35 text-sky-400">
+                <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"/></svg>
+              </span>
+              <div class="min-w-0">
+                <p class="text-[13.5px] font-semibold" x-text="t('ccIntroTitle')"></p>
+                <p class="text-[11.5px] text-muted leading-relaxed mt-0.5" x-text="t('ccIntro')"></p>
+              </div>
+            </div>
+            <section>
+              <p class="px-3.5 mb-1.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-subtle" x-text="t('grpThisDevice')"></p>
+              <div class="glass-inset rounded-[20px] overflow-hidden divide-y divide-[var(--glass-border)]">
+                <div class="px-3.5 py-3" data-cache="ui">
+                  <div class="flex items-start gap-3">
+                    <div class="min-w-0 flex-1">
+                      <p class="text-[13.5px] font-semibold" x-text="t('ccUi')"></p>
+                      <p class="text-[11.5px] text-muted leading-snug mt-0.5" x-text="t('ccUiDesc')"></p>
+                    </div>
+                    <button type="button" @click="clearCache()" :disabled="cacheBusy"
+                            class="glass-btn shrink-0 px-3.5 py-2 rounded-xl text-[12px] font-semibold disabled:opacity-50" x-text="cacheBusy ? t('clearCacheBusy') : t('ccUiBtn')"></button>
+                  </div>
+                  <p class="mt-2 text-[11px] leading-snug text-sky-300/90 flex gap-1.5">
+                    <svg class="w-3.5 h-3.5 shrink-0 mt-px" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18"/></svg>
+                    <span><b class="font-semibold" x-text="t('ccWhen')"></b> <span x-text="t('ccWhen_ui')"></span></span>
+                  </p>
+                </div>
+                <div class="px-3.5 py-3" data-cache="uireset">
+                  <div class="flex items-start gap-3">
+                    <div class="min-w-0 flex-1">
+                      <p class="text-[13.5px] font-semibold" x-text="t('ccUiReset')"></p>
+                      <p class="text-[11.5px] text-muted leading-snug mt-0.5" x-text="t('ccUiResetDesc')"></p>
+                    </div>
+                    <button type="button" @click="resetDeviceUi()" :disabled="false"
+                            class="glass-btn shrink-0 px-3.5 py-2 rounded-xl text-[12px] font-semibold disabled:opacity-50" x-text="t('ccResetBtn')"></button>
+                  </div>
+                  <p class="mt-2 text-[11px] leading-snug text-sky-300/90 flex gap-1.5">
+                    <svg class="w-3.5 h-3.5 shrink-0 mt-px" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18"/></svg>
+                    <span><b class="font-semibold" x-text="t('ccWhen')"></b> <span x-text="t('ccWhen_uireset')"></span></span>
+                  </p>
+                </div>
+              </div>
+            </section>
+            <section x-show="isAdmin()">
+              <p class="px-3.5 mb-1.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-subtle" x-text="t('grpServer')"></p>
+              <div class="glass-inset rounded-[20px] overflow-hidden divide-y divide-[var(--glass-border)]">
+                <div class="px-3.5 py-3" data-cache="http">
+                  <div class="flex items-start gap-3">
+                    <div class="min-w-0 flex-1">
+                      <p class="text-[13.5px] font-semibold" x-text="t('cc_http')"></p>
+                      <p class="text-[11.5px] text-muted leading-snug mt-0.5" x-text="t('cc_http_desc').replace('{n}', cacheState.stats?.http?.count ?? '…').replace('{s}', fmtBytes(cacheState.stats?.http?.bytes))"></p>
+                    </div>
+                    <button type="button" @click="clearServerCache('http')" :disabled="cacheState.busy === 'http'"
+                            class="glass-btn shrink-0 px-3.5 py-2 rounded-xl text-[12px] font-semibold disabled:opacity-50" x-text="t('ccClearBtn')"></button>
+                  </div>
+                  <p class="mt-2 text-[11px] leading-snug text-sky-300/90 flex gap-1.5">
+                    <svg class="w-3.5 h-3.5 shrink-0 mt-px" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18"/></svg>
+                    <span><b class="font-semibold" x-text="t('ccWhen')"></b> <span x-text="t('ccWhen_http')"></span></span>
+                  </p>
+                </div>
+                <div class="px-3.5 py-3" data-cache="updates">
+                  <div class="flex items-start gap-3">
+                    <div class="min-w-0 flex-1">
+                      <p class="text-[13.5px] font-semibold" x-text="t('cc_updates')"></p>
+                      <p class="text-[11.5px] text-muted leading-snug mt-0.5" x-text="t('cc_updates_desc').replace('{n}', cacheState.stats?.updates?.count ?? '…')"></p>
+                    </div>
+                    <button type="button" @click="clearServerCache('updates')" :disabled="cacheState.busy === 'updates'"
+                            class="glass-btn shrink-0 px-3.5 py-2 rounded-xl text-[12px] font-semibold disabled:opacity-50" x-text="t('ccClearBtn')"></button>
+                  </div>
+                  <p class="mt-2 text-[11px] leading-snug text-sky-300/90 flex gap-1.5">
+                    <svg class="w-3.5 h-3.5 shrink-0 mt-px" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18"/></svg>
+                    <span><b class="font-semibold" x-text="t('ccWhen')"></b> <span x-text="t('ccWhen_updates')"></span></span>
+                  </p>
+                </div>
+                <div class="px-3.5 py-3" data-cache="sso">
+                  <div class="flex items-start gap-3">
+                    <div class="min-w-0 flex-1">
+                      <p class="text-[13.5px] font-semibold" x-text="t('cc_sso')"></p>
+                      <p class="text-[11.5px] text-muted leading-snug mt-0.5" x-text="t('cc_sso_desc').replace('{n}', cacheState.stats?.sso?.count ?? '…')"></p>
+                    </div>
+                    <button type="button" @click="clearServerCache('sso')" :disabled="cacheState.busy === 'sso'"
+                            class="glass-btn shrink-0 px-3.5 py-2 rounded-xl text-[12px] font-semibold disabled:opacity-50" x-text="t('ccClearBtn')"></button>
+                  </div>
+                  <p class="mt-2 text-[11px] leading-snug text-sky-300/90 flex gap-1.5">
+                    <svg class="w-3.5 h-3.5 shrink-0 mt-px" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18"/></svg>
+                    <span><b class="font-semibold" x-text="t('ccWhen')"></b> <span x-text="t('ccWhen_sso')"></span></span>
+                  </p>
+                </div>
+                <div class="px-3.5 py-3" data-cache="resources">
+                  <div class="flex items-start gap-3">
+                    <div class="min-w-0 flex-1">
+                      <p class="text-[13.5px] font-semibold" x-text="t('cc_resources')"></p>
+                      <p class="text-[11.5px] text-muted leading-snug mt-0.5" x-text="t('cc_resources_desc').replace('{n}', cacheState.stats?.resources?.count ?? '…')"></p>
+                    </div>
+                    <button type="button" @click="clearServerCache('resources')" :disabled="cacheState.busy === 'resources'"
+                            class="glass-btn text-rose-300 shrink-0 px-3.5 py-2 rounded-xl text-[12px] font-semibold disabled:opacity-50" x-text="t('ccClearBtn')"></button>
+                  </div>
+                  <p class="mt-2 text-[11px] leading-snug text-sky-300/90 flex gap-1.5">
+                    <svg class="w-3.5 h-3.5 shrink-0 mt-px" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18"/></svg>
+                    <span><b class="font-semibold" x-text="t('ccWhen')"></b> <span x-text="t('ccWhen_resources')"></span></span>
+                  </p>
+                </div>
+                <div class="px-3.5 py-3" data-cache="docker">
+                  <div class="flex items-start gap-3">
+                    <div class="min-w-0 flex-1">
+                      <p class="text-[13.5px] font-semibold" x-text="t('cc_docker')"></p>
+                      <p class="text-[11.5px] text-muted leading-snug mt-0.5" x-text="t('cc_docker_desc')"></p>
+                    </div>
+                    <button type="button" @click="openSettingsSection('storage')" :disabled="false"
+                            class="glass-btn shrink-0 px-3.5 py-2 rounded-xl text-[12px] font-semibold disabled:opacity-50" x-text="t('ccOpen')"></button>
+                  </div>
+                  <p class="mt-2 text-[11px] leading-snug text-sky-300/90 flex gap-1.5">
+                    <svg class="w-3.5 h-3.5 shrink-0 mt-px" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18"/></svg>
+                    <span><b class="font-semibold" x-text="t('ccWhen')"></b> <span x-text="t('ccWhen_docker')"></span></span>
+                  </p>
+                </div>
+              </div>
+            </section>
           </div>
         </template>
 
