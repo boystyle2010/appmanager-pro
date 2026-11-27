@@ -3,3 +3,4 @@ __pycache__/
 # Sản phẩm build (tạo lúc build image)
 app/static/css/tailwind.css
 app/static/vendor/
+node_modules
