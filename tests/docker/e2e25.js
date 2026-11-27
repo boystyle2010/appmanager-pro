@@ -20,7 +20,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   await p.screenshot({ path: OUT + '/l5-amber.png' });
   // Đăng nhập / Đăng ký + cách đăng nhập khác
   const hint = (await p.textContent('body')).includes('Quản trị bật trong Cài đặt');
-  await p.getByRole('tab', { name: 'Đăng ký' }).click(); await sleep(500);
+  await p.getByRole('tab', { name: 'Tạo tài khoản' }).click(); await sleep(500);
   const su = (await p.textContent('body')).includes('Tài khoản do Quản trị tạo') && !(await p.locator('form').isVisible());
   await p.screenshot({ path: OUT + '/l7-signup.png' });
   await p.getByRole('tab', { name: 'Đăng nhập' }).click(); await sleep(400);
@@ -55,7 +55,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     await f.fill('input[autocomplete="username"]', 'admin'); await f.fill('input[type="password"]', 'Test-Passw0rd!x');
     await f.click('button[type="submit"]'); await sleep(500);
     const noAcc = (await f.textContent('body')).includes('Máy này chưa có tài khoản');
-    await f.getByRole('tab', { name: 'Đăng ký' }).click(); await sleep(500);
+    await f.getByRole('tab', { name: 'Tạo tài khoản' }).click(); await sleep(500);
     const note = (await f.textContent('body')).includes('Tài khoản đầu tiên là Quản trị');
     await f.screenshot({ path: OUT + '/l8-first-run-signup.png' });
     await f.fill('input[autocomplete="username"]', 'admin');
@@ -71,12 +71,12 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   check('Next visit: already on', vis2 === 'visible');
   check('Without JavaScript the sign-in card is still visible', cardVisibleNoJs);
   check('"Or continue with": SSO off -> hint how an administrator turns it on', hint);
-  check('Sign up tab explains accounts are created by an administrator (no open sign-up form)', su);
+  check('Create account tab explains accounts are created by an administrator (no open sign-up form)', su);
   check('Light beam scrolls with the projector (short window)', bm.sy > 0 && Math.abs(bm.y - bm.cy) < 3, JSON.stringify(bm));
   if (first) {
-    check('First run: same Sign in / Sign up page (no separate "create admin" screen)', first.tabs === 2 && first.noConfirm, JSON.stringify(first));
+    check('First run: same Sign in / Create account page (no separate "create admin" screen)', first.tabs === 2 && first.noConfirm, JSON.stringify(first));
     check('First run: signing in explains there is no account yet', first.noAcc);
-    check('First run: Sign up tab creates the administrator account and opens the dashboard', first.note && /\/$/.test(first.url), JSON.stringify(first));
+    check('First run: Create account tab creates the administrator account and opens the dashboard', first.note && /\/$/.test(first.url), JSON.stringify(first));
   }
   check('No JavaScript errors', !errs.length, errs.join(' | '));
   console.log(`SUMMARY ${R.filter(Boolean).length} / ${R.length}`);

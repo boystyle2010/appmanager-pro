@@ -40,8 +40,8 @@ const results = []; const check = (n, c, d = '') => { results.push(!!c); console
   check('Login page shows "Đăng nhập bằng Authentik"', await q.getByText('Đăng nhập bằng Authentik').isVisible());
   const st = await q.evaluate(async () => (await fetch('/api/auth/oidc/status')).json());
   check('Status tells the page which provider icon to show + that SSO can create accounts', st.provider === 'oidc' || st.provider === 'authentik', JSON.stringify(st));
-  await q.getByRole('tab', { name: 'Đăng ký' }).click(); await sleep(500);
-  check('Sign up tab offers "Đăng ký bằng Authentik" when SSO creates accounts', await q.getByText('Đăng ký bằng Authentik').isVisible() === !!st.signup, JSON.stringify(st));
+  await q.getByRole('tab', { name: 'Tạo tài khoản' }).click(); await sleep(500);
+  check('Sign up tab offers "Tạo tài khoản bằng Authentik" when SSO creates accounts', await q.getByText('Tạo tài khoản bằng Authentik').isVisible() === !!st.signup, JSON.stringify(st));
   await q.screenshot({ path: OUT + '/s4b-signup-sso.png' });
   await q.getByRole('tab', { name: 'Đăng nhập' }).click(); await sleep(300);
   await q.screenshot({ path: OUT + '/s4-login-sso.png' });

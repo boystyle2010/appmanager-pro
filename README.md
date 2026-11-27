@@ -224,10 +224,10 @@ docker compose pull && docker compose up -d
 
 **First run — create the administrator account**
 1. Open `http://<server-ip>:<port>` (e.g. `http://192.168.1.10:8098`). The sign-in page shows a server in a dark room: press its **power button** to light up the form.
-2. Choose the **Sign up** tab (it has a small dot while the machine has no account yet).
+2. Choose the **Create account** tab (it has a small dot while the machine has no account yet).
 3. Enter a username (at least 3 characters) and a password (at least 8 characters), confirm it, and tap **Create administrator account**. You are signed in right away.
 
-The first account is the **administrator** (full access). There is no open sign-up after that: the *Sign up* tab only explains how to get an account, so strangers on your network cannot create one.
+The first account is the **administrator** (full access). There is no open account creation after that: the *Create account* tab only explains how to get an account, so strangers on your network cannot create one.
 
 **Adding people (administrator)**
 - *Settings → Accounts & roles → Add*: choose a username, a temporary password and a role:
@@ -239,14 +239,14 @@ The first account is the **administrator** (full access). There is no open sign-
   | **Viewer** (View only) | See apps, versions, logs and history |
 
 - Send the username / password to the person; they can change the password and turn on two-factor authentication in *Settings → Security*.
-- With **single sign-on** (*Settings → Single sign-on (SSO)*: Authentik, Authelia, Keycloak, Google…), accounts can be created automatically the first time someone signs in, with the role taken from their groups. The sign-in page then shows **Sign in with …** and **Sign up with …** buttons.
+- With **single sign-on** (*Settings → Single sign-on (SSO)*: Authentik, Authelia, Keycloak, Google…), accounts can be created automatically the first time someone signs in, with the role taken from their groups. The sign-in page then shows **Sign in with …** and **Create account with …** buttons.
 
 **Managing another machine**
 Every machine running AppManager has its own accounts. To manage another machine, ask **its** administrator to either:
 - create an account for you on that machine (then sign in at that machine's address), or
 - give you an **API Token** (*Settings → API Token* on that machine, *Update* or *Full* access) and add the machine under *Settings → Servers* on your own AppManager — see [Multiple servers](#multiple-servers).
 
-**Forgot the only administrator password?** Set the environment variable `RESET_AUTH=true` and restart the container: **all accounts** are removed (apps and settings are kept). Open the page, create the administrator account again in the *Sign up* tab, then set `RESET_AUTH` back to `false` and restart (otherwise accounts are removed on every start). Another administrator can also reset a password in *Settings → Accounts & roles*.
+**Forgot the only administrator password?** Set the environment variable `RESET_AUTH=true` and restart the container: **all accounts** are removed (apps and settings are kept). Open the page, create the administrator account again in the *Create account* tab, then set `RESET_AUTH` back to `false` and restart (otherwise accounts are removed on every start). Another administrator can also reset a password in *Settings → Accounts & roles*.
 
 ## ⚙️ Configuration
 
