@@ -119,6 +119,7 @@ body {
 /* Mở từ biểu tượng trên màn hình chính (PWA): thanh trạng thái trong suốt nằm đè lên trang -> header chừa thêm khoảng
    dưới Dynamic Island / tai thỏ. */
 html.pwa .glass-header { padding-top: calc(env(safe-area-inset-top) + 12px); }
+@media (display-mode: standalone), (display-mode: fullscreen) { .glass-header { padding-top: calc(env(safe-area-inset-top) + 12px); } }
 
 .glass-panel {
   background: var(--glass-bg-elevated);
