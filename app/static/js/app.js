@@ -74,7 +74,9 @@
         security: { loading: false, totp_enabled: false, backup_codes_left: 0, setup: null, code: '',
                     backupCodes: [], disablePw: '', disableCode: '', regenCode: '', busy: false },
         pwForm: { current: '', next: '', confirm: '', busy: false },
-        auditItems: [],
+        auditItems: [], auditUser: '',
+        me: { username: '', role: 'admin' },
+        usersState: { list: [], loading: false, form: { open: false, isNew: true, username: '', role: 'viewer', password: '', disabled: false, busy: false, error: '' } },
         backupsState: { loading: false, items: [], busyFile: '' },
         restorePicker: { open: false, app: null, items: [], selected: '', server: null },
         versionPicker: { open: false, loading: false, error: '', items: [], selected: '' },
@@ -378,7 +380,7 @@
 
         async init() {
           this.$watch(() => [this.confirmModal, this.actionSheet, this.logModal, this.batchModal, this.deployModal, this.updateModal,
-                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker, this.restoreRun, this.updateAllPicker, this.versionPicker, this.dupPopup, this.dataSetup, this.dataFolders, this.tokenState.form, this.apiDocs, this.srv.form, this.remoteJob, this.composeHint, this.runCmd].some(m => m && m.open), (open) => {
+                             this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker, this.restoreRun, this.updateAllPicker, this.versionPicker, this.dupPopup, this.dataSetup, this.dataFolders, this.tokenState.form, this.apiDocs, this.srv.form, this.remoteJob, this.composeHint, this.runCmd, this.usersState.form].some(m => m && m.open), (open) => {
             const b = document.body, h = document.documentElement;
             if (open) {
               this._lockY = window.scrollY || 0;
@@ -390,11 +392,79 @@
               window.scrollTo(0, this._lockY || 0);
             }
           });
+          await this.loadMe();
           await this.loadApps();
-          this.checkDataSetup();
+          if (this.isAdmin()) this.checkDataSetup();
           this.loadServers(true);
           const stale = !this.lastChecked || (Date.now() - new Date(this.lastChecked).getTime()) > 3600000;
-          if (stale && !this.checkingUpdates) this.checkUpdates(true);
+          if (stale && !this.checkingUpdates && this.canUpdate()) this.checkUpdates(true);
+        },
+
+        // ---------------- Tài khoản & quyền (0.22) ----------------
+        async loadMe() {
+          try {
+            const res = await fetch('/api/auth/me');
+            if (res.status === 401) { window.location.href = '/login'; return; }
+            if (res.ok) this.me = await res.json();
+          } catch (_) {}
+        },
+        isAdmin() { return this.me.role === 'admin'; },
+        canUpdate() { return this.me.role === 'admin' || this.me.role === 'operator'; },
+        roleLabel(r) { return this.t('role_' + (r || 'admin')); },
+
+        async loadUsers() {
+          const st = this.usersState;
+          st.loading = true;
+          try {
+            const res = await fetch('/api/users');
+            if (res.ok) st.list = (await res.json()).users || [];
+          } catch (_) {}
+          finally { st.loading = false; }
+        },
+
+        openUserForm(u = null) {
+          this.usersState.form = u
+            ? { open: true, isNew: false, username: u.username, role: u.role, password: '', disabled: u.disabled, busy: false, error: '', self: u.username === this.me.username, user: u }
+            : { open: true, isNew: true, username: '', role: 'viewer', password: '', disabled: false, busy: false, error: '', self: false, user: null };
+        },
+
+        async saveUserForm() {
+          const f = this.usersState.form;
+          f.busy = true; f.error = '';
+          try {
+            const body = { new: f.isNew, username: f.username.trim(), role: f.role, password: f.password || null };
+            if (!f.isNew) body.disabled = f.disabled;
+            const { res, data } = await this._postJson('/api/users', body);
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            f.open = false;
+            this.showToast(f.isNew ? this.t('usAdded').replace('{u}', body.username) : this.t('usSaved').replace('{u}', body.username));
+            if (data.self_changed) { await this.loadMe(); if (!this.isAdmin()) { this.settingsModal.tab = 'home'; } }
+            await this.loadUsers();
+          } catch (err) { f.error = err.message; }
+          finally { f.busy = false; }
+        },
+
+        confirmDeleteUser() {
+          const f = this.usersState.form;
+          this.askConfirm({
+            tone: 'danger', title: this.t('usDeleteTitle').replace('{u}', f.username), message: this.t('usDeleteMsg'),
+            confirmLabel: this.t('delete'),
+            onConfirm: async () => {
+              const { res, data } = await this._postJson('/api/users/delete', { username: f.username });
+              if (!res.ok) { this.showToast(data.detail || 'Failed'); return; }
+              f.open = false;
+              this.showToast(this.t('usDeleted').replace('{u}', f.username));
+              this.loadUsers();
+            }
+          });
+        },
+
+        // Người có trong nhật ký (để lọc): tài khoản + Token + tên đã xuất hiện
+        auditPeople() {
+          const names = new Set(this.usersState.list.map(u => u.username));
+          this.auditItems.forEach(a => { if (a.username) names.add(a.username); });
+          if (this.auditUser) names.add(this.auditUser);
+          return [...names].sort((a, b) => a.localeCompare(b));
         },
 
         handleShortcut(e) {
@@ -1905,7 +1975,7 @@
         // ---------------- Settings ----------------
         async openSettings() {
           this.settingsModal = { open: true, tab: 'home' };
-          this.refreshDataStatus();
+          if (this.isAdmin()) { this.refreshDataStatus(); this.loadUsers(); }
           try {
             const res = await fetch('/api/settings');
             if (res.status === 401) { window.location.href = '/login'; return; }
@@ -1914,7 +1984,7 @@
             this.settingsForm = { ...data.settings, github_token: '' };
             this.updateHistory = data.history || [];
           } catch (err) { this.showToast(err.message); }
-          this.loadApiStatus();
+          if (this.isAdmin()) this.loadApiStatus();
         },
 
         openSettingsSection(tab) {
@@ -1924,6 +1994,7 @@
           else if (tab === 'security') this.loadSecurity();
           else if (tab === 'tokens') this.loadTokens();
           else if (tab === 'servers') this.loadServers(true);
+          else if (tab === 'users') this.loadUsers();
         },
 
         // ---------------- Nhiều máy chủ (0.18) ----------------
@@ -2225,7 +2296,7 @@
 
         settingsSectionTitle() {
           return {
-            home: this.t('settingsTitle'), schedule: this.t('setGeneral'), storage: this.t('setStorage'),
+            home: this.t('settingsTitle'), schedule: this.t('setGeneral'), storage: this.t('setStorage'), users: this.t('setUsers'),
             notify: this.t('setNotify'), servers: this.t('setServers'), security: this.t('tabSecurity'), tokens: this.t('setTokens'), history: this.t('tabHistory'), about: this.t('tabAbout'),
           }[this.settingsModal.tab] || this.t('settingsTitle');
         },
@@ -2248,7 +2319,11 @@
             amber: 'bg-amber-500/15 border-amber-400/35 text-amber-400', rose: 'bg-rose-500/15 border-rose-400/35 text-rose-400',
             violet: 'bg-violet-500/15 border-violet-400/35 text-violet-400', slate: 'bg-slate-500/15 border-slate-400/35 text-slate-300' };
           const c = (x) => C[x];
-          return [
+          I.users = 'M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z';
+          const admin = this.isAdmin();
+          // Không phải Quản trị: chỉ còn tài khoản của mình (mật khẩu / 2FA), lịch sử cập nhật, giới thiệu
+          const keep = admin ? null : new Set(['security', 'history', 'about']);
+          const menu = [
             { id: 'main', items: [
               { tab: 'schedule', title: this.t('setGeneral'), desc: this.t('setGeneralDesc'), icon: I.gear, color: c('sky') },
               { tab: 'storage', title: this.t('setStorage'), desc: st?.missing_count ? this.t('dataFoldersMissing').replace('{n}', st.missing_count) : this.t('setStorageDesc'), warn: !!st?.missing_count, icon: I.disk, color: c('emerald') },
@@ -2256,7 +2331,8 @@
               { tab: 'servers', title: this.t('setServers'), desc: this.srv.list.length ? this.t('svCount').replace('{n}', this.srv.list.length) : this.t('setServersDesc'), icon: I.servers, color: c('violet') },
             ] },
             { id: 'safety', items: [
-              { tab: 'security', title: this.t('tabSecurity'), desc: this.t('setSecurityDesc'), icon: I.lock, color: c('rose') },
+              { tab: 'security', title: this.t('tabSecurity'), desc: admin ? this.t('setSecurityDesc') : this.t('setSecurityDescSelf'), icon: I.lock, color: c('rose') },
+              { tab: 'users', title: this.t('setUsers'), desc: this.usersState.list.length > 1 ? this.t('usCount').replace('{n}', this.usersState.list.length) : this.t('setUsersDesc'), icon: I.users, color: c('emerald') },
               { tab: 'tokens', title: this.t('setTokens'), desc: this.t('setTokensDesc'), icon: I.key, color: c('sky') },
               { tab: 'history', title: this.t('tabHistory'), desc: this.t('setHistoryDesc'), icon: I.clock, color: c('violet') },
             ] },
@@ -2264,6 +2340,8 @@
               { tab: 'about', title: this.t('tabAbout'), desc: this.t('setAboutDesc'), icon: I.info, color: c('slate') },
             ] },
           ];
+          if (!keep) return menu;
+          return menu.map(g => ({ ...g, items: g.items.filter(it => keep.has(it.tab)) })).filter(g => g.items.length);
         },
 
         // ---------------- Thông báo ----------------
@@ -2507,7 +2585,7 @@
             this.security.backup_codes_left = data.backup_codes_left || 0;
           } catch (err) { this.showToast(err.message); }
           finally { this.security.loading = false; }
-          this.loadAudit();
+          if (this.isAdmin()) { this.loadAudit(); if (!this.usersState.list.length) this.loadUsers(); }
         },
 
         async start2fa() {
@@ -2591,7 +2669,9 @@
 
         async loadAudit() {
           try {
-            const res = await fetch('/api/audit?limit=150');
+            if (!this.isAdmin()) return;
+            const q = this.auditUser ? `&user=${encodeURIComponent(this.auditUser)}` : '';
+            const res = await fetch('/api/audit?limit=150' + q);
             if (!res.ok) return;
             const data = await res.json();
             this.auditItems = data.items || [];

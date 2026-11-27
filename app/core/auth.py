@@ -15,7 +15,7 @@ from argon2.exceptions import VerifyMismatchError
 from fastapi import HTTPException, Request, Response, WebSocket, status
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
-from app.core import api_tokens
+from app.core import api_tokens, users
 from app.core.database import (
     add_login_failure,
     clear_login_failures,
@@ -229,7 +229,9 @@ def set_session_cookie(
     response: Response, request: Request, username: str, remember: bool = False
 ) -> None:
     max_age = SESSION_LONG_AGE if remember else SESSION_SHORT_AGE
-    token = _get_serializer().dumps({"u": username, "r": remember})
+    u = get_user_by_username(username)
+    ver = int((u["session_ver"] if u else 1) or 1)
+    token = _get_serializer().dumps({"u": username, "r": remember, "v": ver})
     response.set_cookie(
         key=COOKIE_NAME,
         value=token,
@@ -245,17 +247,38 @@ def clear_session_cookie(response: Response) -> None:
     response.delete_cookie(key=COOKIE_NAME, path="/")
 
 
-def verify_session_token(token: Optional[str]) -> Optional[str]:
+def session_user(token: Optional[str]):
+    """Bản ghi người dùng của phiên (None nếu phiên sai / hết hạn / tài khoản bị khoá / phiên đã bị thu hồi)."""
     if not token or not has_admin_user():
         return None
     try:
         data = _get_serializer().loads(token, max_age=SESSION_LONG_AGE)
-        username = data.get("u")
-        if username and get_user_by_username(username):
-            return username
     except (BadSignature, SignatureExpired):
         return None
-    return None
+    username = data.get("u")
+    u = get_user_by_username(username) if username else None
+    if not u or u["username"] != username or u["disabled"]:
+        return None
+    if int(data.get("v") or 1) != int(u["session_ver"] or 1):  # đổi vai trò / mật khẩu / bị khoá -> phiên cũ hết hiệu lực
+        return None
+    return u
+
+
+def verify_session_token(token: Optional[str]) -> Optional[str]:
+    u = session_user(token)
+    return u["username"] if u else None
+
+
+def revoke_sessions(username: str) -> None:
+    """Đăng xuất mọi thiết bị của MỘT người (không ảnh hưởng người khác)."""
+    u = get_user_by_username(username)
+    if u:
+        update_user_fields(u["username"], session_ver=int(u["session_ver"] or 1) + 1)
+
+
+def check_role(request_or_ws, role: str, method: str, path: str) -> None:
+    if not users.role_allows(role, method, path):
+        raise HTTPException(status_code=403, detail=users.denied_detail(role))
 
 
 def get_current_user_optional(request: Request) -> Optional[str]:
@@ -284,17 +307,21 @@ def token_user(request: Request) -> Optional[str]:
 
 
 def require_user(request: Request) -> str:
-    """Người đăng nhập (cookie phiên) hoặc API token hợp lệ có đủ quyền cho request này."""
+    """Người đăng nhập (cookie phiên) hoặc API token hợp lệ có đủ quyền cho request này.
+    Người đăng nhập: vai trò (Quản trị / Cập nhật / Chỉ xem) phải cho phép request (users.role_allows)."""
     tu = token_user(request)
     if tu:
         return tu
-    user = get_current_user_optional(request)
-    if not user:
+    u = session_user(request.cookies.get(COOKIE_NAME))
+    if not u:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Unauthorized",
         )
-    return user
+    role = u["role"] or "admin"
+    request.state.role = role
+    check_role(request, role, request.method, request.url.path)
+    return u["username"]
 
 
 def _allowed_hosts(headers) -> set[str]:
@@ -326,7 +353,13 @@ def origin_allowed(headers) -> bool:
 def verify_websocket_user(websocket: WebSocket) -> Optional[str]:
     if not origin_allowed(websocket.headers):
         return None
-    return verify_session_token(websocket.cookies.get(COOKIE_NAME))
+    u = session_user(websocket.cookies.get(COOKIE_NAME))
+    if not u:
+        return None
+    if not users.role_allows(u["role"] or "admin", "GET", websocket.url.path):
+        websocket.state.denied = True  # đã đăng nhập nhưng không đủ quyền -> đóng mã 4403 (không đẩy về trang đăng nhập)
+        return None
+    return u["username"]
 
 
 def setup_first_admin(username: str, password: str) -> None:

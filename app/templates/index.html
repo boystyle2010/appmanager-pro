@@ -106,12 +106,12 @@
 
         <div class="flex items-center gap-1.5 shrink-0">
           <!-- Desktop only: Deploy + Check (mobile có ở hàng tìm kiếm) -->
-          <button @click="openDeployModal()" :title="t('deployApp')"
+          <button x-show="isAdmin()" @click="openDeployModal()" :title="t('deployApp')"
                   class="hidden md:inline-flex glass-btn-primary h-9 px-3 rounded-xl text-xs font-semibold items-center justify-center gap-1.5">
             <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
             <span x-text="t('deployShort')"></span>
           </button>
-          <button @click="checkUpdates(false)" :disabled="checkingUpdates" :title="t('checkShort')"
+          <button x-show="canUpdate()" @click="checkUpdates(false)" :disabled="checkingUpdates" :title="t('checkShort')"
                   class="hidden md:inline-flex glass-btn h-9 w-9 rounded-xl items-center justify-center text-sky-400 disabled:opacity-70">
             <svg class="w-4 h-4" :class="checkingUpdates ? 'animate-spin' : ''" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M20.49 9A9 9 0 005.64 5.64L4 9m16 6l-1.64 3.36A9 9 0 013.51 15"/></svg>
           </button>
@@ -199,9 +199,9 @@
               <a :href="currentServer()?.url" target="_blank" rel="noopener" class="glass-btn px-3 py-2 rounded-xl text-[11px] font-semibold text-sky-400 shrink-0" x-text="t('svOpenWeb')"></a>
             </div>
             <div class="grid grid-cols-2 gap-2">
-              <button @click="remoteCheck()" :disabled="remote.checking || remote.loading" class="glass-btn py-2.5 rounded-xl text-xs font-semibold disabled:opacity-50"
+              <button x-show="canUpdate()" @click="remoteCheck()" :disabled="remote.checking || remote.loading" class="glass-btn py-2.5 rounded-xl text-xs font-semibold disabled:opacity-50"
                       x-text="remote.checking ? t('svCheckingUpdates') : t('svCheck')"></button>
-              <button @click="confirmRemoteUpdateAll()" :disabled="!remote.data?.summary?.updates" class="glass-btn-update py-2.5 rounded-xl text-xs font-semibold disabled:opacity-40"
+              <button x-show="canUpdate()" @click="confirmRemoteUpdateAll()" :disabled="!remote.data?.summary?.updates" class="glass-btn-update py-2.5 rounded-xl text-xs font-semibold disabled:opacity-40"
                       x-text="t('svUpdateAll') + (remote.data?.summary?.updates ? ' (' + remote.data.summary.updates + ')' : '')"></button>
             </div>
           </div>
@@ -240,7 +240,7 @@
                    x-text="ra.has_update ? `${ra.version || '?'} → ${ra.remote_version || '?'}` : (ra.version || ra.image_tag || '')"></p>
                 <!-- App của máy này trong danh sách gộp: dùng cửa sổ cập nhật + menu thao tác như trang chính -->
                 <div x-show="ra._server === ''" class="flex gap-2">
-                  <button x-show="ra.has_update && ra.can_update" @click="openUpdateModal(ra)" class="glass-btn-update flex-1 h-9 rounded-xl text-xs font-semibold" x-text="t('svUpdate')"></button>
+                  <button x-show="ra.has_update && ra.can_update && canUpdate()" @click="openUpdateModal(ra)" class="glass-btn-update flex-1 h-9 rounded-xl text-xs font-semibold" x-text="t('svUpdate')"></button>
                   <button @click="openLogs(ra)" class="glass-btn flex-1 h-9 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12"/></svg>
                     <span x-text="t('svLogs')"></span>
@@ -252,12 +252,12 @@
                 <template x-if="ra._server !== ''">
                   <div class="space-y-2">
                     <div class="flex gap-2">
-                      <button x-show="ra.has_update && ra.can_update" @click="confirmRemoteUpdate(ra)" class="glass-btn-update flex-1 h-9 rounded-xl text-xs font-semibold" x-text="t('svUpdate')"></button>
-                      <button x-show="ra.status === 'running'" @click="remoteAction(ra, 'restart')" :disabled="remote.busy === rkey(ra)"
+                      <button x-show="ra.has_update && ra.can_update && canUpdate()" @click="confirmRemoteUpdate(ra)" class="glass-btn-update flex-1 h-9 rounded-xl text-xs font-semibold" x-text="t('svUpdate')"></button>
+                      <button x-show="ra.status === 'running' && canUpdate()" @click="remoteAction(ra, 'restart')" :disabled="remote.busy === rkey(ra)"
                               class="glass-btn flex-1 h-9 rounded-xl text-xs font-semibold disabled:opacity-50" x-text="remote.busy === rkey(ra) ? '…' : t('restart')"></button>
-                      <button x-show="ra.status === 'running' && !ra.is_self" @click="remoteAction(ra, 'stop')" :disabled="remote.busy === rkey(ra)"
+                      <button x-show="ra.status === 'running' && !ra.is_self && canUpdate()" @click="remoteAction(ra, 'stop')" :disabled="remote.busy === rkey(ra)"
                               class="glass-btn h-9 px-3 rounded-xl text-xs font-semibold text-rose-400 disabled:opacity-50" x-text="t('stop')"></button>
-                      <button x-show="ra.status !== 'running'" @click="remoteAction(ra, 'start')" :disabled="remote.busy === rkey(ra)"
+                      <button x-show="ra.status !== 'running' && canUpdate()" @click="remoteAction(ra, 'start')" :disabled="remote.busy === rkey(ra)"
                               class="glass-btn flex-1 h-9 rounded-xl text-xs font-semibold text-emerald-300 disabled:opacity-50" x-text="remote.busy === rkey(ra) ? '…' : t('start')"></button>
                     </div>
                     <div class="flex gap-2">
@@ -265,7 +265,7 @@
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12"/></svg>
                         <span x-text="t('svLogs')"></span>
                       </button>
-                      <button x-show="!ra.is_self" @click="confirmRemoteRestore(ra)" :disabled="remote.busy === rkey(ra)" class="glass-btn flex-1 h-8 rounded-xl text-[11px] font-semibold text-amber-300 flex items-center justify-center gap-1.5 disabled:opacity-50">
+                      <button x-show="!ra.is_self && canUpdate()" @click="confirmRemoteRestore(ra)" :disabled="remote.busy === rkey(ra)" class="glass-btn flex-1 h-8 rounded-xl text-[11px] font-semibold text-amber-300 flex items-center justify-center gap-1.5 disabled:opacity-50">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"/></svg>
                         <span x-text="t('restore')"></span>
                       </button>
@@ -311,14 +311,14 @@
                   class="glass-btn h-9 px-3.5 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5">
             <span x-text="filter === 'updates' ? t('showAll') : t('viewUpdates')"></span>
           </button>
-          <button @click="confirmBatchUpdate()"
+          <button x-show="canUpdate()" @click="confirmBatchUpdate()"
                   class="glass-btn-update h-9 px-4 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
             </svg>
             <span class="whitespace-nowrap" x-text="`${t('updateAll')} (${updateAllTargets.length}${updateAllTargets.length !== updatableApps.length ? '/' + updatableApps.length : ''})`"></span>
           </button>
-          <button @click="openUpdateAllPicker()" :title="t('customizeUpdateAll')" :aria-label="t('customizeUpdateAll')"
+          <button x-show="canUpdate()" @click="openUpdateAllPicker()" :title="t('customizeUpdateAll')" :aria-label="t('customizeUpdateAll')"
                   class="h-9 w-10 rounded-xl inline-flex items-center justify-center border transition"
                   :class="updateAllTargets.length !== updatableApps.length
                     ? 'bg-amber-500/15 border-amber-400/50 text-amber-300'
@@ -349,11 +349,11 @@
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
         </div>
-        <button @click="checkUpdates(false)" :disabled="checkingUpdates" :title="t('checkShort')" aria-label="Check updates"
+        <button x-show="canUpdate()" @click="checkUpdates(false)" :disabled="checkingUpdates" :title="t('checkShort')" aria-label="Check updates"
                 class="glass-btn h-11 w-11 rounded-2xl shrink-0 flex items-center justify-center text-sky-400 disabled:opacity-70">
           <svg class="w-[18px] h-[18px]" :class="checkingUpdates ? 'animate-spin' : ''" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M20.49 9A9 9 0 005.64 5.64L4 9m16 6l-1.64 3.36A9 9 0 013.51 15"/></svg>
         </button>
-        <button @click="openDeployModal()" :title="t('deployApp')" aria-label="Deploy"
+        <button x-show="isAdmin()" @click="openDeployModal()" :title="t('deployApp')" aria-label="Deploy"
                 class="glass-btn-primary h-11 w-11 rounded-2xl shrink-0 flex items-center justify-center">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
         </button>
@@ -547,10 +547,13 @@
               <template x-if="app.has_update && app.manage !== 'external'">
                 <button @click="openUpdateModal(app)"
                         class="glass-btn-update flex-1 h-9 px-3.5 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5">
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                  <svg x-show="canUpdate()" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
                   </svg>
-                  <span x-text="t('updateNow')"></span>
+                  <svg x-show="!canUpdate()" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  </svg>
+                  <span x-text="canUpdate() ? t('updateNow') : t('viewUpdate')"></span>
                 </button>
               </template>
 
@@ -565,7 +568,7 @@
               </template>
 
               <template x-if="(!app.has_update || app.manage === 'external') && (!app.port_map || app.status !== 'running')">
-                <button @click="app.status === 'running' ? openLogs(app) : runAction(app, 'start')"
+                <button @click="app.status === 'running' || !canUpdate() ? openLogs(app) : runAction(app, 'start')"
                         :disabled="busyId === app.id"
                         class="flex-1 h-9 px-3.5 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
                         :class="app.status === 'running' ? 'glass-btn text-sky-400' : 'glass-btn-primary'">
@@ -577,7 +580,7 @@
                 </button>
               </template>
 
-              <button x-show="app.latest_backup" @click="confirmRestoreApp(app)"
+              <button x-show="app.latest_backup && canUpdate()" @click="confirmRestoreApp(app)"
                       :disabled="(app.backups || []).some(x => x.file === backupsState.busyFile)"
                       :title="app.latest_backup ? `${app.latest_backup.version || ''} • ${formatTs(app.latest_backup.created)}` : ''"
                       class="glass-btn h-9 px-3 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5 text-amber-300 shrink-0 disabled:opacity-50">
@@ -815,7 +818,7 @@
           <p class="text-[11px] text-muted font-mono-code truncate" x-text="actionSheet.app?.name"></p>
         </div>
         <!-- AppManager Pro chỉ có thao tác Restart -> đặt cạnh nút đóng thay vì một nút lẻ bên dưới -->
-        <button x-show="actionSheet.app?.is_self" @click="const a = actionSheet.app; closeActionSheet(); confirmRestart(a)"
+        <button x-show="actionSheet.app?.is_self && canUpdate()" @click="const a = actionSheet.app; closeActionSheet(); confirmRestart(a)"
                 :aria-label="t('restart')" :title="t('restart')"
                 class="glass-btn w-8 h-8 rounded-full flex items-center justify-center text-sky-400 shrink-0">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
@@ -853,7 +856,7 @@
           <span x-show="actionSheet.app?.has_update" class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300">NEW</span>
         </button>
 
-        <button @click="const a = actionSheet.app; closeActionSheet(); checkOneApp(a)" class="ios-row">
+        <button x-show="canUpdate()" @click="const a = actionSheet.app; closeActionSheet(); checkOneApp(a)" class="ios-row">
           <span class="flex items-center gap-3">
             <svg class="w-4 h-4 text-sky-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
@@ -862,7 +865,7 @@
           </span>
         </button>
 
-        <button x-show="!actionSheet.app?.can_update && actionSheet.app?.compose_issue && !actionSheet.app?.is_self"
+        <button x-show="isAdmin() && !actionSheet.app?.can_update && actionSheet.app?.compose_issue && !actionSheet.app?.is_self"
                 @click="const a = actionSheet.app; closeActionSheet(); openComposeHint(a)" class="ios-row">
           <span class="flex items-center gap-3 min-w-0">
             <svg class="w-4 h-4 text-amber-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -876,7 +879,7 @@
           <svg class="w-3.5 h-3.5 text-subtle" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
         </button>
 
-        <button :disabled="!actionSheet.app?.can_update"
+        <button x-show="canUpdate()" :disabled="!actionSheet.app?.can_update"
                 @click="const a = actionSheet.app; closeActionSheet(); openVersionPickerFor(a)" class="ios-row disabled:opacity-45">
           <span class="flex items-center gap-3 min-w-0">
             <svg class="w-4 h-4 text-amber-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -890,7 +893,7 @@
           <svg class="w-3.5 h-3.5 text-subtle" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
         </button>
 
-        <button x-show="actionSheet.app?.manage === 'run'"
+        <button x-show="isAdmin() && actionSheet.app?.manage === 'run'"
                 @click="const a = actionSheet.app; closeActionSheet(); openRunCommand(a)" class="ios-row">
           <span class="flex items-center gap-3 min-w-0">
             <svg class="w-4 h-4 text-teal-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -904,7 +907,7 @@
           <svg class="w-3.5 h-3.5 text-subtle" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
         </button>
 
-        <button x-show="actionSheet.app?.manage === 'run' && !actionSheet.app?.is_self"
+        <button x-show="isAdmin() && actionSheet.app?.manage === 'run' && !actionSheet.app?.is_self"
                 @click="const a = actionSheet.app; closeActionSheet(); openComposeHint({ ...a, compose_issue: 'not_compose' })" class="ios-row">
           <span class="flex items-center gap-3 min-w-0">
             <svg class="w-4 h-4 text-teal-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -918,7 +921,7 @@
           <svg class="w-3.5 h-3.5 text-subtle" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
         </button>
 
-        <button :disabled="!actionSheet.app?.can_edit"
+        <button x-show="isAdmin()" :disabled="!actionSheet.app?.can_edit"
                 @click="const a = actionSheet.app; closeActionSheet(); openEditModal(a)" class="ios-row disabled:opacity-45">
           <span class="flex items-center gap-3 min-w-0">
             <svg class="w-4 h-4 text-indigo-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -943,7 +946,7 @@
         </button>
       </div>
 
-      <div x-show="!actionSheet.app?.is_self" class="grid grid-cols-2 gap-2 text-xs font-semibold">
+      <div x-show="!actionSheet.app?.is_self && canUpdate()" class="grid grid-cols-2 gap-2 text-xs font-semibold">
         <button @click="const a = actionSheet.app; closeActionSheet(); confirmRestart(a)"
                 class="glass-btn py-2.5 px-3 rounded-2xl flex items-center justify-center gap-2 text-sky-400">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -962,7 +965,7 @@
         </button>
       </div>
 
-      <button x-show="!actionSheet.app?.is_self"
+      <button x-show="!actionSheet.app?.is_self && isAdmin()"
               @click="const a = actionSheet.app; closeActionSheet(); openUninstallModal(a)"
               class="w-full py-3 rounded-2xl text-xs font-semibold flex items-center justify-center gap-2 bg-rose-500/12 border border-rose-500/30 text-rose-400 hover:bg-rose-500/20 transition">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -1074,7 +1077,7 @@
         </div>
 
         <div class="flex items-center gap-2 shrink-0">
-        <button @click="refreshSingleApp()" :disabled="updateModal.checking || updateModal.updating" :aria-label="t('checkOne')" :title="t('checkOne')"
+        <button x-show="canUpdate()" @click="refreshSingleApp()" :disabled="updateModal.checking || updateModal.updating" :aria-label="t('checkOne')" :title="t('checkOne')"
                 class="glass-btn w-8 h-8 rounded-full flex items-center justify-center text-sky-400 shrink-0 disabled:opacity-50">
           <svg class="w-4 h-4" :class="updateModal.checking ? 'animate-spin' : ''" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
@@ -1119,7 +1122,7 @@
             <div x-show="updateModal.app?.manage === 'run' && !updateModal.preview" class="rounded-2xl px-3.5 py-2.5 bg-teal-500/10 border border-teal-400/30 text-[11px] text-teal-200 leading-snug" x-text="t('runUpdateNote')"></div>
 
             <!-- Kênh phát hành: chuyển latest <-> beta... (chỉ hiện khi image có nhiều kênh) -->
-            <div x-show="(updateModal.app?.channels || []).length > 1" class="glass-inset rounded-2xl p-3.5 shrink-0 space-y-2.5">
+            <div x-show="canUpdate() && (updateModal.app?.channels || []).length > 1" class="glass-inset rounded-2xl p-3.5 shrink-0 space-y-2.5">
               <div class="flex items-center justify-between gap-2">
                 <p class="text-xs font-semibold" x-text="t('releaseChannel')"></p>
                 <span class="text-[10.5px] font-mono-code text-muted truncate" x-text="`:${updateModal.app?.image_tag || ''}`"></span>
@@ -1143,7 +1146,7 @@
               <p class="text-[10.5px] text-muted leading-snug" x-text="t('releaseChannelDesc')"></p>
             </div>
 
-            <div x-show="updateModal.app?.can_update" class="glass-inset rounded-2xl p-3.5 shrink-0 flex items-center justify-between gap-3">
+            <div x-show="canUpdate() && updateModal.app?.can_update" class="glass-inset rounded-2xl p-3.5 shrink-0 flex items-center justify-between gap-3">
               <div class="min-w-0">
                 <p class="text-xs font-semibold" x-text="t('chooseVersion')"></p>
                 <p class="text-[11px] text-muted" x-text="t('chooseVersionDesc')"></p>
@@ -1157,7 +1160,7 @@
               </button>
             </div>
 
-            <div class="glass-inset rounded-2xl p-3.5 shrink-0 flex items-center justify-between gap-3">
+            <div x-show="canUpdate()" class="glass-inset rounded-2xl p-3.5 shrink-0 flex items-center justify-between gap-3">
               <div class="min-w-0">
                 <p class="text-xs font-semibold" x-text="t('autoUpdateApp')"></p>
                 <p class="text-[11px] text-muted" x-text="t('autoUpdateAppDesc')"></p>
@@ -1169,7 +1172,7 @@
             </div>
 
             <!-- Quy tắc tự cập nhật của app (0.20): chỉ hiện khi bật tự cập nhật -->
-            <template x-if="updateModal.autoUpdate && updateModal.policy">
+            <template x-if="canUpdate() && updateModal.autoUpdate && updateModal.policy">
             <div class="glass-inset rounded-2xl p-3.5 shrink-0 space-y-3 text-[11.5px]">
               <div class="flex items-center justify-between gap-2">
                 <p class="text-xs font-semibold" x-text="t('polTitle')"></p>
@@ -1236,9 +1239,9 @@
                 <div class="flex items-center gap-1.5">
                   <a x-show="updateModal.releaseUrl" :href="updateModal.releaseUrl" target="_blank" rel="noopener"
                      class="glass-btn px-2.5 py-1 rounded-lg text-[11px] text-sky-400">GitHub ↗</a>
-                  <button @click="updateModal.showRepoInput = !updateModal.showRepoInput"
+                  <button x-show="canUpdate()" @click="updateModal.showRepoInput = !updateModal.showRepoInput"
                           class="glass-btn px-2.5 py-1 rounded-lg text-[11px] text-muted" x-text="t('repoSource')"></button>
-                  <button @click="refreshSingleApp()" class="glass-btn px-2.5 py-1 rounded-lg text-[11px]" x-text="t('recheck')"></button>
+                  <button x-show="canUpdate()" @click="refreshSingleApp()" class="glass-btn px-2.5 py-1 rounded-lg text-[11px]" x-text="t('recheck')"></button>
                 </div>
               </div>
 
@@ -1247,8 +1250,8 @@
                    x-text="updateModal.changelogError"></div>
 
               <div x-show="!updateModal.changelogHtml || updateModal.showRepoInput" x-cloak class="space-y-2">
-                <p x-show="!updateModal.changelogHtml" class="text-xs text-muted" x-text="t('noChangelog')"></p>
-                <div class="flex gap-2">
+                <p x-show="!updateModal.changelogHtml" class="text-xs text-muted" x-text="canUpdate() ? t('noChangelog') : t('noChangelogView')"></p>
+                <div x-show="canUpdate()" class="flex gap-2">
                   <input type="text" x-model="updateModal.customRepo" placeholder="owner/repo hoặc https://github.com/owner/repo"
                          class="glass-input flex-1 rounded-xl px-3 py-2 text-xs font-mono-code" />
                   <button @click="saveCustomRepo()" class="glass-btn-primary px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0" x-text="t('save')"></button>
@@ -1265,7 +1268,11 @@
              x-text="updateModal.updateLogs"></pre>
       </div>
 
-      <div class="pt-3 border-t border-[var(--glass-border)] flex items-center gap-2">
+      <div x-show="!canUpdate()" class="pt-3 border-t border-[var(--glass-border)] flex items-center gap-2 text-[11px] text-muted">
+        <svg class="w-4 h-4 shrink-0 text-sky-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        <span x-text="t('viewOnlyNote')"></span>
+      </div>
+      <div x-show="canUpdate()" class="pt-3 border-t border-[var(--glass-border)] flex items-center gap-2">
         <button x-show="!updateModal.updating && updateModal.preview" @click="cancelChannelPreview()"
                 class="glass-btn py-3 px-3.5 rounded-2xl text-xs font-semibold shrink-0 text-muted" x-text="t('cancel')"></button>
         <button x-show="!updateModal.updating && updateModal.preview" @click="startAppUpdate(updateModal.preview.tag)"
@@ -2363,12 +2370,18 @@
                       class="glass-btn-primary w-full py-2.5 rounded-xl text-xs font-semibold disabled:opacity-50" x-text="t('pwSave')"></button>
             </div>
 
-            <!-- Nhật ký hoạt động -->
-            <div class="glass-inset rounded-2xl p-4 space-y-2.5">
+            <!-- Nhật ký hoạt động (Quản trị) — lọc theo người (0.22) -->
+            <div x-show="isAdmin()" class="glass-inset rounded-2xl p-4 space-y-2.5">
               <div class="flex items-center justify-between">
                 <p class="font-semibold text-[13px]" x-text="t('auditTitle')"></p>
                 <button @click="loadAudit()" class="glass-btn px-2.5 py-1 rounded-lg text-[11px]" x-text="t('recheck')"></button>
               </div>
+              <select class="glass-input w-full rounded-xl py-2 pl-3 text-xs" x-model="auditUser" @change="loadAudit()">
+                <option value="" x-text="t('auditAllPeople')"></option>
+                <template x-for="n in auditPeople()" :key="n">
+                  <option :value="n" x-text="n.startsWith('token:') ? 'API Token · ' + n.slice(6) : n" :selected="auditUser === n"></option>
+                </template>
+              </select>
               <p x-show="!auditItems.length" class="text-[11px] text-subtle" x-text="t('auditEmpty')"></p>
               <div class="space-y-1.5">
                 <template x-for="a in auditItems" :key="a.id">
@@ -2385,6 +2398,51 @@
                 </template>
               </div>
             </div>
+          </div>
+        </template>
+
+        <!-- TAB: TÀI KHOẢN & QUYỀN (0.22, Quản trị) -->
+        <template x-if="settingsModal.tab === 'users'">
+          <div class="space-y-3.5">
+            <div class="glass-inset rounded-2xl p-4 space-y-2 text-[11.5px] text-muted leading-relaxed">
+              <p class="font-semibold text-[13px] text-[var(--text-primary)]" x-text="t('usRolesTitle')"></p>
+              <template x-for="r in ['admin', 'operator', 'viewer']" :key="r">
+                <p class="flex items-start gap-2">
+                  <span class="shrink-0 px-1.5 py-0.5 rounded-md text-[10px] font-semibold border"
+                        :class="r === 'admin' ? 'bg-rose-500/12 text-rose-300 border-rose-400/30' : r === 'operator' ? 'bg-amber-500/12 text-amber-300 border-amber-400/30' : 'bg-sky-500/12 text-sky-300 border-sky-400/30'"
+                        x-text="roleLabel(r)"></span>
+                  <span x-text="t('role_' + r + '_desc')"></span>
+                </p>
+              </template>
+            </div>
+            <button @click="openUserForm()" class="glass-btn-primary w-full py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+              <span x-text="t('usAdd')"></span>
+            </button>
+            <p x-show="usersState.loading && !usersState.list.length" class="text-[11px] text-subtle" x-text="t('svLoading')"></p>
+            <div class="glass-inset rounded-2xl divide-y divide-[var(--glass-border)] overflow-hidden">
+              <template x-for="u in usersState.list" :key="u.username">
+                <button type="button" @click="openUserForm(u)" class="w-full px-3.5 py-3 flex items-center gap-3 text-left hover:bg-white/5 transition">
+                  <span class="w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-white font-bold text-xs uppercase ring-1 ring-white/20"
+                        :class="u.disabled ? 'bg-slate-600' : avatarGradient(u.username)" x-text="u.username.slice(0, 2)"></span>
+                  <span class="min-w-0 flex-1">
+                    <span class="flex items-center gap-1.5 min-w-0">
+                      <span class="font-semibold text-[13px] truncate" :class="u.disabled && 'line-through text-muted'" x-text="u.username"></span>
+                      <span x-show="u.username === me.username" class="text-[10px] text-subtle shrink-0" x-text="t('usYou')"></span>
+                    </span>
+                    <span class="block text-[10.5px] text-subtle truncate"
+                          x-text="u.disabled ? t('usDisabled') : (u.last_login ? t('usLastLogin').replace('{t}', utcToLocal(u.last_login)) + (u.last_ip ? ' · ' + u.last_ip : '') : t('usNeverLogin'))"></span>
+                  </span>
+                  <span x-show="u.totp_enabled" class="shrink-0 text-emerald-400" :title="'2FA'">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>
+                  </span>
+                  <span class="shrink-0 px-1.5 py-0.5 rounded-md text-[10px] font-semibold border"
+                        :class="u.role === 'admin' ? 'bg-rose-500/12 text-rose-300 border-rose-400/30' : u.role === 'operator' ? 'bg-amber-500/12 text-amber-300 border-amber-400/30' : 'bg-sky-500/12 text-sky-300 border-sky-400/30'"
+                        x-text="roleLabel(u.role)"></span>
+                </button>
+              </template>
+            </div>
+            <p class="text-[10.5px] text-subtle leading-snug" x-text="t('usNote')"></p>
           </div>
         </template>
 
@@ -2980,17 +3038,17 @@
               </div>
             </template>
 
-            <div x-show="!row.is_self" class="grid gap-2 pt-0.5" :class="row.status === 'running' ? 'grid-cols-3' : 'grid-cols-1'">
+            <div x-show="!row.is_self && canUpdate()" class="grid gap-2 pt-0.5" :class="row.status === 'running' ? 'grid-cols-3' : 'grid-cols-1'">
               <template x-if="row.status !== 'running'">
-                <button @click="runAction(row, 'start')" :disabled="busyId === row.id"
+                <button x-show="canUpdate()" @click="runAction(row, 'start')" :disabled="busyId === row.id"
                         class="glass-btn-primary py-2 rounded-xl text-[11.5px] font-semibold disabled:opacity-50" x-text="t('start')"></button>
               </template>
               <template x-if="row.status === 'running'">
-                <button @click="confirmRestart(row)" :disabled="busyId === row.id"
+                <button x-show="canUpdate()" @click="confirmRestart(row)" :disabled="busyId === row.id"
                         class="glass-btn py-2 rounded-xl text-[11.5px] font-semibold text-sky-400 disabled:opacity-50" x-text="t('restart')"></button>
               </template>
               <template x-if="row.status === 'running'">
-                <button @click="confirmStop(row)" :disabled="busyId === row.id"
+                <button x-show="canUpdate()" @click="confirmStop(row)" :disabled="busyId === row.id"
                         class="glass-btn py-2 rounded-xl text-[11.5px] font-semibold text-amber-300 disabled:opacity-50" x-text="t('stop')"></button>
               </template>
               <template x-if="row.status === 'running'">
@@ -3789,6 +3847,66 @@
       <div class="grid grid-cols-2 gap-2.5 pt-1 shrink-0">
         <button @click="restorePicker.open = false" class="glass-btn py-2.5 px-3 rounded-xl text-xs font-semibold" x-text="t('cancel')"></button>
         <button @click="runRestorePicker()" class="glass-btn-update py-2.5 px-3 rounded-xl text-xs font-semibold" x-text="t('restore')"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Thêm / sửa tài khoản (0.22) -->
+  <div x-show="usersState.form.open" x-cloak x-transition.opacity
+       class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md"
+       @click.self="usersState.form.open = false" @keydown.escape.window="if (!confirmModal.open) usersState.form.open = false">
+    <div class="glass-panel w-full max-w-sm rounded-[26px] p-5 space-y-3.5 shadow-2xl max-h-[88dvh] overflow-y-auto">
+      <div class="flex items-center justify-between gap-3">
+        <h3 class="font-bold text-[15px] truncate" x-text="usersState.form.isNew ? t('usAdd') : usersState.form.username"></h3>
+        <button @click="usersState.form.open = false" aria-label="Close" class="glass-btn w-8 h-8 rounded-full flex items-center justify-center text-muted shrink-0">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <template x-if="usersState.form.isNew">
+        <label class="block space-y-1">
+          <span class="text-[11px] font-semibold text-muted" x-text="t('usName')"></span>
+          <input type="text" x-model="usersState.form.username" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"
+                 class="glass-input w-full rounded-xl px-3 py-2 text-xs" :placeholder="t('usNamePh')" />
+        </label>
+      </template>
+      <div class="space-y-1">
+        <span class="text-[11px] font-semibold text-muted" x-text="t('usRole')"></span>
+        <div class="glass-inset rounded-xl p-0.5 grid grid-cols-3">
+          <template x-for="r in ['admin', 'operator', 'viewer']" :key="r">
+            <button type="button" @click="usersState.form.role = r" class="py-1.5 rounded-lg text-[11px] font-semibold transition truncate"
+                    :class="usersState.form.role === r ? (r === 'admin' ? 'bg-rose-500/25 text-rose-200' : r === 'operator' ? 'bg-amber-500/25 text-amber-200' : 'bg-sky-500/25 text-sky-200') : 'text-muted'"
+                    x-text="roleLabel(r)"></button>
+          </template>
+        </div>
+        <p class="text-[10.5px] text-subtle leading-snug" x-text="t('role_' + usersState.form.role + '_desc')"></p>
+      </div>
+      <label class="block space-y-1">
+        <span class="text-[11px] font-semibold text-muted" x-text="usersState.form.isNew ? t('usPassword') : t('usResetPassword')"></span>
+        <input type="password" x-model="usersState.form.password" autocomplete="new-password"
+               class="glass-input w-full rounded-xl px-3 py-2 text-xs" :placeholder="usersState.form.isNew ? t('pwNew') : t('usResetPh')" />
+      </label>
+      <template x-if="!usersState.form.isNew && !usersState.form.self">
+        <div class="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 bg-rose-500/8 border border-rose-500/20">
+          <div class="min-w-0">
+            <p class="text-xs font-semibold" x-text="t('usDisable')"></p>
+            <p class="text-[10.5px] text-muted leading-snug" x-text="t('usDisableDesc')"></p>
+          </div>
+          <button type="button" role="switch" :aria-checked="usersState.form.disabled" @click="usersState.form.disabled = !usersState.form.disabled"
+                  class="relative w-11 h-6 rounded-full transition shrink-0" :class="usersState.form.disabled ? 'bg-rose-500' : 'bg-slate-600'">
+            <span class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition" :class="usersState.form.disabled ? 'translate-x-5' : ''"></span>
+          </button>
+        </div>
+      </template>
+      <!-- Sẽ thực hiện -->
+      <div x-show="!usersState.form.isNew" class="rounded-xl px-3 py-2.5 bg-[var(--glass-surface)] text-[10.5px] text-muted leading-snug">
+        <p class="font-semibold text-[11px] text-[var(--text-primary)] mb-0.5" x-text="t('dfPlanTitle')"></p>
+        <p x-text="usersState.form.self ? t('usWillSelf') : t('usWillOther')"></p>
+      </div>
+      <p x-show="usersState.form.error" class="text-[11px] text-rose-300 break-words" x-text="usersState.form.error"></p>
+      <div class="grid gap-2" :class="usersState.form.isNew || usersState.form.self ? 'grid-cols-1' : 'grid-cols-2'">
+        <button x-show="!usersState.form.isNew && !usersState.form.self" @click="confirmDeleteUser()" class="glass-btn py-2.5 rounded-xl text-xs font-semibold text-rose-400" x-text="t('delete')"></button>
+        <button @click="saveUserForm()" :disabled="usersState.form.busy || (usersState.form.isNew && (!usersState.form.username.trim() || !usersState.form.password))"
+                class="glass-btn-primary py-2.5 rounded-xl text-xs font-semibold disabled:opacity-50" x-text="usersState.form.busy ? '…' : (usersState.form.isNew ? t('usCreate') : t('save'))"></button>
       </div>
     </div>
   </div>

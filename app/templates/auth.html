@@ -224,7 +224,7 @@
               body: JSON.stringify(body)
             });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || 'Authentication failed');
+            if (!res.ok) throw new Error(res.status === 403 && this.lang === 'vi' && /disabled/.test(data.detail || '') ? 'Tài khoản này đã bị khoá. Hãy nhờ Quản trị mở lại.' : (data.detail || 'Authentication failed'));
             if (data.otp_required) {
               this.otpStep = true;
               this.$nextTick(() => this.$refs.otpInput && this.$refs.otpInput.focus());

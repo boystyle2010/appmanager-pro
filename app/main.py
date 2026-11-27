@@ -15,11 +15,15 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from app.core import api_tokens, jobs, logs as app_logs, servers
+from app.core import api_tokens, jobs, logs as app_logs, servers, users as users_mod
 from app.core.app_backup import delete_backup, list_backups, restore_backup
 from app.core.auth import (
+    COOKIE_NAME,
+    check_role,
     check_second_factor,
     clear_failed_attempts,
+    revoke_sessions,
+    session_user,
     clear_session_cookie,
     get_client_ip,
     get_current_user_optional,
@@ -57,11 +61,13 @@ from app.core.compose_manager import (
 from app.core.database import (
     DATA_DIR,
     add_audit,
+    create_user,
+    delete_user,
+    list_users,
     get_app_pref,
     get_audit_log,
     get_resource_samples,
     get_resource_totals,
-    rotate_session_secret,
     update_user_fields,
     get_public_settings,
     get_update_cache_item,
@@ -395,10 +401,15 @@ async def api_login(payload: LoginPayload, request: Request, response: Response)
             _notify_if_locked(ip, user["username"])
             raise HTTPException(status_code=401, detail="Invalid two-factor code")
 
+    if user["disabled"]:
+        audit(request, user["username"], "login_failed", detail="Account disabled", ok=False)
+        raise HTTPException(status_code=403, detail="This account is disabled. Ask an administrator.")
+
     clear_failed_attempts(ip)
+    update_user_fields(user["username"], last_login=time.strftime("%Y-%m-%d %H:%M:%S"), last_ip=ip)
     set_session_cookie(response, request, user["username"], remember=payload.remember)
     audit(request, user["username"], "login", detail="2FA" if user["totp_enabled"] else "")
-    return {"ok": True, "username": user["username"]}
+    return {"ok": True, "username": user["username"], "role": user["role"] or "admin"}
 
 
 @app.post("/api/auth/logout")
@@ -481,7 +492,7 @@ async def api_change_password(payload: PasswordChangePayload, request: Request, 
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     validate_new_password(payload.new_password)
     update_user_fields(user, password_hash=await asyncio.to_thread(hash_password, payload.new_password))
-    rotate_session_secret()  # đăng xuất mọi thiết bị khác
+    revoke_sessions(user)  # đăng xuất mọi thiết bị khác của người này (người khác không bị ảnh hưởng)
     set_session_cookie(response, request, user, remember=True)
     audit(request, user, "password_changed")
     notify.on_security(("Mật khẩu của " if notify.settings()["lang"] == "vi" else "The password of ") + user +
@@ -491,8 +502,20 @@ async def api_change_password(payload: PasswordChangePayload, request: Request, 
 
 
 @app.get("/api/audit")
-async def api_audit(limit: int = 200, _: str = Depends(require_user)):
-    return {"items": get_audit_log(max(1, min(1000, limit)))}
+async def api_audit(limit: int = 200, user: str = "", _: str = Depends(require_user)):
+    """Nhật ký hoạt động (Quản trị). user = chỉ hành động của một người (vd admin, token:Home Assistant)."""
+    return {"items": get_audit_log(max(1, min(1000, limit)), user.strip()[:80])}
+
+
+# ---------------- Tài khoản & phân quyền (0.22) ----------------
+
+@app.get("/api/auth/me")
+async def api_me(request: Request):
+    """Người đang đăng nhập + vai trò (giao diện dùng để ẩn nút không được phép)."""
+    u = session_user(request.cookies.get(COOKIE_NAME))
+    if not u:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return {"username": u["username"], "role": u["role"] or "admin", "roles": list(users_mod.ROLES)}
 
 
 # ---------------- Docker & Update APIs ----------------
@@ -939,13 +962,95 @@ class UpdateJobPayload(BaseModel):
 
 
 def _session_only(request: Request) -> str:
-    """Quản lý token chỉ qua giao diện web (cookie phiên) — token không tự tạo / xoá token được."""
+    """Quản lý token chỉ qua giao diện web (cookie phiên) — token không tự tạo / xoá token được.
+    Vai trò của người đăng nhập vẫn được kiểm tra (vd Chỉ xem không thêm máy chủ được)."""
     if api_tokens.bearer(request.headers):
         raise HTTPException(status_code=403, detail="API tokens cannot manage API tokens; sign in on the web page")
-    user = get_current_user_optional(request)
-    if not user:
+    u = session_user(request.cookies.get(COOKIE_NAME))
+    if not u:
         raise HTTPException(status_code=401, detail="Unauthorized")
-    return user
+    check_role(request, u["role"] or "admin", request.method, request.url.path)
+    return u["username"]
+
+
+class UserPayload(BaseModel):
+    username: str
+    role: str = "viewer"
+    password: Optional[str] = None
+    disabled: Optional[bool] = None
+    new: bool = False
+
+
+class UserNamePayload(BaseModel):
+    username: str
+
+
+@app.get("/api/users")
+async def api_users(_: str = Depends(_session_only)):
+    return {"users": [users_mod.public(u) for u in list_users()], "roles": list(users_mod.ROLES)}
+
+
+@app.post("/api/users")
+async def api_user_save(payload: UserPayload, request: Request, response: Response, me: str = Depends(_session_only)):
+    """Thêm (new=true, cần mật khẩu) hoặc sửa tài khoản: vai trò, khoá / mở khoá, đặt lại mật khẩu."""
+    all_users = list_users()
+    try:
+        role = users_mod.validate_role(payload.role)
+        if payload.new:
+            name = users_mod.validate_username(payload.username)
+            if get_user_by_username(name):
+                raise ValueError("This user name already exists")
+            if len(all_users) >= users_mod.MAX_USERS:
+                raise ValueError(f"At most {users_mod.MAX_USERS} accounts")
+            if not payload.password:
+                raise ValueError("Enter a password for the new account")
+        else:
+            cur = get_user_by_username(payload.username)
+            if not cur or cur["username"] != payload.username:
+                raise HTTPException(status_code=404, detail="Account not found")
+            name = cur["username"]
+            demote = (cur["role"] or "admin") == "admin" and (role != "admin" or payload.disabled)
+            if demote and users_mod.active_admins(all_users, exclude=name) == 0:
+                raise ValueError("Keep at least one active administrator")
+            if name == me and payload.disabled:
+                raise ValueError("You cannot disable your own account")
+        if payload.password:
+            validate_new_password(payload.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if payload.new:
+        create_user(name, await asyncio.to_thread(hash_password, payload.password), role, me)
+        audit(request, me, "user_add", name, role)
+        return {"ok": True, "user": users_mod.public(get_user_by_username(name))}
+    changes: list[str] = []
+    fields: dict[str, Any] = {}
+    if role != (cur["role"] or "admin"):
+        fields["role"] = role; changes.append(f"role {cur['role'] or 'admin'} -> {role}")
+    if payload.disabled is not None and bool(payload.disabled) != bool(cur["disabled"]):
+        fields["disabled"] = 1 if payload.disabled else 0; changes.append("disabled" if payload.disabled else "enabled")
+    if payload.password:
+        fields["password_hash"] = await asyncio.to_thread(hash_password, payload.password); changes.append("password reset")
+    if fields:
+        update_user_fields(name, **fields)
+        revoke_sessions(name)  # vai trò / mật khẩu / khoá có hiệu lực ngay trên mọi thiết bị của người đó
+        if name == me:
+            set_session_cookie(response, request, name, remember=True)  # tự sửa mình: giữ đăng nhập ở thiết bị này
+        audit(request, me, "user_edit", name, ", ".join(changes))
+    return {"ok": True, "user": users_mod.public(get_user_by_username(name)), "self_changed": name == me and bool(fields)}
+
+
+@app.post("/api/users/delete")
+async def api_user_delete(payload: UserNamePayload, request: Request, me: str = Depends(_session_only)):
+    cur = get_user_by_username(payload.username)
+    if not cur or cur["username"] != payload.username:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if cur["username"] == me:
+        raise HTTPException(status_code=400, detail="You cannot delete your own account")
+    if (cur["role"] or "admin") == "admin" and users_mod.active_admins(list_users(), exclude=cur["username"]) == 0:
+        raise HTTPException(status_code=400, detail="Keep at least one active administrator")
+    delete_user(cur["username"])
+    audit(request, me, "user_delete", cur["username"], cur["role"] or "admin")
+    return {"ok": True}
 
 
 @app.get("/api/tokens")
@@ -1317,7 +1422,8 @@ _API_GUIDE: list[tuple[str, str, str, str, str]] = [
     ("GET", "/api/backups", "App configuration backups.", "Các bản sao lưu cấu hình app.", ""),
     ("POST", "/api/backups/restore", "Restore an app configuration backup (Update permission or higher).", "Khôi phục bản sao lưu cấu hình app (quyền Cập nhật trở lên).", '{"app": "<app>", "file": "<backup file>"}'),
     ("GET", "/api/system/storage", "Docker disk usage and reclaimable space.", "Dung lượng Docker và phần có thể dọn.", ""),
-    ("GET", "/api/audit", "Activity log (who did what, from which IP).", "Nhật ký hoạt động (ai làm gì, từ IP nào).", ""),
+    ("GET", "/api/audit", "Activity log (who did what, from which IP). Optional user=<name> (e.g. token:Home Assistant) shows one person only.",
+     "Nhật ký hoạt động (ai làm gì, từ IP nào). Tuỳ chọn user=<tên> (vd token:Home Assistant) để xem riêng một người.", ""),
 ]
 
 
@@ -1733,7 +1839,7 @@ async def ws_task_manager(websocket: WebSocket):
     ws_user = verify_websocket_user(websocket)
     await websocket.accept()
     if not ws_user:
-        await websocket.close(code=4401)
+        await websocket.close(code=4403 if getattr(websocket.state, "denied", False) else 4401)
         return
     try:
         while True:
@@ -1749,7 +1855,7 @@ async def ws_deploy_app(websocket: WebSocket):
     ws_user = verify_websocket_user(websocket)
     await websocket.accept()
     if not ws_user:
-        await websocket.close(code=4401)
+        await websocket.close(code=4403 if getattr(websocket.state, "denied", False) else 4401)
         return
 
     async def send_log(text: str):
@@ -1782,7 +1888,7 @@ async def ws_container_logs(websocket: WebSocket, container_id: str):
     ws_user = verify_websocket_user(websocket)
     await websocket.accept()
     if not ws_user:
-        await websocket.close(code=4401)
+        await websocket.close(code=4403 if getattr(websocket.state, "denied", False) else 4401)
         return
 
     loop = asyncio.get_running_loop()
@@ -1854,7 +1960,7 @@ async def ws_update_app(websocket: WebSocket, container_name: str):
     ws_user = verify_websocket_user(websocket)
     await websocket.accept()
     if not ws_user:
-        await websocket.close(code=4401)
+        await websocket.close(code=4403 if getattr(websocket.state, "denied", False) else 4401)
         return
 
     async def send_log(text: str):
@@ -1889,7 +1995,7 @@ async def ws_update_all(websocket: WebSocket):
     ws_user = verify_websocket_user(websocket)
     await websocket.accept()
     if not ws_user:
-        await websocket.close(code=4401)
+        await websocket.close(code=4403 if getattr(websocket.state, "denied", False) else 4401)
         return
 
     async def send_event(payload: dict):

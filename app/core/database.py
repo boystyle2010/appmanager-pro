@@ -121,6 +121,13 @@ def init_db() -> None:
             ("totp_last_step", "INTEGER DEFAULT 0"),
             ("backup_codes", "TEXT DEFAULT '[]'"),
             ("totp_pending", "TEXT DEFAULT ''"),
+            # 0.22 nhiều tài khoản: tài khoản cũ (trước 0.22) là Quản trị
+            ("role", "TEXT DEFAULT 'admin'"),
+            ("disabled", "INTEGER DEFAULT 0"),
+            ("session_ver", "INTEGER DEFAULT 1"),
+            ("last_login", "TEXT DEFAULT ''"),
+            ("last_ip", "TEXT DEFAULT ''"),
+            ("created_by", "TEXT DEFAULT ''"),
         ):
             if col not in ucols:
                 conn.execute(f"ALTER TABLE users ADD COLUMN {col} {ddl}")
@@ -231,31 +238,53 @@ def has_admin_user() -> bool:
 
 
 def create_admin_user(username: str, password_hash: str) -> None:
+    create_user(username, password_hash, "admin", "")
+
+
+def create_user(username: str, password_hash: str, role: str, created_by: str) -> None:
     conn = get_connection()
     try:
         conn.execute(
-            "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-            (username, password_hash),
+            "INSERT INTO users (username, password_hash, role, created_by) VALUES (?, ?, ?, ?)",
+            (username, password_hash, role, created_by),
         )
         conn.commit()
     finally:
         conn.close()
 
 
+_USER_COLS = ("id, username, password_hash, totp_secret, totp_enabled, totp_last_step, backup_codes, totp_pending, "
+              "role, disabled, session_ver, last_login, last_ip, created_by, created_at")
+
+
 def get_user_by_username(username: str):
     conn = get_connection()
     try:
-        return conn.execute(
-            "SELECT id, username, password_hash, totp_secret, totp_enabled, totp_last_step, "
-            "backup_codes, totp_pending FROM users WHERE username = ?",
-            (username,),
-        ).fetchone()
+        return conn.execute(f"SELECT {_USER_COLS} FROM users WHERE username = ? COLLATE NOCASE", (username,)).fetchone()
+    finally:
+        conn.close()
+
+
+def list_users() -> list[dict[str, Any]]:
+    conn = get_connection()
+    try:
+        return [dict(r) for r in conn.execute(f"SELECT {_USER_COLS} FROM users ORDER BY id").fetchall()]
+    finally:
+        conn.close()
+
+
+def delete_user(username: str) -> None:
+    conn = get_connection()
+    try:
+        conn.execute("DELETE FROM users WHERE username = ?", (username,))
+        conn.commit()
     finally:
         conn.close()
 
 
 def update_user_fields(username: str, **fields: Any) -> None:
-    allowed = {"password_hash", "totp_secret", "totp_enabled", "totp_last_step", "backup_codes", "totp_pending"}
+    allowed = {"password_hash", "totp_secret", "totp_enabled", "totp_last_step", "backup_codes", "totp_pending",
+               "role", "disabled", "session_ver", "last_login", "last_ip"}
     cols = [k for k in fields if k in allowed]
     if not cols:
         return
@@ -327,10 +356,13 @@ def add_audit(action: str, username: str = "", ip: str = "", target: str = "", d
         conn.close()
 
 
-def get_audit_log(limit: int = 200) -> list[dict[str, Any]]:
+def get_audit_log(limit: int = 200, username: str = "") -> list[dict[str, Any]]:
     conn = get_connection()
     try:
-        rows = conn.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        if username:
+            rows = conn.execute("SELECT * FROM audit_log WHERE username = ? ORDER BY id DESC LIMIT ?", (username, limit)).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()

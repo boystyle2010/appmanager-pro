@@ -1,2 +1,5 @@
 # Ghi chú cho bản phát hành kế tiếp — mỗi dòng bắt đầu bằng "- "
 - Logs: color codes written by many apps (e.g. Portainer, Go and Node apps) are shown as real colors instead of odd characters like `[32m`; search and filters ignore them and downloaded logs are plain text.
+- Multiple accounts with roles (Settings → Accounts & permissions): Admin (everything), Update (view + check for and install updates, start / stop / restart, restore backups, per-app update rules) and View only (apps, versions, changelogs, logs, history). Permissions are enforced by the server for every request and WebSocket; the interface hides what your role cannot do. Accounts created before this version are Admins.
+- Admins add accounts, change roles, reset passwords, disable or delete accounts; changes take effect at once (that person is signed out on every device). There is always at least one active Admin. Changing your own password now signs out only your other devices, not other people.
+- Activity log can be filtered by person (accounts and API Tokens). New API: `GET /api/auth/me`, `/api/users` (admins signed in on the web only), `GET /api/audit?user=`.
