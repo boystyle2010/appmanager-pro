@@ -83,6 +83,7 @@
       } catch (e) {}
     })();
   </script>
+  <script>if ('serviceWorker' in navigator && window.isSecureContext) { window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {}); }); }</script>
 </head>
 <body x-data="dashboardApp()" @keydown.window="handleShortcut($event)">
   <div class="ambient-bg"></div>

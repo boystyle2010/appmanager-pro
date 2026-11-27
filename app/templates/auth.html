@@ -86,6 +86,7 @@
     .lp-pill { background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .08); }
     @media (prefers-reduced-motion: reduce) { .lp-mote { animation: none; opacity: .5; bottom: auto; } .lp-on .lp-beam { animation: none; } .lp-star { animation: none; } .lp-card { transition: none; } .lp-on .lp-led, .lp-on .lp-scan, .lp-hit { animation: none; } }
   </style>
+  <script>if ('serviceWorker' in navigator && window.isSecureContext) { window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {}); }); }</script>
 </head>
 <body class="lp" x-data="authApp({{ 'true' if is_setup else 'false' }})" :class="{ 'lp-ready': ready, 'lp-on': lampOn, 'lp-off': !lampOn }"
       :style="`--lamp: ${lampColors[color]}`">
