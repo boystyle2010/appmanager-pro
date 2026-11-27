@@ -2724,6 +2724,15 @@
                   <p class="text-[10.5px] text-muted leading-snug" x-text="t('wpDesc')"></p>
                 </div>
               </div>
+              <div class="flex flex-wrap items-center gap-1.5">
+                <span class="text-[10.5px] font-semibold text-muted mr-0.5" x-text="t('npSupport')"></span>
+                <template x-for="pf in notifyPlatforms('webpush')" :key="'wp' + pf">
+                  <span class="inline-flex items-center gap-1 h-6 px-2 rounded-lg bg-white/[0.06] border border-[var(--glass-border)] text-[10.5px] font-semibold">
+                    <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" aria-hidden="true" x-html="platformIcon(pf)"></svg>
+                    <span x-text="pf === 'ios' ? 'iOS 16.4+' : platformLabel(pf)"></span>
+                  </span>
+                </template>
+              </div>
               <!-- Trạng thái thiết bị đang dùng -->
               <template x-if="!wp.secure">
                 <div class="rounded-xl px-3 py-2.5 bg-amber-500/10 border border-amber-400/30 text-[11px] text-amber-100 leading-relaxed space-y-1.5">
