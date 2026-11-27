@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.24.0
+
+*Released: 2026-11-27*
+
+### 📦 Component & Version Matrix
+
+- **App Release:** Bumped from `v0.23.0` ➡️ `v0.24.0`
+- **Supported Architectures:** `linux/amd64` (x86_64), `linux/arm64` (ARM64) & `linux/arm/v7` (ARMv7 32-bit) *(Multi-arch GHCR Image)*
+- **Python Base Image:** `python 3.15.2`
+- **Docker CLI:** `docker 29.10.1`
+- **Core Python Stack:** `FastAPI 0.165.0` • `Uvicorn 0.54.0` • `Docker SDK 7.2.0` • `ruamel.yaml 0.19.1` • `Argon2 25.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.29.0` • `APScheduler 3.11.3` • `segno 1.6.6`
+- **Frontend Libraries:** `Alpine.js 3.17.5` • `Tailwind CSS 4.3.5` • `marked 18.3.0` • `DOMPurify 3.5.0`
+
+### 🚀 What's Changed
+
+- The "Roles" headings (Accounts page and "Groups → Roles" in SSO settings; "Vai trò" in Vietnamese) start with a capital letter.
+- AppManager configuration backup (Settings → Configuration backup): save accounts and roles (passwords stay hashed, 2FA kept), single sign-on, API Tokens, notification channels, other servers, registry accounts, per-app update rules and general settings to one `.ampbak` file encrypted with your password (scrypt + AES-256-GCM, works on ARMv7). Choose which parts to include.
+- Restore from a `.ampbak` file: preview what is inside, pick the parts to restore, confirm. The current configuration is saved automatically first (last 5 copies, downloadable) so a restore can be undone; a file without an active administrator cannot replace the accounts. Moving to a new machine keeps passwords, 2FA, roles and API Tokens working.
+
 ## 0.23.0
 
 *Released: 2026-11-27*

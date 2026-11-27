@@ -1,4 +1,1 @@
 # Ghi chú cho bản phát hành kế tiếp — mỗi dòng bắt đầu bằng "- "
-- The "Roles" headings (Accounts page and "Groups → Roles" in SSO settings; "Vai trò" in Vietnamese) start with a capital letter.
-- AppManager configuration backup (Settings → Configuration backup): save accounts and roles (passwords stay hashed, 2FA kept), single sign-on, API Tokens, notification channels, other servers, registry accounts, per-app update rules and general settings to one `.ampbak` file encrypted with your password (scrypt + AES-256-GCM, works on ARMv7). Choose which parts to include.
-- Restore from a `.ampbak` file: preview what is inside, pick the parts to restore, confirm. The current configuration is saved automatically first (last 5 copies, downloadable) so a restore can be undone; a file without an active administrator cannot replace the accounts. Moving to a new machine keeps passwords, 2FA, roles and API Tokens working.
