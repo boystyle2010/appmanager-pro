@@ -57,6 +57,7 @@
         taskModal: { open: false, connected: false, data: null, ws: null },
         taskSort: 'cpu',
         settingsModal: { open: false, tab: 'home' },
+        settingsBase: null,
         settingsForm: {
           check_interval_hours: 6, auto_update_enabled: false,
           auto_update_time: '03:30', prune_old_images: true, auto_rollback: true, health_wait_seconds: 25,
@@ -2141,9 +2142,12 @@
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || 'Failed to load settings');
             this.settingsForm = { ...data.settings, github_token: '' };
+            this._snapSettings();
             this.updateHistory = data.history || [];
           } catch (err) { this.showToast(err.message); }
-          if (this.isAdmin()) this.loadApiStatus();
+          if (this.isAdmin()) { this.loadApiStatus(); this.loadNotify(); this.loadTokens(); }
+          // tóm tắt trên trang đầu (2FA bật / tắt)
+          fetch('/api/auth/security').then(r => r.ok ? r.json() : null).then(d => { if (d) this.security.totp_enabled = !!d.totp_enabled; }).catch(() => {});
         },
 
         openSettingsSection(tab) {
@@ -2457,7 +2461,7 @@
 
         settingsSectionTitle() {
           return {
-            home: this.t('settingsTitle'), schedule: this.t('setGeneral'), storage: this.t('setStorage'), users: this.t('setUsers'), sso: this.t('setSso'), config: this.t('setConfig'),
+            home: this.t('settingsTitle'), language: this.t('language'), schedule: this.t('setGeneral'), storage: this.t('setStorage'), users: this.t('setUsers'), sso: this.t('setSso'), config: this.t('setConfig'),
             notify: this.t('setNotify'), servers: this.t('setServers'), security: this.t('tabSecurity'), tokens: this.t('setTokens'), history: this.t('tabHistory'), about: this.t('tabAbout'),
           }[this.settingsModal.tab] || this.t('settingsTitle');
         },
@@ -2485,23 +2489,33 @@
           I.users = 'M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z';
           const admin = this.isAdmin();
           // Không phải Quản trị: chỉ còn tài khoản của mình (mật khẩu / 2FA), lịch sử cập nhật, giới thiệu
-          const keep = admin ? null : new Set(['security', 'history', 'about']);
+          const keep = admin ? null : new Set(['language', 'security', 'history', 'about']);
+          I.globe = 'M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418';
+          const f = this.settingsForm || {};
+          const general = f.auto_update_enabled
+            ? this.t('sumAuto').replace('{t}', f.auto_update_time || '03:30').replace('{h}', f.check_interval_hours || 6)
+            : this.t('sumCheck').replace('{h}', f.check_interval_hours || 6);
+          const chans = (this.notifyState.channels || []).filter(x => x.enabled).length;
+          const toks = (this.tokenState.items || []).length;
           const menu = [
-            { id: 'main', items: [
-              { tab: 'schedule', title: this.t('setGeneral'), desc: this.t('setGeneralDesc'), icon: I.gear, color: c('sky') },
+            { id: 'pref', label: this.t('grpPersonal'), items: [
+              { tab: 'language', title: this.t('language'), desc: this.lang === 'vi' ? 'Tiếng Việt' : 'English', icon: I.globe, color: c('sky') },
+            ] },
+            { id: 'main', label: this.t('grpGeneral'), items: [
+              { tab: 'schedule', title: this.t('setGeneral'), desc: this.settingsBase ? general : this.t('setGeneralDesc'), icon: I.gear, color: c('sky') },
               { tab: 'storage', title: this.t('setStorage'), desc: st?.missing_count ? this.t('dataFoldersMissing').replace('{n}', st.missing_count) : this.t('setStorageDesc'), warn: !!st?.missing_count, icon: I.disk, color: c('emerald') },
-              { tab: 'notify', title: this.t('setNotify'), desc: this.t('setNotifyDesc'), icon: I.bell, color: c('amber') },
+              { tab: 'notify', title: this.t('setNotify'), desc: chans ? this.t('sumChannels').replace('{n}', chans) : this.t('setNotifyDesc'), icon: I.bell, color: c('amber') },
               { tab: 'servers', title: this.t('setServers'), desc: this.srv.list.length ? this.t('svCount').replace('{n}', this.srv.list.length) : this.t('setServersDesc'), icon: I.servers, color: c('violet') },
             ] },
-            { id: 'safety', items: [
-              { tab: 'security', title: this.t('tabSecurity'), desc: admin ? this.t('setSecurityDesc') : this.t('setSecurityDescSelf'), icon: I.lock, color: c('rose') },
+            { id: 'safety', label: this.t('grpSecurity'), items: [
+              { tab: 'security', title: this.t('tabSecurity'), desc: this.security.totp_enabled ? this.t('sum2faOn') : this.t('sum2faOff'), icon: I.lock, color: c('rose') },
               { tab: 'sso', title: this.t('setSso'), desc: this.ssoState.cfg?.enabled ? this.t('ssoOnWith').replace('{p}', this.ssoState.cfg.label || 'SSO') : this.t('setSsoDesc'), icon: I.sso, color: c('violet') },
               { tab: 'users', title: this.t('setUsers'), desc: this.usersState.list.length > 1 ? this.t('usCount').replace('{n}', this.usersState.list.length) : this.t('setUsersDesc'), icon: I.users, color: c('emerald') },
               { tab: 'config', title: this.t('setConfig'), desc: this.t('setConfigDesc'), icon: I.archive, color: c('amber') },
-              { tab: 'tokens', title: this.t('setTokens'), desc: this.t('setTokensDesc'), icon: I.key, color: c('sky') },
-              { tab: 'history', title: this.t('tabHistory'), desc: this.t('setHistoryDesc'), icon: I.clock, color: c('violet') },
+              { tab: 'tokens', title: this.t('setTokens'), desc: toks ? this.t('sumTokens').replace('{n}', toks) : this.t('setTokensDesc'), icon: I.key, color: c('sky') },
             ] },
-            { id: 'about', items: [
+            { id: 'about', label: this.t('grpOther'), items: [
+              { tab: 'history', title: this.t('tabHistory'), desc: (this.updateHistory || []).length ? this.t('sumHistory').replace('{n}', this.updateHistory.length) : this.t('setHistoryDesc'), icon: I.clock, color: c('violet') },
               { tab: 'about', title: this.t('tabAbout'), desc: this.t('setAboutDesc'), icon: I.info, color: c('slate') },
             ] },
           ];
@@ -2810,9 +2824,9 @@
           await this.loadApiStatus();
         },
 
-        async saveSettings() {
-          const f = this.settingsForm;
-          const payload = {
+        // Cài đặt chung chỉnh như bản nháp: thanh dưới cùng "N thay đổi · Huỷ · Lưu" (kiểu Cài đặt iOS)
+        _settingsPayload(f = this.settingsForm) {
+          return {
             check_interval_hours: Math.max(1, Math.min(168, parseInt(f.check_interval_hours, 10) || 6)),
             auto_update_enabled: !!f.auto_update_enabled,
             auto_update_time: f.auto_update_time || '03:30',
@@ -2830,12 +2844,24 @@
             backup_file_max_mb: Math.max(1, Math.min(10240, parseInt(f.backup_file_max_mb, 10) || 50)),
             backup_keep: Math.max(1, Math.min(20, parseInt(f.backup_keep, 10) || 3))
           };
+        },
+        _snapSettings() { this.settingsBase = JSON.parse(JSON.stringify(this.settingsForm)); },
+        settingsChanges() {
+          if (!this.settingsBase) return 0;
+          const now = this._settingsPayload(), base = this._settingsPayload(this.settingsBase);
+          return Object.keys(now).filter(k => now[k] !== base[k]).length + ((this.settingsForm.github_token || '').trim() ? 1 : 0);
+        },
+        discardSettings() { if (this.settingsBase) this.settingsForm = JSON.parse(JSON.stringify(this.settingsBase)); },
+        async saveSettings() {
+          const f = this.settingsForm;
+          const payload = this._settingsPayload();
           if ((f.github_token || '').trim()) payload.github_token = f.github_token.trim();
           try {
             const { res, data } = await this._postJson('/api/settings', payload);
             if (!res.ok) throw new Error(data.detail || 'Failed to save settings');
             this.settingsForm = { ...data.settings, github_token: '' };
-            this.showToast(this.lang === 'vi' ? 'Đã lưu cài đặt ✓' : 'Settings saved ✓');
+            this._snapSettings();
+            this.showToast(this.lang === 'vi' ? 'Đã lưu cài đặt' : 'Settings saved');
           } catch (err) { this.showToast(err.message); }
         },
 

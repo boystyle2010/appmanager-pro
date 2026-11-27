@@ -1833,13 +1833,13 @@
     <div class="glass-panel w-full max-w-xl rounded-t-[28px] sm:rounded-[28px] p-5 sm:p-6 flex flex-col max-h-[90dvh]"
          style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));">
       <div class="sheet-handle sm:hidden"></div>
-      <div class="flex items-center justify-between pb-3.5 border-b border-[var(--glass-border)]">
+      <div class="flex items-center justify-between pb-3.5" :class="settingsModal.tab !== 'home' && 'border-b border-[var(--glass-border)]'">
         <div class="flex items-center gap-2 min-w-0">
           <button x-show="settingsModal.tab !== 'home'" @click="settingsModal.tab = 'home'" :aria-label="t('back')"
                   class="glass-btn w-8 h-8 rounded-full flex items-center justify-center text-muted hover:text-[var(--text-primary)] shrink-0">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
           </button>
-          <h3 class="font-bold text-base truncate" x-text="settingsSectionTitle()"></h3>
+          <h3 x-show="settingsModal.tab !== 'home'" class="font-bold text-base truncate" x-text="settingsSectionTitle()"></h3>
         </div>
         <div class="flex items-center gap-2 shrink-0">
         <button x-show="settingsModal.tab === 'home'" @click="openSettingsSection('about')" :aria-label="t('tabAbout')" :title="t('tabAbout')"
@@ -1858,53 +1858,76 @@
         </div>
       </div>
 
-      <div class="flex-1 overflow-y-auto space-y-3.5 pt-4">
-        <!-- TRANG ĐẦU: danh sách mục (kiểu Cài đặt của iPhone) — mỗi mục mở trang con có nút quay lại -->
+      <div class="flex-1 overflow-y-auto space-y-3.5" :class="settingsModal.tab === 'home' ? 'pt-0' : 'pt-4'">
+        <!-- TRANG ĐẦU (kiểu Cài đặt iOS): tiêu đề lớn, thẻ nhanh, nhóm có nhãn chữ in hoa, mỗi dòng có icon màu + giá trị hiện tại -->
         <template x-if="settingsModal.tab === 'home'">
-          <div class="space-y-3.5">
+          <div class="space-y-5 pb-2">
+            <div class="-mt-1">
+              <h2 class="text-[28px] font-bold leading-tight tracking-tight" x-text="t('settingsTitle')"></h2>
+              <p class="text-[13px] text-muted mt-0.5" x-text="t('setHero')"></p>
+            </div>
+            <!-- thẻ nhanh: chế độ tối -->
+            <button type="button" @click="setTheme(theme === 'dark' ? 'light' : 'dark')" role="switch" :aria-checked="theme === 'dark'"
+                    class="glass-inset w-full rounded-[20px] flex items-center gap-3 px-3.5 py-3.5 text-left active:scale-[.99] transition">
+              <span class="w-10 h-10 rounded-[13px] flex items-center justify-center shrink-0 border bg-indigo-500/15 border-indigo-400/35 text-indigo-300">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/></svg>
+              </span>
+              <span class="min-w-0 flex-1">
+                <span class="block text-[14px] font-semibold" x-text="t('darkMode')"></span>
+                <span class="block text-[11.5px] text-muted" x-text="t('darkModeDesc')"></span>
+              </span>
+              <span class="w-11 h-6 rounded-full relative shrink-0 transition" :class="theme === 'dark' ? 'bg-emerald-500' : 'bg-slate-500/50'">
+                <span class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform" :class="theme === 'dark' && 'translate-x-5'"></span>
+              </span>
+            </button>
             <template x-for="group in settingsMenu()" :key="group.id">
-              <div class="glass-inset rounded-2xl overflow-hidden divide-y divide-[var(--glass-border)]">
-                <template x-for="item in group.items" :key="item.tab">
-                  <button type="button" @click="openSettingsSection(item.tab)"
-                          class="w-full flex items-center gap-3 px-3.5 py-3 text-left hover:bg-white/[0.03] active:bg-white/[0.06] transition">
-                    <span class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border" :class="item.color">
-                      <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" :d="item.icon"/></svg>
-                    </span>
-                    <span class="min-w-0 flex-1">
-                      <span class="block text-[13px] font-semibold" x-text="item.title"></span>
-                      <span class="block text-[11px] truncate" :class="item.warn ? 'text-amber-300' : 'text-muted'" x-text="item.desc"></span>
-                    </span>
-                    <svg class="w-4 h-4 text-subtle shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
-                  </button>
-                </template>
-              </div>
+              <section>
+                <p class="px-3.5 mb-1.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-subtle" x-text="group.label"></p>
+                <div class="glass-inset rounded-[20px] overflow-hidden divide-y divide-[var(--glass-border)]">
+                  <template x-for="item in group.items" :key="item.tab">
+                    <button type="button" @click="openSettingsSection(item.tab)"
+                            class="w-full flex items-center gap-3 px-3.5 py-3 text-left hover:bg-white/[0.03] active:bg-white/[0.06] transition">
+                      <span class="w-9 h-9 rounded-[12px] flex items-center justify-center shrink-0 border" :class="item.color">
+                        <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" :d="item.icon"/></svg>
+                      </span>
+                      <span class="min-w-0 flex-1">
+                        <span class="block text-[13.5px] font-semibold" x-text="item.title"></span>
+                        <span class="block text-[11.5px] truncate" :class="item.warn ? 'text-amber-300' : 'text-muted'" x-text="item.desc"></span>
+                      </span>
+                      <svg class="w-4 h-4 text-subtle shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+                    </button>
+                  </template>
+                </div>
+              </section>
             </template>
+          </div>
+        </template>
+
+        <!-- Ngôn ngữ: danh sách có mã ngôn ngữ, chọn là áp dụng ngay -->
+        <template x-if="settingsModal.tab === 'language'">
+          <div class="space-y-2">
+            <div class="glass-inset rounded-[20px] overflow-hidden divide-y divide-[var(--glass-border)]">
+              <template x-for="l in [{ id: 'vi', code: 'VI', name: 'Tiếng Việt', sub: 'Vietnamese' }, { id: 'en', code: 'EN', name: 'English', sub: 'Tiếng Anh' }]" :key="l.id">
+                <button type="button" @click="setLang(l.id)" class="w-full flex items-center gap-3 px-3.5 py-3 text-left hover:bg-white/[0.03] transition">
+                  <span class="w-9 h-9 rounded-[12px] flex items-center justify-center shrink-0 text-[11px] font-bold border"
+                        :class="lang === l.id ? 'bg-sky-500/20 border-sky-400/45 text-sky-300' : 'bg-white/[0.04] border-[var(--glass-border)] text-muted'" x-text="l.code"></span>
+                  <span class="min-w-0 flex-1">
+                    <span class="block text-[13.5px] font-semibold" x-text="l.name"></span>
+                    <span class="block text-[11.5px] text-muted" x-text="l.sub"></span>
+                  </span>
+                  <span x-show="lang === l.id" class="w-5 h-5 rounded-full bg-sky-500 text-white flex items-center justify-center shrink-0">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                  </span>
+                </button>
+              </template>
+            </div>
+            <p class="px-3.5 text-[11px] text-subtle" x-text="t('langPageNote')"></p>
           </div>
         </template>
 
         <!-- TAB 1: PREFERENCES & SCHEDULE -->
         <template x-if="settingsModal.tab === 'schedule'">
           <div class="space-y-3.5">
-            <div class="grid grid-cols-2 gap-3">
-              <div class="glass-inset rounded-2xl p-3">
-                <p class="text-[11px] font-semibold text-muted mb-2 text-center" x-text="t('appearance')"></p>
-                <div class="glass-dock p-0.5 rounded-xl grid grid-cols-2 gap-0.5 text-[11px] font-semibold">
-                  <button type="button" @click="setTheme('dark')" class="py-1.5 rounded-[10px] transition"
-                          :class="theme === 'dark' ? 'bg-sky-500/25 text-sky-300' : 'text-muted'" x-text="t('dark')"></button>
-                  <button type="button" @click="setTheme('light')" class="py-1.5 rounded-[10px] transition"
-                          :class="theme === 'light' ? 'bg-sky-500/20 text-sky-600' : 'text-muted'" x-text="t('light')"></button>
-                </div>
-              </div>
-              <div class="glass-inset rounded-2xl p-3">
-                <p class="text-[11px] font-semibold text-muted mb-2 text-center" x-text="t('language')"></p>
-                <div class="glass-dock p-0.5 rounded-xl grid grid-cols-2 gap-0.5 text-[11px] font-semibold">
-                  <button type="button" @click="setLang('vi')" class="py-1.5 rounded-[10px] transition"
-                          :class="lang === 'vi' ? 'bg-sky-500/25 text-sky-400' : 'text-muted'">Tiếng Việt</button>
-                  <button type="button" @click="setLang('en')" class="py-1.5 rounded-[10px] transition"
-                          :class="lang === 'en' ? 'bg-sky-500/25 text-sky-400' : 'text-muted'">English</button>
-                </div>
-              </div>
-            </div>
             <div class="glass-inset rounded-2xl p-4 flex items-center justify-between gap-3">
               <div class="min-w-0">
                 <p class="text-xs font-semibold" x-text="t('enableAutoUpdate')"></p>
@@ -1961,8 +1984,6 @@
                      :placeholder="settingsForm.has_github_token ? '•••••••• (Saved)' : 'ghp_...'"
                      class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" />
             </div>
-            <button @click="saveSettings()" class="glass-btn-primary w-full py-3 rounded-2xl text-xs font-semibold"
-                    x-text="t('saveSettings')"></button>
 
             <!-- Nguồn cập nhật & giới hạn API -->
             <div class="glass-inset rounded-2xl p-3.5 space-y-3">
@@ -2217,7 +2238,6 @@
                     <p x-show="settingsForm.auto_prune_next_run" class="text-[10.5px] text-muted" x-text="`${t('apNext')}: ${settingsForm.auto_prune_next_run}`"></p>
                   </div>
                   <p x-show="settingsForm.auto_prune_last" class="text-[10.5px] text-emerald-300/90" x-text="`${t('apLast')}: ${settingsForm.auto_prune_last}`"></p>
-                  <button @click="saveSettings()" class="glass-btn-primary w-full py-2.5 rounded-xl text-xs font-semibold" x-text="t('saveSettings')"></button>
                 </div>
 
                 <!-- Sao lưu dữ liệu app trước khi cập nhật -->
@@ -2253,7 +2273,6 @@
                     </label>
                   </div>
                   <p x-show="settingsForm.backup_before_update" x-cloak class="text-[10.5px] text-muted leading-snug" x-text="t('bkNote')"></p>
-                  <button @click="saveSettings()" class="glass-btn-primary w-full py-2.5 rounded-xl text-xs font-semibold" x-text="t('saveSettings')"></button>
 
                   <div class="pt-1 space-y-2">
                     <div class="flex items-center justify-between">
@@ -3228,6 +3247,15 @@
             <p class="text-center text-[10.5px] text-subtle leading-relaxed px-2" x-text="t('aboutCredits')"></p>
           </div>
         </template>
+      </div>
+      <!-- Thay đổi chưa lưu (Cài đặt chung / Lưu trữ): kiểu "N thay đổi · Huỷ · Lưu" -->
+      <div x-show="settingsChanges() > 0" x-cloak x-transition.opacity.duration.200ms
+           class="mt-3 glass-dock rounded-[20px] pl-4 pr-1.5 py-1.5 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-amber-400 shrink-0 shadow-[0_0_8px_rgba(251,191,36,.8)]"></span>
+        <span class="flex-1 min-w-0 text-[12.5px] font-semibold truncate"
+              x-text="settingsChanges() === 1 ? t('pendChange') : t('pendChanges').replace('{n}', settingsChanges())"></span>
+        <button type="button" @click="discardSettings()" class="px-3 py-2 rounded-xl text-[12.5px] font-semibold text-muted hover:text-[var(--text-primary)] transition" x-text="t('discardBtn')"></button>
+        <button type="button" @click="saveSettings()" class="glass-btn-primary px-4 py-2 rounded-[14px] text-[12.5px] font-semibold" x-text="t('saveBtn')"></button>
       </div>
     </div>
   </div>
