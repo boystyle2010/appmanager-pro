@@ -34,7 +34,7 @@ _ADMIN_GET = re.compile(
 # POST của vai trò Cập nhật
 _OPERATOR_POST = re.compile(
     r"^/api/("
-    r"updates/check|update-all|update-all/excluded|backups/restore"
+    r"updates/check|update-all|update-all/excluded|backups/restore|vulns/scan"
     r"|apps/[^/]+/(check|update|prefs|start|stop|restart)"
     r"|servers/[^/]+/(check|update-all|backups/restore|apps/[^/]+/(update|start|stop|restart))"
     r")$"

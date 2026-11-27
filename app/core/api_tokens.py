@@ -47,6 +47,7 @@ _UPDATE_POST = (
     re.compile(r"^/api/update-all$"),
     re.compile(r"^/api/apps/[^/]+/(start|stop|restart)$"),
     re.compile(r"^/api/backups/restore$"),   # 0.21: khôi phục cấu hình app (máy chính khôi phục máy phụ từ xa)
+    re.compile(r"^/api/vulns/scan$"),         # 0.26: quét lỗ hổng
 )
 
 

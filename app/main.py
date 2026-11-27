@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from app.core import api_tokens, config_backup, jobs, logs as app_logs, oidc, servers, users as users_mod, webpush
+from app.core import api_tokens, config_backup, jobs, logs as app_logs, oidc, servers, users as users_mod, vulnscan, webpush
 from app.core.app_backup import delete_backup, list_backups, restore_backup
 from app.core.auth import (
     COOKIE_NAME,
@@ -1918,6 +1918,84 @@ async def api_net_cache_clear(request: Request, user: str = Depends(require_user
     n = await asyncio.to_thread(net.clear_cache)
     audit(request, user, "api_cache_clear", "", str(n))
     return {"ok": True, "cleared": n}
+
+
+class VulnScanPayload(BaseModel):
+    name: str = ""      # trống = mọi app
+    force: bool = True
+
+
+class VulnSettingsPayload(BaseModel):
+    enabled: Optional[bool] = None
+    schedule: Optional[str] = None
+    time: Optional[str] = None
+    weekday: Optional[int] = None
+    after_update: Optional[bool] = None
+    fixable_only: Optional[bool] = None
+    severities: Optional[list[str]] = None
+
+
+@app.get("/api/vulns")
+async def api_vulns(user: str = Depends(require_user)):
+    """Quét lỗ hổng (0.26): cài đặt, trạng thái Trivy, tóm tắt kết quả mọi app (mọi vai trò xem được)."""
+    return await asyncio.to_thread(vulnscan.summary)
+
+
+@app.get("/api/vulns/{container_name}")
+async def api_vuln_detail(container_name: str, user: str = Depends(require_user)):
+    res = await asyncio.to_thread(vulnscan.result, container_name)
+    if not res:
+        raise HTTPException(status_code=404, detail="Not scanned yet")
+    return res
+
+
+@app.post("/api/vulns/scan")
+async def api_vuln_scan(payload: VulnScanPayload, request: Request, user: str = Depends(require_user)):
+    if not vulnscan.installed():
+        raise HTTPException(status_code=409, detail="Trivy is not installed — an administrator can install it in Settings → Vulnerability scan")
+    if vulnscan.state["running"]:
+        return {"ok": True, "busy": True, "state": vulnscan.state}
+    names = [payload.name] if payload.name else None
+    audit(request, user, "vuln_scan", payload.name or "*")
+
+    def _run():
+        try:
+            vulnscan.scan_apps(names, force=payload.force)
+        except Exception:
+            logger.exception("vulnerability scan failed")
+    threading.Thread(target=_run, daemon=True).start()
+    await asyncio.sleep(0.2)
+    return {"ok": True, "state": vulnscan.state}
+
+
+@app.post("/api/vulns/settings")
+async def api_vuln_settings(payload: VulnSettingsPayload, request: Request, user: str = Depends(require_user)):
+    try:
+        cfg = await asyncio.to_thread(vulnscan.save_settings, payload.model_dump(exclude_none=True))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    configure_jobs()
+    audit(request, user, "vuln_settings", "on" if cfg["enabled"] else "off")
+    return {"ok": True, "settings": cfg}
+
+
+@app.post("/api/vulns/install")
+async def api_vuln_install(request: Request, user: str = Depends(require_user)):
+    if vulnscan.state["installing"]:
+        return {"ok": True, "state": vulnscan.state}
+    audit(request, user, "vuln_install", vulnscan._arch())
+    threading.Thread(target=vulnscan.install, daemon=True).start()
+    await asyncio.sleep(0.2)
+    return {"ok": True, "state": vulnscan.state}
+
+
+@app.post("/api/vulns/uninstall")
+async def api_vuln_uninstall(request: Request, user: str = Depends(require_user)):
+    if vulnscan.state["running"] or vulnscan.state["installing"]:
+        raise HTTPException(status_code=409, detail="A scan or installation is running")
+    await asyncio.to_thread(vulnscan.uninstall)
+    audit(request, user, "vuln_uninstall", "")
+    return {"ok": True}
 
 
 class CacheClearPayload(BaseModel):

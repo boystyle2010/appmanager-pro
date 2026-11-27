@@ -29,7 +29,8 @@ logger = logging.getLogger(__name__)
 
 CHANNEL_TYPES = ("telegram", "discord", "slack", "teams", "googlechat", "mattermost", "matrix", "signal",
                  "ntfy", "gotify", "bark", "pushover", "pushbullet", "email", "apprise", "webhook", "webpush")
-EVENTS = ("update_available", "update_success", "update_failed", "self_update", "app_unhealthy", "server_offline", "disk_low", "security")
+EVENTS = ("update_available", "update_success", "update_failed", "self_update", "app_unhealthy", "server_offline", "disk_low", "security",
+          "vuln_found")
 CRITICAL = {"update_failed", "app_unhealthy", "server_offline", "disk_low", "security"}
 # Sự kiện có từ bản đầu (0.16). Sự kiện thêm sau được tự bật cho kênh đã có (xem channels()).
 _BASE_EVENTS = ("update_available", "update_success", "update_failed", "self_update", "app_unhealthy", "disk_low", "security")
@@ -57,6 +58,7 @@ T = {
         "test_body": "AppManager Pro can reach this channel.", "private_body": "Open AppManager Pro to see the details.", "used": "used", "free": "free",
         "config": "settings applied", "recovery": "recovered after an interruption",
         "server_offline": "🔌 Server unreachable", "server_online": "✅ Server reachable again", "down_for": "unreachable for",
+        "vuln_found": "🛡️ New vulnerabilities", "n_vuln_one": "New vulnerabilities in {app}", "n_vuln_many": "New vulnerabilities in {n} apps",
         "n_avail": "Update available: {v}", "n_update_many": "{n} updates available", "n_and_more": "{names} and {n} more",
         "n_updated": "Updated to {v}", "n_failed": "Update failed", "n_rolled": "Update failed, back on {v}",
         "n_test": "Notifications are on", "n_test_body": "You'll get alerts on this device.",
@@ -69,6 +71,7 @@ T = {
         "test_body": "AppManager Pro gửi được tới kênh này.", "private_body": "Mở AppManager Pro để xem chi tiết.", "used": "đã dùng", "free": "còn trống",
         "config": "đã áp dụng cấu hình", "recovery": "đã phục hồi sau sự cố",
         "server_offline": "🔌 Máy chủ mất kết nối", "server_online": "✅ Máy chủ đã kết nối lại", "down_for": "mất kết nối trong",
+        "vuln_found": "🛡️ Lỗ hổng mới", "n_vuln_one": "Lỗ hổng mới trong {app}", "n_vuln_many": "Lỗ hổng mới trong {n} app",
         "n_avail": "Có bản cập nhật: {v}", "n_update_many": "{n} bản cập nhật mới", "n_and_more": "{names} và {n} app khác",
         "n_updated": "Đã cập nhật lên {v}", "n_failed": "Cập nhật thất bại", "n_rolled": "Cập nhật lỗi, đã quay về {v}",
         "n_test": "Thông báo đã bật", "n_test_body": "Thiết bị này sẽ nhận thông báo.",
@@ -286,6 +289,11 @@ def native(event: str, title: str, body: str, data: dict[str, Any]) -> tuple[str
             listed = ", ".join(names[:3])
             return (L["n_update_many"].format(n=len(apps)),
                     L["n_and_more"].format(names=listed, n=len(names) - 3) if len(names) > 3 else listed)
+        if event == "vuln_found" and data.get("vulns"):
+            v = data["vulns"]
+            head = L["n_vuln_one"].format(app=v[0]["title"]) if len(v) == 1 else L["n_vuln_many"].format(n=len(v))
+            lines = [re.sub(r"^[^:]+:\s*", "", x) if len(v) == 1 else x for x in (body or "").split("\n") if x]
+            return head, " · ".join(lines[:4])
         if event in ("update_success", "self_update", "update_failed") and data.get("status") and data.get("app") is not None:
             app = str(data.get("title") or data.get("app") or "AppManager Pro")
             if data["status"] == "success":
@@ -540,6 +548,12 @@ def on_history(container: str, title: str, from_v: str, to_v: str, mode: str, st
         arrow = f"{from_v} → {to_v}" if (from_v or to_v) and from_v != to_v else (to_v or from_v)
         what = tr("config") if mode == "config" else tr("recovery") if mode == "recovery" else arrow
         if status == "success":
+            if mode not in ("config", "recovery"):
+                try:
+                    from app.core import vulnscan
+                    vulnscan.after_update(container)
+                except Exception:
+                    logger.exception("vulnerability scan after update")
             notify("self_update" if is_self else "update_success",
                    f"{tr('self_update') if is_self else tr('update_success')}: {title}", what,
                    {"app": container, "title": title, "from": from_v, "to": to_v, "mode": mode, "status": status})

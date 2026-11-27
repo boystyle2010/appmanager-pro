@@ -40,7 +40,7 @@ SETTING_SECTIONS: dict[str, tuple[str, ...]] = {
     "settings": ("check_interval_hours", "auto_update_enabled", "auto_update_time", "prune_old_images", "github_token",
                  "auto_rollback", "health_wait_seconds", "backup_before_update", "backup_max_mb", "backup_file_max_mb",
                  "backup_keep", "auto_prune_enabled", "auto_prune_freq", "auto_prune_time", "auto_prune_weekday",
-                 "auto_prune_images", "auto_prune_cache", "update_all_excluded"),
+                 "auto_prune_images", "auto_prune_cache", "update_all_excluded", "vuln_settings"),
     "notify": ("notify_channels", "notify_lang", "notify_quiet_enabled", "notify_quiet_start", "notify_quiet_end",
                "notify_disk_pct", "notify_known_events", "webpush_vapid", "webpush_subs"),
     "sso": ("oidc_config",),

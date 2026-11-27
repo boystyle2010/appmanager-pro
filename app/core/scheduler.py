@@ -204,6 +204,10 @@ def configure_jobs() -> None:
     scheduler.add_job(_servers.watch_once, trigger=IntervalTrigger(minutes=3), id="servers_watch", max_instances=1,
                       coalesce=True, next_run_time=datetime.now(timezone.utc) + timedelta(seconds=45), replace_existing=True)
 
+    # Quét lỗ hổng (0.26): theo lịch trong Cài đặt → Quét lỗ hổng
+    from app.core import vulnscan as _vulnscan
+    _vulnscan.configure(scheduler)
+
     if scheduler.get_job("auto_prune_job"):
         scheduler.remove_job("auto_prune_job")
 
