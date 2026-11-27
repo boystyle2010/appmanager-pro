@@ -18,7 +18,7 @@ const results = []; const check = (n, c, d = '') => { results.push(!!c); console
   await p.goto(B + '/'); await sleep(2500); await D("d.lang = 'vi'; d.dataSetup.open = false");
   await D('d.openSettings()'); await sleep(1200);
   await p.getByText('Sao lưu cấu hình', { exact: true }).click(); await sleep(1500);
-  check('Page explains what is in the file and lists every part with counts', (await p.textContent('body')).includes('Tài khoản & Vai trò') && (await p.textContent('body')).includes('2 mục'));
+  check('Page explains what is in the file and lists every part with counts', (await p.textContent('body')).includes('Tài khoản & vai trò') && (await p.textContent('body')).includes('2 mục'));
   await p.screenshot({ path: OUT + '/c1-config-page.png' });
   await p.fill('input[x-model="cfgState.exp.pw"]', 'Backup-Pass-2026');
   await p.fill('input[x-model="cfgState.exp.pw2"]', 'Backup-Pass-2026');

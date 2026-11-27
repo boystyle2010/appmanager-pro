@@ -26,7 +26,7 @@ const results = []; const check = (n, c, d = '') => { results.push(!!c); console
   await p.locator('input[x-model="ssoState.form[r + \'_groups\']"]').nth(1).fill('amp-ops');
   await p.getByRole('button', { name: 'Kiểm tra', exact: true }).click(); await sleep(1500);
   check('Test shows the provider is reachable with its keys', (await p.textContent('body')).includes('Kết nối được nhà cung cấp'));
-  await p.evaluate(() => [...document.querySelectorAll('p')].find(x => x.textContent.trim() === 'Nhóm → vai trò')?.scrollIntoView({ block: 'start' })); await sleep(300);
+  await p.evaluate(() => [...document.querySelectorAll('p')].find(x => x.textContent.trim() === 'Nhóm → Vai trò')?.scrollIntoView({ block: 'start' })); await sleep(300);
   await p.screenshot({ path: OUT + '/s2-sso-groups.png' });
   await p.getByRole('button', { name: 'Lưu', exact: true }).last().click(); await sleep(1500);
   check('Saved: SSO on, secret not shown again', await D('return d.ssoState.cfg.enabled && d.ssoState.cfg.has_secret && !d.ssoState.secret'));
