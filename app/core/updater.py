@@ -17,11 +17,23 @@ from app.core.database import (
     get_setting,
 )
 from app.core.compose_snapshot import rollback_compose_text, save_good
-from app.core.docker_client import compose_cmd, get_app_by_name, get_docker_client, list_all_apps
+from app.core.docker_client import GENERIC_VERSIONS, compose_cmd, get_app_by_name, get_docker_client, list_all_apps
 from app.core.registry_checker import check_one_app_by_name
 
 LogCallback = Callable[[str], Awaitable[None]]
 EventCallback = Callable[[dict[str, Any]], Awaitable[None]]
+
+
+def _final_version(running: str, target: str, tag: str = "") -> str:
+    """Phiên bản ghi vào Lịch sử / thông báo sau khi cập nhật. Image chạy tag kênh (beta, latest…) không có nhãn phiên bản
+    thì `running` chỉ là tên tag -> dùng phiên bản thật đã tra được trên registry (vd "Updated to beta" -> "0.148.9")."""
+    import re as _re
+
+    v = (running or "").strip()
+    generic = v.lower() in GENERIC_VERSIONS or (tag and v.lower() == tag.lower()) or not _re.search(r"\d", v)
+    if generic and target and _re.search(r"\d", target):
+        return target
+    return v or target
 
 
 async def _run_cmd_stream(
@@ -807,9 +819,7 @@ async def _update_app_stream_impl(
         reason = f"{reason}; rollback failed: {rb_reason}"
 
     refreshed = await asyncio.to_thread(get_app_by_name, container_name)
-    new_ver = refreshed["version"] if refreshed else target_ver
-    if force_tag and (not new_ver or new_ver.lower() in ("latest", "beta", "stable", "edge", "dev", "nightly", force_tag.lower())):
-        new_ver = target_ver  # tag kênh chưa có phiên bản cụ thể -> ghi phiên bản đã tra được của kênh
+    new_ver = _final_version((refreshed or {}).get("version") or "", target_ver, force_tag or target_tag)
     new_image_id = refreshed["image_id"] if refreshed else ""
     new_status = refreshed["status"] if refreshed else "unknown"
 
@@ -922,9 +932,7 @@ async def _update_run_app(app_info: dict, send_log: LogCallback, mode: str, forc
             if msg:
                 await send_log(f"==> {msg}\n")
         refreshed = await asyncio.to_thread(get_app_by_name, name)
-        new_ver = (refreshed or {}).get("version") or target_ver
-        if force_tag and (not new_ver or new_ver.lower() in ("latest", "beta", "stable", "edge", "dev", "nightly", force_tag.lower())):
-            new_ver = target_ver
+        new_ver = _final_version((refreshed or {}).get("version") or "", target_ver, force_tag or tag)
         add_update_history(name, title, from_ver, new_ver, mode, "success",
                            "Recreated (docker run)" if res.get("changed") else "Already up to date")
         await send_log(f"\n✅ {title} updated successfully ({from_ver} -> {new_ver})!\n")

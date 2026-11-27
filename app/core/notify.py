@@ -60,7 +60,7 @@ T = {
         "server_offline": "🔌 Server unreachable", "server_online": "✅ Server reachable again", "down_for": "unreachable for",
         "vuln_found": "🛡️ New vulnerabilities", "n_vuln_one": "New vulnerabilities in {app}", "n_vuln_many": "New vulnerabilities in {n} apps",
         "n_avail": "Update available: {v}", "n_update_many": "{n} updates available", "n_and_more": "{names} and {n} more",
-        "n_updated": "Updated to {v}", "n_failed": "Update failed", "n_rolled": "Update failed, back on {v}",
+        "n_updated": "Updated to {v}", "n_updated_ch": "Updated to the latest {ch} build", "n_failed": "Update failed", "n_rolled": "Update failed, back on {v}",
         "n_test": "Notifications are on", "n_test_body": "You'll get alerts on this device.",
     },
     "vi": {
@@ -73,7 +73,7 @@ T = {
         "server_offline": "🔌 Máy chủ mất kết nối", "server_online": "✅ Máy chủ đã kết nối lại", "down_for": "mất kết nối trong",
         "vuln_found": "🛡️ Lỗ hổng mới", "n_vuln_one": "Lỗ hổng mới trong {app}", "n_vuln_many": "Lỗ hổng mới trong {n} app",
         "n_avail": "Có bản cập nhật: {v}", "n_update_many": "{n} bản cập nhật mới", "n_and_more": "{names} và {n} app khác",
-        "n_updated": "Đã cập nhật lên {v}", "n_failed": "Cập nhật thất bại", "n_rolled": "Cập nhật lỗi, đã quay về {v}",
+        "n_updated": "Đã cập nhật lên {v}", "n_updated_ch": "Đã cập nhật bản {ch} mới nhất", "n_failed": "Cập nhật thất bại", "n_rolled": "Cập nhật lỗi, đã quay về {v}",
         "n_test": "Thông báo đã bật", "n_test_body": "Thiết bị này sẽ nhận thông báo.",
     },
 }
@@ -298,7 +298,10 @@ def native(event: str, title: str, body: str, data: dict[str, Any]) -> tuple[str
             app = str(data.get("title") or data.get("app") or "AppManager Pro")
             if data["status"] == "success":
                 if data.get("to") and data.get("mode") not in ("config", "recovery"):
-                    return app, L["n_updated"].format(v=_ver(data["to"]))
+                    to = _ver(data["to"])
+                    if not re.search(r"\d", to):  # chỉ có tên kênh (beta, latest…), không có số phiên bản
+                        return app, L["n_updated_ch"].format(ch=to)
+                    return app, L["n_updated"].format(v=to)
                 return app, body.split("\n", 1)[0].strip()
             if data["status"] == "rolled_back" and data.get("from"):
                 return app, L["n_rolled"].format(v=_ver(data["from"]))

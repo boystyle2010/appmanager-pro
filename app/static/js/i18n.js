@@ -1,7 +1,7 @@
 /* AppManager Pro — bảng dịch EN/VI */
 window.AMP_I18N = {
         en: {
-          setVuln: 'Vulnerability scan', vulnOffDesc: 'Off · check app images for known vulnerabilities (Trivy)', vulnOnDesc: 'On · {s}',
+          setVuln: 'Vulnerability Scan', vulnOffDesc: 'Off · check app images for known vulnerabilities (Trivy)', vulnOnDesc: 'On · {s}',
           vulnSched_daily: 'daily', vulnSched_weekly: 'weekly', vulnSched_manual: 'only when you scan',
           vulnBadgeTitle: '{n} vulnerabilities — tap to see', sev_CRITICAL: 'Critical', sev_HIGH: 'High', sev_MEDIUM: 'Medium', sev_LOW: 'Low', sev_UNKNOWN: 'Unknown',
           vulnBusy: 'A scan is already running', vulnStarted: 'Scan started', vulnUninstall: 'Remove Trivy',
