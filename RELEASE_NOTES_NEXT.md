@@ -17,4 +17,4 @@
 - Security: the first administrator can only be created while the machine has no account at all (fresh install, or after RESET_AUTH); the check and the creation now happen in one database transaction, so simultaneous requests cannot create two administrators.
 - Home Screen app (PWA): the status bar now has its own strip and the glass header starts right below it, so the Dynamic Island / notch no longer cuts into the header and no extra empty space is added.
 - Sign-in page on computers: no more empty area below the page after the window is made smaller.
-- Sign-in page: when the server is switched on, the whole room now glows softly in the light color (not just a cone), with glowing specks that twinkle and float upward.
+- Sign-in page: when the server is switched on, the whole room (edges and corners included) now glows softly in the light color instead of a hard cone or frame around the form, with glowing specks that twinkle and float upward.
