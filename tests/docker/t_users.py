@@ -1,7 +1,7 @@
 """0.22 nhiều tài khoản + phân quyền: Quản trị / Cập nhật / Chỉ xem. AppManager thật (uvicorn :8781) trên Docker
 trong sandbox (setup.sh: bb-none busybox:1.35 chạy bằng docker run, có bản mới 1.38). Kiểm tra quyền ở máy chủ cho
 API, WebSocket, máy chủ phụ; khoá / đổi vai trò / đặt lại mật khẩu thu hồi phiên ngay; luôn giữ 1 Quản trị; nhật ký theo người."""
-import asyncio, atexit, json, os, subprocess, sys, time
+import asyncio, atexit, os, subprocess, sys, time
 import httpx
 S = os.environ["S"]; R = []
 B = "http://localhost:8781"
