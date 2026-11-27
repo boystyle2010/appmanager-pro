@@ -28,6 +28,17 @@
     .lp-stars { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
     .lp-star { position: absolute; width: 2px; height: 2px; border-radius: 9999px; background: #fff; opacity: .25; animation: lp-twinkle 4s ease-in-out infinite; }
     @keyframes lp-twinkle { 0%, 100% { opacity: .12; } 50% { opacity: .55; } }
+    /* Cả căn phòng sáng dịu theo màu đèn (quầng lớn quanh máy chiếu + quanh ô đăng nhập), không chỉ một khối hình nón */
+    .lp-room-glow { position: absolute; left: 0; top: 0; width: 100%; pointer-events: none; z-index: 0; opacity: 0; transition: opacity 1.2s ease; }
+    .lp-on .lp-room-glow { opacity: 1; }
+    /* Hạt sáng (bụi trong ánh đèn): lấp lánh + trôi lên, chỉ hiện khi bật */
+    .lp-motes { position: fixed; inset: 0; pointer-events: none; z-index: 1; overflow: hidden; opacity: 0; transition: opacity 1.2s ease; }
+    .lp-on .lp-motes { opacity: 1; }
+    .lp-mote { position: absolute; bottom: -12px; border-radius: 9999px; background: rgb(var(--lamp));
+      box-shadow: 0 0 6px 1px rgb(var(--lamp) / .8), 0 0 14px 3px rgb(var(--lamp) / .35);
+      animation: lp-rise var(--d, 12s) linear var(--delay, 0s) infinite, lp-blink2 var(--b, 2.4s) ease-in-out var(--delay, 0s) infinite; }
+    @keyframes lp-rise { 0% { transform: translate(0, 0); } 50% { transform: translate(var(--sway, 14px), -55vh); } 100% { transform: translate(0, -112vh); } }
+    @keyframes lp-blink2 { 0%, 100% { opacity: .15; } 35% { opacity: 1; } 60% { opacity: .45; } 80% { opacity: .9; } }
     .lp-beam { position: absolute; left: 0; top: 0; width: 100%; pointer-events: none; z-index: 1; opacity: 0; transition: opacity .6s ease; }
     .lp-on .lp-beam { opacity: 1; animation: lp-flicker .7s linear 1; }
     @keyframes lp-flicker { 0% { opacity: 0; } 12% { opacity: .9; } 20% { opacity: .15; } 32% { opacity: 1; } 40% { opacity: .35; } 55%, 100% { opacity: 1; } }
@@ -73,21 +84,26 @@
     .lp-dot { width: 18px; height: 18px; border-radius: 9999px; border: 2px solid transparent; transition: transform .15s ease, border-color .15s ease; }
     .lp-dot[aria-pressed="true"] { border-color: #fff; transform: scale(1.12); }
     .lp-pill { background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .08); }
-    @media (prefers-reduced-motion: reduce) { .lp-on .lp-beam { animation: none; } .lp-star { animation: none; } .lp-card { transition: none; } .lp-on .lp-led, .lp-on .lp-scan, .lp-hit { animation: none; } }
+    @media (prefers-reduced-motion: reduce) { .lp-mote { animation: none; opacity: .5; bottom: auto; } .lp-on .lp-beam { animation: none; } .lp-star { animation: none; } .lp-card { transition: none; } .lp-on .lp-led, .lp-on .lp-scan, .lp-hit { animation: none; } }
   </style>
 </head>
 <body class="lp" x-data="authApp({{ 'true' if is_setup else 'false' }})" :class="{ 'lp-ready': ready, 'lp-on': lampOn, 'lp-off': !lampOn }"
       :style="`--lamp: ${lampColors[color]}`">
   <div class="lp-stars" x-ref="stars"></div>
   <!-- Chùm sáng: đa giác từ miệng chao đèn tới ô đăng nhập (tính lại khi đổi cỡ màn hình) -->
+  <div class="lp-room-glow" aria-hidden="true"
+       :style="`height: ${beam.h}px; background:
+         radial-gradient(ellipse ${beam.r * 1.25}px ${beam.r * 1.05}px at ${beam.cx}px ${beam.cy}px, rgb(${lampColors[color]} / .20), rgb(${lampColors[color]} / .07) 45%, transparent 75%),
+         radial-gradient(ellipse ${beam.cw * 1.1}px ${beam.ch * .9}px at ${beam.kx}px ${beam.ky}px, rgb(${lampColors[color]} / .16), transparent 70%)`"></div>
+  <div class="lp-motes" x-ref="motes" aria-hidden="true"></div>
   <svg class="lp-beam" aria-hidden="true" :style="`height: ${beam.h}px`">
     <defs>
       <radialGradient id="lpBeamGrad" gradientUnits="userSpaceOnUse" :cx="beam.cx" :cy="beam.cy" :r="beam.r">
-        <stop offset="0" :stop-color="`rgb(${lampColors[color]})`" stop-opacity=".55"/>
-        <stop offset=".55" :stop-color="`rgb(${lampColors[color]})`" stop-opacity=".16"/>
+        <stop offset="0" :stop-color="`rgb(${lampColors[color]})`" stop-opacity=".42"/>
+        <stop offset=".55" :stop-color="`rgb(${lampColors[color]})`" stop-opacity=".1"/>
         <stop offset="1" :stop-color="`rgb(${lampColors[color]})`" stop-opacity="0"/>
       </radialGradient>
-      <filter id="lpBeamBlur" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="14"/></filter>
+      <filter id="lpBeamBlur" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="30"/></filter>
     </defs>
     <polygon :points="beam.points" fill="url(#lpBeamGrad)" filter="url(#lpBeamBlur)"/>
   </svg>
@@ -380,7 +396,7 @@
         // Máy chủ + máy chiếu: bật / tắt + màu nhớ trong trình duyệt (lần sau mở trang tự bật)
         lampColors: { amber: '245 181 74', cyan: '94 224 240', pink: '244 114 182', green: '74 222 128', white: '242 244 248' },
         color: 'white', lampOn: false, ready: false,
-        beam: { points: '', cx: 0, cy: 0, r: 1, h: 0 },
+        beam: { points: '', cx: 0, cy: 0, r: 1, h: 0, kx: 0, ky: 0, cw: 1, ch: 1 },
         mode: 'signin',
         username: '', password: '', confirmPassword: '', remember: true,
         showPw: false, loading: false, error: '', otpStep: false, otp: '',
@@ -417,6 +433,17 @@
             d.style.animationDelay = (Math.random() * 4) + 's';
             if (Math.random() < .25) { d.style.width = d.style.height = '3px'; }
             box.appendChild(d);
+          }
+          // hạt sáng: vị trí / cỡ / tốc độ / độ lấp lánh ngẫu nhiên (delay âm = đã trôi sẵn giữa màn hình khi bật)
+          const motes = this.$refs.motes;
+          const n = window.innerWidth < 640 ? 26 : 44;
+          for (let i = 0; i < n; i++) {
+            const d = document.createElement('span'); d.className = 'lp-mote';
+            const sz = 1.5 + Math.random() * 2.8, dur = 9 + Math.random() * 12;
+            d.style.cssText = `left:${(Math.random() * 100).toFixed(2)}%;width:${sz.toFixed(1)}px;height:${sz.toFixed(1)}px;` +
+              `--d:${dur.toFixed(1)}s;--delay:${(-Math.random() * dur).toFixed(1)}s;--b:${(1.6 + Math.random() * 2.6).toFixed(1)}s;` +
+              `--sway:${((Math.random() - .5) * 60).toFixed(0)}px`;
+            motes.appendChild(d);
           }
           // Có lỗi cần đọc / đang thiết lập lần đầu / đã bật lần trước -> bật đèn luôn (không bắt kéo dây lại)
           const keepOn = this._load('amp_lamp_on') === '1' || !!this.error || this.isSetup;
@@ -457,7 +484,8 @@
           const far = Math.max(...pts.map(p => Math.hypot(p[0] - mx, p[1] - my)));
           this.beam = { points: hull(pts).map(p => p.map(v => v.toFixed(1)).join(',')).join(' '), cx: mx, cy: my, r: far,
                         // chiều cao theo NỘI DUNG (không dùng scrollHeight: chùm sáng tự kéo dài trang, thu nhỏ cửa sổ thì trang không co lại)
-                        h: Math.ceil(Math.max(window.innerHeight, (this.$refs.room?.getBoundingClientRect().bottom || 0) + Y)) };
+                        h: Math.ceil(Math.max(window.innerHeight, (this.$refs.room?.getBoundingClientRect().bottom || 0) + Y)),
+                        kx: C.left + C.width / 2 + X, ky: C.top + C.height / 2 + Y, cw: C.width, ch: C.height };
         },
         async init() {
           // Lỗi SSO quay về trang đăng nhập dạng ?sso_error=... (máy chủ đã ghi nhật ký)
