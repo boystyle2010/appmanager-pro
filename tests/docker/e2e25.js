@@ -1,6 +1,6 @@
 // Trang đăng nhập "máy chủ + máy chiếu": tắt -> ô đăng nhập ẩn; bấm nút nguồn -> LED nhấp nháy, chùm sáng, ô đăng nhập hiện;
 // chấm màu đổi màu ánh sáng + nút; đăng nhập thật; lần sau đèn tự bật; khổ máy tính; tắt JavaScript vẫn đăng nhập được.
-// argv: OUT, base URL (uvicorn đã tạo admin / Test-Passw0rd!x)
+// argv: OUT, base URL (uvicorn đã tạo admin / Test-Passw0rd!x), [base URL của máy CHƯA có tài khoản]
 const { chromium } = require('playwright');
 const OUT = process.argv[2], B = process.argv[3] || 'http://localhost:8771';
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -43,6 +43,26 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const ctx4 = await b.newContext({ viewport: { width: 390, height: 844 }, javaScriptEnabled: false });
   const p4 = await ctx4.newPage(); await p4.goto(B + '/login'); await sleep(500);
     const cardVisibleNoJs = await p4.locator('.lp-card').isVisible();
+  // Lần đầu (máy chưa có tài khoản, argv[4]): trang vẫn là Đăng nhập; tạo Quản trị ở tab Đăng ký
+  let first = null;
+  if (process.argv[4]) {
+    const F = process.argv[4];
+    const c5 = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+    const f = await c5.newPage(); f.on('pageerror', e => errs.push(e.message));
+    await f.goto(F + '/login'); await sleep(1500);
+    const tabs = await f.getByRole('tab').count();
+    const noConfirm = !(await f.locator('input[autocomplete="new-password"]').count());
+    await f.fill('input[autocomplete="username"]', 'admin'); await f.fill('input[type="password"]', 'Test-Passw0rd!x');
+    await f.click('button[type="submit"]'); await sleep(500);
+    const noAcc = (await f.textContent('body')).includes('Máy này chưa có tài khoản');
+    await f.getByRole('tab', { name: 'Đăng ký' }).click(); await sleep(500);
+    const note = (await f.textContent('body')).includes('Tài khoản đầu tiên là Quản trị');
+    await f.screenshot({ path: OUT + '/l8-first-run-signup.png' });
+    await f.fill('input[autocomplete="username"]', 'admin');
+    const pw = f.locator('input[type="password"]'); await pw.nth(0).fill('Test-Passw0rd!x'); await pw.nth(1).fill('Test-Passw0rd!x');
+    await f.click('button[type="submit"]'); await sleep(2500);
+    first = { tabs, noConfirm, noAcc, note, url: f.url() };
+  }
   const R = [];
   const check = (n, c, d = '') => { R.push(!!c); console.log((c ? 'PASS ' : 'FAIL ') + n + (c ? '' : ' :: ' + d)); };
   check('Server off: the sign-in card is hidden, hint shown', vis0 === 'hidden');
@@ -53,6 +73,11 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   check('"Or continue with": SSO off -> hint how an administrator turns it on', hint);
   check('Sign up tab explains accounts are created by an administrator (no open sign-up form)', su);
   check('Light beam scrolls with the projector (short window)', bm.sy > 0 && Math.abs(bm.y - bm.cy) < 3, JSON.stringify(bm));
+  if (first) {
+    check('First run: same Sign in / Sign up page (no separate "create admin" screen)', first.tabs === 2 && first.noConfirm, JSON.stringify(first));
+    check('First run: signing in explains there is no account yet', first.noAcc);
+    check('First run: Sign up tab creates the administrator account and opens the dashboard', first.note && /\/$/.test(first.url), JSON.stringify(first));
+  }
   check('No JavaScript errors', !errs.length, errs.join(' | '));
   console.log(`SUMMARY ${R.filter(Boolean).length} / ${R.length}`);
   await b.close();

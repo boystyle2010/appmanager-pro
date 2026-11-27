@@ -12,3 +12,5 @@
 - Sign-in page: "Or continue with" section — the single sign-on button now shows the provider's icon (Google, Authentik, Keycloak, Authelia, GitLab, Okta, Auth0, Cloudflare Access, Nextcloud or OpenID); when single sign-on is off it explains how an administrator turns it on.
 - Sign-in page: the light beam now scrolls together with the projector on short screens.
 - Appearance → UI style now changes the whole app the way its sample shows: Rounded makes buttons, inputs and chips pill-shaped with rounder cards, Soft is the original design (default), Crisp uses small corners.
+- First run: no separate "create admin" screen any more — the normal sign-in page is shown and the administrator account is created in the Sign up tab (marked with a dot while the machine has no account). Once an administrator exists, Sign up explains how to get an account here or on another machine (ask its administrator for an account or an API Token for Settings → Servers).
+- README: new "Accounts & signing in" guide (first run, adding people and roles, single sign-on, managing another machine, resetting the administrator password with RESET_AUTH).

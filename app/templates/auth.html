@@ -167,15 +167,15 @@
             <span class="pro-badge !h-[18px] !text-[10px] !px-1.5 !rounded-[5px]">PRO</span>
           </div>
         </div>
-        <h1 class="text-[26px] font-bold leading-tight tracking-tight" x-text="isSetup ? t('welcomeSetup') : (mode === 'signup' ? t('signupTitle') : t('welcome'))"></h1>
-        <p class="text-[13px] text-[#8a90a0] mt-1 mb-4 leading-relaxed" x-text="isSetup ? t('setupSubtitle') : (mode === 'signup' ? t('signupSubtitle') : t('loginSubtitle'))"></p>
+        <h1 class="text-[26px] font-bold leading-tight tracking-tight" x-text="mode === 'signup' ? (isSetup ? t('setupTitle') : t('signupTitle')) : t('welcome')"></h1>
+        <p class="text-[13px] text-[#8a90a0] mt-1 mb-4 leading-relaxed" x-text="mode === 'signup' ? (isSetup ? t('setupSubtitle') : t('signupSubtitle')) : t('loginSubtitle')"></p>
         <!-- Đăng nhập / Đăng ký -->
-        <div x-show="!isSetup" class="grid grid-cols-2 gap-1 p-1 mb-5 rounded-2xl bg-white/[0.04] border border-white/[0.07]" role="tablist">
+        <div class="grid grid-cols-2 gap-1 p-1 mb-5 rounded-2xl bg-white/[0.04] border border-white/[0.07]" role="tablist">
           <template x-for="m in ['signin', 'signup']" :key="m">
             <button type="button" role="tab" :aria-selected="mode === m" @click="mode = m; error = ''"
                     class="py-2.5 rounded-xl text-[13px] font-semibold transition"
                     :class="mode === m ? 'bg-white/[0.09] text-white shadow-[inset_0_1px_0_rgb(255_255_255/.08)]' : 'text-[#8a90a0] hover:text-white'"
-                    x-text="m === 'signin' ? t('tabSignIn') : t('tabSignUp')"></button>
+                    ><span x-text="m === 'signin' ? t('tabSignIn') : t('tabSignUp')"></span><span x-show="isSetup && m === 'signup' && mode !== 'signup'" class="keep-round inline-block w-1.5 h-1.5 rounded-full bg-amber-400 ml-1.5 align-middle"></span></button>
           </template>
         </div>
 
@@ -188,7 +188,7 @@
         </div>
 
         <!-- Đăng ký: AppManager không tự đăng ký bằng mật khẩu (bảo vệ Docker) — Quản trị tạo tài khoản, hoặc SSO tự tạo -->
-        <div x-show="!isSetup && mode === 'signup'" x-cloak class="space-y-3.5">
+        <div x-show="!isSetup && mode === 'signup'" x-cloak class="space-y-3">
           <a x-show="sso.enabled && sso.signup" :href="'/api/auth/oidc/login?remember=' + (remember ? 1 : 0)"
              class="lp-btn w-full rounded-2xl py-3.5 text-sm font-bold flex items-center justify-center gap-2">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path :d="providerIcon()"/></svg>
@@ -204,10 +204,26 @@
               <p class="text-[11.5px] text-[#8a90a0] leading-relaxed mt-0.5" x-text="t('signupAdminDesc')"></p>
             </div>
           </div>
+          <div class="rounded-2xl bg-white/[0.035] border border-white/[0.08] p-3.5 flex gap-3">
+            <span class="w-9 h-9 rounded-xl shrink-0 flex items-center justify-center bg-white/[0.06] text-[#c9cdd8]">
+              <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z"/></svg>
+            </span>
+            <div class="min-w-0">
+              <p class="text-[13px] font-semibold" x-text="t('otherMachineTitle')"></p>
+              <p class="text-[11.5px] text-[#8a90a0] leading-relaxed mt-0.5" x-text="t('otherMachineDesc')"></p>
+            </div>
+          </div>
           <button type="button" @click="mode = 'signin'" class="w-full py-3 rounded-2xl text-sm font-semibold bg-white/[0.04] border border-white/10 hover:bg-white/[0.07] transition" x-text="t('haveAccount')"></button>
         </div>
+        <!-- Máy chưa có tài khoản: tab Đăng ký = tạo tài khoản Quản trị đầu tiên -->
+        <div x-show="isSetup && mode === 'signup'" x-cloak class="mb-4 rounded-2xl bg-amber-400/[0.07] border border-amber-300/20 p-3.5 flex gap-3">
+          <span class="w-9 h-9 rounded-xl shrink-0 flex items-center justify-center bg-amber-400/15 text-amber-300">
+            <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>
+          </span>
+          <p class="text-[11.5px] text-[#c9cdd8] leading-relaxed" x-text="t('setupNote')"></p>
+        </div>
 
-        <form x-show="isSetup || mode === 'signin'" @submit.prevent="submit()" class="space-y-3.5">
+        <form x-show="mode === 'signin' || isSetup" @submit.prevent="submit()" class="space-y-3.5">
           <div>
             <label class="block text-xs font-semibold text-[#a3a8b6] mb-1.5 ml-1" x-text="t('username')"></label>
             <div class="relative">
@@ -230,8 +246,8 @@
                 </svg>
               </span>
               <input :type="showPw ? 'text' : 'password'" x-model="password" required
-                     :autocomplete="isSetup ? 'new-password' : 'current-password'"
-                     :minlength="isSetup ? 8 : 1"
+                     :autocomplete="creating() ? 'new-password' : 'current-password'"
+                     :minlength="creating() ? 8 : 1"
                      class="glass-input w-full rounded-2xl pl-10 pr-11 py-3 text-sm" placeholder="••••••••" />
               <button type="button" @click="showPw = !showPw" :aria-label="t('showPw')"
                       class="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-[#6b7180] hover:text-white transition">
@@ -246,7 +262,7 @@
             </div>
           </div>
 
-          <template x-if="isSetup">
+          <template x-if="creating()">
             <div>
               <label class="block text-xs font-semibold text-[#a3a8b6] mb-1.5 ml-1" x-text="t('confirmPassword')"></label>
               <input :type="showPw ? 'text' : 'password'" x-model="confirmPassword" required
@@ -264,7 +280,7 @@
             </div>
           </template>
 
-          <template x-if="!isSetup">
+          <template x-if="!creating()">
             <label class="flex items-center gap-2.5 text-xs font-medium text-[#a3a8b6] cursor-pointer select-none pt-0.5 ml-1">
               <input type="checkbox" x-model="remember" class="lp-check w-4 h-4 rounded" />
               <span x-text="t('remember')"></span>
@@ -273,12 +289,12 @@
 
           <button type="submit" :disabled="loading"
                   class="lp-btn w-full rounded-2xl py-3.5 text-sm font-bold mt-1 flex items-center justify-center gap-2 disabled:opacity-60">
-            <span x-text="loading ? t('processing') : (isSetup ? t('createAdmin') : (otpStep ? t('verify') : t('signIn')))"></span>
+            <span x-text="loading ? t('processing') : (creating() ? t('createAdmin') : (otpStep ? t('verify') : t('signIn')))"></span>
             <svg x-show="!loading" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg>
           </button>
         </form>
         <!-- Cách đăng nhập khác (0.23 SSO): nút nhà cung cấp có biểu tượng; chưa bật thì gợi ý cách bật -->
-        <div x-show="!isSetup && mode === 'signin'" class="mt-5 space-y-3">
+        <div x-show="mode === 'signin'" class="mt-5 space-y-3">
           <div class="flex items-center gap-3 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#5d6372]"><span class="flex-1 h-px bg-white/10"></span><span x-text="t('orContinue')"></span><span class="flex-1 h-px bg-white/10"></span></div>
           <a x-show="sso.enabled" x-cloak :href="'/api/auth/oidc/login?remember=' + (remember ? 1 : 0)"
              class="w-full py-3 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2.5 bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] transition">
@@ -317,7 +333,7 @@
           setupSubtitle: 'Create an administrator account to protect your Docker engine',
           loginSubtitle: 'Sign in to manage containers, compose files & updates',
           username: 'Username', password: 'Password', confirmPassword: 'Confirm Password',
-          remember: 'Keep me signed in for 30 days', createAdmin: 'Create Admin Account',
+          remember: 'Keep me signed in for 30 days', createAdmin: 'Create administrator account',
           signIn: 'Sign In', processing: 'Authenticating...', mismatch: 'Passwords do not match',
           otpLabel: 'Two-factor code', otpHint: '6-digit code from your authenticator app, or a backup code', verify: 'Verify',
           or: 'or', ssoBtn: 'Sign in with {p}', ssoFailed: 'Single sign-on failed',
@@ -326,7 +342,10 @@
           tabSignIn: 'Sign in', tabSignUp: 'Sign up', signupTitle: 'Create an account', signupSubtitle: 'Get access to this AppManager',
           ssoSignup: 'Sign up with {p}', ssoSignupNote: 'Your account is created the first time you sign in; your role follows your groups.',
           signupAdminTitle: 'Accounts are created by an administrator',
-          signupAdminDesc: 'To protect the Docker server, AppManager has no open password sign-up. Ask an administrator to create your account (Settings → Accounts & roles).',
+          signupAdminDesc: 'This machine already has an administrator. To protect the Docker server, AppManager has no open password sign-up: ask the administrator to create your account (Settings → Accounts & roles).',
+          otherMachineTitle: 'Want to manage another machine?', otherMachineDesc: 'Each machine running AppManager has its own accounts. Ask the administrator of that machine for an account, or for an API Token so you can add it under Settings → Servers here.',
+          setupTitle: 'Create the administrator account', setupNote: 'This machine has no account yet. The first account is the administrator (full access): it can add other accounts, give them roles and turn on single sign-on.',
+          noAccountYet: 'This machine has no account yet — create the administrator account in the Sign up tab.',
           haveAccount: 'I already have an account', orContinue: 'Or continue with',
           ssoOffHint: 'Google, Authentik, Keycloak, Authelia… can be turned on by an administrator in Settings → Single sign-on.'
         },
@@ -335,7 +354,7 @@
           setupSubtitle: 'Tạo tài khoản Quản trị viên để bảo vệ quyền truy cập Docker',
           loginSubtitle: 'Đăng nhập để quản lý ứng dụng, Compose và cập nhật',
           username: 'Tên đăng nhập', password: 'Mật khẩu', confirmPassword: 'Xác nhận mật khẩu',
-          remember: 'Ghi nhớ đăng nhập trong 30 ngày', createAdmin: 'Tạo tài khoản Admin',
+          remember: 'Ghi nhớ đăng nhập trong 30 ngày', createAdmin: 'Tạo tài khoản Quản trị',
           signIn: 'Đăng nhập', processing: 'Đang xác thực...', mismatch: 'Mật khẩu xác nhận không khớp',
           otpLabel: 'Mã xác thực 2 lớp', otpHint: 'Mã 6 số trong ứng dụng xác thực, hoặc mã dự phòng', verify: 'Xác minh',
           or: 'hoặc', ssoBtn: 'Đăng nhập bằng {p}', ssoFailed: 'Đăng nhập một lần không thành công',
@@ -344,7 +363,10 @@
           tabSignIn: 'Đăng nhập', tabSignUp: 'Đăng ký', signupTitle: 'Tạo tài khoản', signupSubtitle: 'Để được dùng AppManager này',
           ssoSignup: 'Đăng ký bằng {p}', ssoSignupNote: 'Tài khoản tự tạo ở lần đăng nhập đầu tiên; quyền theo nhóm của bạn.',
           signupAdminTitle: 'Tài khoản do Quản trị tạo',
-          signupAdminDesc: 'Để bảo vệ máy chủ Docker, AppManager không cho tự đăng ký bằng mật khẩu. Hãy nhờ Quản trị tạo tài khoản cho bạn (Cài đặt → Tài khoản & quyền).',
+          signupAdminDesc: 'Máy này đã có Quản trị. Để bảo vệ máy chủ Docker, AppManager không cho tự đăng ký bằng mật khẩu: hãy nhờ Quản trị viên cấp tài khoản cho bạn (Cài đặt → Tài khoản & quyền).',
+          otherMachineTitle: 'Muốn quản lý một máy khác?', otherMachineDesc: 'Mỗi máy chạy AppManager có tài khoản riêng. Hãy nhờ Quản trị viên của máy đó cấp tài khoản, hoặc cấp API Token để bạn thêm máy đó vào Cài đặt → Máy chủ ở đây.',
+          setupTitle: 'Tạo tài khoản Quản trị', setupNote: 'Máy này chưa có tài khoản nào. Tài khoản đầu tiên là Quản trị (toàn quyền): tạo thêm tài khoản, phân vai trò và bật đăng nhập một lần (SSO).',
+          noAccountYet: 'Máy này chưa có tài khoản — hãy tạo tài khoản Quản trị ở tab Đăng ký.',
           haveAccount: 'Tôi đã có tài khoản', orContinue: 'Hoặc tiếp tục với',
           ssoOffHint: 'Google, Authentik, Keycloak, Authelia… — Quản trị bật trong Cài đặt → Đăng nhập một lần (SSO).'
         }
@@ -449,15 +471,18 @@
           this.lang = this.lang === 'vi' ? 'en' : 'vi';
           localStorage.setItem('amp_lang', this.lang);
         },
+        // Đang tạo tài khoản Quản trị đầu tiên (máy chưa có tài khoản, tab Đăng ký)
+        creating() { return this.isSetup && this.mode === 'signup'; },
         async submit() {
           this.error = '';
-          if (this.isSetup && this.password !== this.confirmPassword) {
+          if (this.isSetup && this.mode === 'signin') { this.error = this.t('noAccountYet'); return; }
+          if (this.creating() && this.password !== this.confirmPassword) {
             this.error = this.t('mismatch'); return;
           }
           this.loading = true;
           try {
-            const url = this.isSetup ? '/api/auth/setup' : '/api/auth/login';
-            const body = this.isSetup
+            const url = this.creating() ? '/api/auth/setup' : '/api/auth/login';
+            const body = this.creating()
               ? { username: this.username, password: this.password, confirm_password: this.confirmPassword }
               : { username: this.username, password: this.password, remember: this.remember, otp: this.otpStep ? this.otp : null };
             const res = await fetch(url, {
