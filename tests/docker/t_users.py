@@ -27,7 +27,7 @@ def client(user, pw=PW):
 httpx.post(B + "/api/auth/setup", headers=H, json={"username": "admin", "password": PW, "confirm_password": PW})
 adm, _ = client("admin")
 me = adm.get("/api/auth/me").json()
-check("U1 the first account (and accounts from before 0.22) is an administrator", me == {"username": "admin", "role": "admin", "roles": ["admin", "operator", "viewer"]}, me)
+check("U1 the first account (and accounts from before 0.22) is an administrator", me == {"username": "admin", "role": "admin", "roles": ["admin", "operator", "viewer"], "auth_source": "local"}, me)
 
 # U2 tạo tài khoản
 r1 = adm.post("/api/users", json={"new": True, "username": "oper", "password": PW, "role": "operator"})

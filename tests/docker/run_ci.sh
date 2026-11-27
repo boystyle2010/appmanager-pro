@@ -34,6 +34,8 @@ fresh d23; suite "23. Content encryption + private mode" env APP_DATA_DIR=$S/d23
 fresh d26; suite "26. Auto-update rules per app" env APP_DATA_DIR=$S/d26 bash -c "bash $S/setup.sh >/dev/null 2>&1; timeout 600 python -u $S/t_policy.py"
 fresh d30; suite "30. Logs, remote logs / restore, server offline alerts" env S=$S bash -c "bash $S/setup.sh >/dev/null 2>&1; timeout 900 python -u $S/t_v021.py"
 fresh d32; suite "32. Accounts and roles" env S=$S bash -c "bash $S/setup.sh >/dev/null 2>&1; timeout 900 python -u $S/t_users.py"
+fresh d34; suite "34. SSO / OIDC (mock provider, RS256 / ES256, every error case)" env S=$S timeout 600 python -u $S/t_sso.py
+fresh d35; suite "35. SSO with a real Keycloak 26" env S=$S timeout 600 python -u $S/t_sso_keycloak.py
 fresh d25; suite "25. Release channels" env APP_DATA_DIR=$S/d25 timeout 300 python -u $S/t_channels.py
 echo; echo "Result:"; grep -E "^(===|SUMMARY|FAIL)" "$OUT"
 exit $FAILED

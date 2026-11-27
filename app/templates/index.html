@@ -2286,8 +2286,13 @@
         <!-- TAB: SECURITY (2FA, password, activity log) -->
         <template x-if="settingsModal.tab === 'security'">
           <div class="space-y-3.5 text-xs">
+            <!-- Tài khoản SSO: mật khẩu / 2FA do nhà cung cấp quản lý (0.23) -->
+            <div x-show="me.auth_source === 'oidc'" class="glass-inset rounded-2xl p-4 text-[11.5px] text-muted leading-relaxed">
+              <p class="font-semibold text-[13px] text-[var(--text-primary)]" x-text="t('ssoAccountTitle')"></p>
+              <p x-text="t('ssoAccountDesc')"></p>
+            </div>
             <!-- 2FA -->
-            <div class="glass-inset rounded-2xl p-4 space-y-3">
+            <div x-show="me.auth_source !== 'oidc'" class="glass-inset rounded-2xl p-4 space-y-3">
               <div class="flex items-center justify-between gap-3">
                 <div class="min-w-0">
                   <p class="font-semibold text-[13px]" x-text="t('tfaTitle')"></p>
@@ -2360,7 +2365,7 @@
             </div>
 
             <!-- Đổi mật khẩu -->
-            <div class="glass-inset rounded-2xl p-4 space-y-2.5">
+            <div x-show="me.auth_source !== 'oidc'" class="glass-inset rounded-2xl p-4 space-y-2.5">
               <p class="font-semibold text-[13px]" x-text="t('pwTitle')"></p>
               <input type="password" x-model="pwForm.current" :placeholder="t('pwCurrent')" autocomplete="current-password" class="glass-input w-full rounded-xl px-3 py-2 text-xs" />
               <input type="password" x-model="pwForm.next" :placeholder="t('pwNew')" autocomplete="new-password" class="glass-input w-full rounded-xl px-3 py-2 text-xs" />
@@ -2401,6 +2406,162 @@
           </div>
         </template>
 
+        <!-- TAB: ĐĂNG NHẬP MỘT LẦN SSO / OIDC (0.23, Quản trị) -->
+        <template x-if="settingsModal.tab === 'sso'">
+          <div class="space-y-3.5">
+            <div class="glass-inset rounded-2xl p-4 space-y-2 text-[11.5px] text-muted leading-relaxed">
+              <p class="font-semibold text-[13px] text-[var(--text-primary)]" x-text="t('ssoWhatTitle')"></p>
+              <p x-text="t('ssoWhat')"></p>
+              <ol class="list-decimal pl-4 space-y-1">
+                <li x-text="t('ssoStep1')"></li><li x-text="t('ssoStep2')"></li><li x-text="t('ssoStep3')"></li><li x-text="t('ssoStep4')"></li>
+              </ol>
+              <p class="text-[10.5px] text-subtle" x-text="t('ssoSafety')"></p>
+            </div>
+            <p x-show="ssoState.loading && !ssoState.cfg" class="text-[11px] text-subtle" x-text="t('svLoading')"></p>
+            <template x-if="ssoState.cfg">
+              <div class="space-y-3.5">
+                <!-- Redirect URI -->
+                <div class="glass-inset rounded-2xl p-4 space-y-2">
+                  <p class="text-[11px] font-semibold text-muted" x-text="t('ssoRedirect')"></p>
+                  <div class="flex gap-2 items-center">
+                    <code class="flex-1 min-w-0 glass-terminal rounded-xl px-3 py-2 text-[11px] font-mono-code text-emerald-300 break-all" x-text="ssoState.redirect"></code>
+                    <button @click="copyText(ssoState.redirect)" class="glass-btn px-3 py-2 rounded-xl text-[11px] font-semibold text-sky-400 shrink-0" x-text="t('copy')"></button>
+                  </div>
+                  <p class="text-[10.5px] text-subtle leading-snug" x-text="t('ssoRedirectNote')"></p>
+                </div>
+                <!-- Nhà cung cấp -->
+                <div class="glass-inset rounded-2xl p-4 space-y-3">
+                  <div class="flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                      <p class="text-xs font-semibold" x-text="t('ssoEnable')"></p>
+                      <p class="text-[10.5px] text-muted leading-snug" x-text="t('ssoEnableDesc')"></p>
+                    </div>
+                    <button type="button" role="switch" :aria-checked="ssoState.form.enabled" @click="ssoState.form.enabled = !ssoState.form.enabled"
+                      class="relative w-11 h-6 rounded-full transition shrink-0" :class="ssoState.form.enabled ? 'bg-emerald-500' : 'bg-slate-600'">
+                <span class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition" :class="ssoState.form.enabled ? 'translate-x-5' : ''"></span>
+              </button>
+                  </div>
+                  <label class="block space-y-1">
+                <span class="text-[11px] font-semibold text-muted" x-text="t('ssoLabel')"></span>
+                <input type="text" x-model="ssoState.form.label"  autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"
+                       class="glass-input w-full rounded-xl px-3 py-2 text-xs" placeholder="Authentik" />
+              </label>
+                  <label class="block space-y-1">
+                <span class="text-[11px] font-semibold text-muted" x-text="t('ssoIssuer')"></span>
+                <input type="text" x-model="ssoState.form.issuer"  autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"
+                       class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" placeholder="https://auth.example.com/application/o/appmanager/" />
+              </label>
+                  <label class="block space-y-1">
+                <span class="text-[11px] font-semibold text-muted" x-text="t('ssoClientId')"></span>
+                <input type="text" x-model="ssoState.form.client_id"  autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"
+                       class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" placeholder="appmanager" />
+              </label>
+                  <label class="block space-y-1">
+                    <span class="text-[11px] font-semibold text-muted" x-text="t('ssoClientSecret')"></span>
+                    <input type="password" x-model="ssoState.secret" autocomplete="new-password" class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code"
+                           :placeholder="ssoState.cfg.has_secret ? t('ssoSecretKept') : ''" />
+                  </label>
+                </div>
+                <!-- Nhóm -> vai trò -->
+                <div class="glass-inset rounded-2xl p-4 space-y-3">
+                  <p class="font-semibold text-[13px]" x-text="t('ssoGroupsTitle')"></p>
+                  <p class="text-[10.5px] text-muted leading-snug" x-text="t('ssoGroupsDesc')"></p>
+                  <template x-for="r in ['admin', 'operator', 'viewer']" :key="r">
+                    <label class="block space-y-1">
+                      <span class="text-[11px] font-semibold"
+                            :class="r === 'admin' ? 'text-rose-300' : r === 'operator' ? 'text-amber-300' : 'text-sky-300'" x-text="t('ssoGroupsFor').replace('{r}', roleLabel(r))"></span>
+                      <input type="text" x-model="ssoState.form[r + '_groups']" autocapitalize="off" autocorrect="off" spellcheck="false"
+                             class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" :placeholder="r === 'admin' ? 'appmanager-admins' : r === 'operator' ? 'appmanager-update' : 'family'" />
+                    </label>
+                  </template>
+                  <label class="block space-y-1">
+                    <span class="text-[11px] font-semibold text-muted" x-text="t('ssoDefaultRole')"></span>
+                    <select class="glass-input w-full rounded-xl py-2 pl-3 text-xs" x-model="ssoState.form.default_role">
+                      <option value="none" x-text="t('ssoDefaultNone')"></option>
+                      <option value="viewer" x-text="roleLabel('viewer')"></option>
+                      <option value="operator" x-text="roleLabel('operator')"></option>
+                      <option value="admin" x-text="roleLabel('admin')"></option>
+                    </select>
+                  </label>
+                </div>
+                <!-- Nâng cao -->
+                <details class="glass-inset rounded-2xl p-4 group">
+                  <summary class="flex items-center justify-between cursor-pointer list-none">
+                    <span class="font-semibold text-[13px]" x-text="t('ssoAdvanced')"></span>
+                    <svg class="w-4 h-4 text-subtle transition-transform group-open:rotate-90" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+                  </summary>
+                  <div class="space-y-3 pt-3">
+                    <div class="flex items-center justify-between gap-3">
+                      <div class="min-w-0"><p class="text-xs font-semibold" x-text="t('ssoAutoCreate')"></p><p class="text-[10.5px] text-muted leading-snug" x-text="t('ssoAutoCreateDesc')"></p></div>
+                      <button type="button" role="switch" :aria-checked="ssoState.form.auto_create" @click="ssoState.form.auto_create = !ssoState.form.auto_create"
+                      class="relative w-11 h-6 rounded-full transition shrink-0" :class="ssoState.form.auto_create ? 'bg-emerald-500' : 'bg-slate-600'">
+                <span class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition" :class="ssoState.form.auto_create ? 'translate-x-5' : ''"></span>
+              </button>
+                    </div>
+                    <div class="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 bg-rose-500/8 border border-rose-500/20">
+                      <div class="min-w-0"><p class="text-xs font-semibold" x-text="t('ssoLink')"></p><p class="text-[10.5px] text-muted leading-snug" x-text="t('ssoLinkDesc')"></p></div>
+                      <button type="button" role="switch" :aria-checked="ssoState.form.link_existing" @click="ssoState.form.link_existing = !ssoState.form.link_existing"
+                      class="relative w-11 h-6 rounded-full transition shrink-0" :class="ssoState.form.link_existing ? 'bg-rose-500' : 'bg-slate-600'">
+                <span class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition" :class="ssoState.form.link_existing ? 'translate-x-5' : ''"></span>
+              </button>
+                    </div>
+                    <div class="flex items-center justify-between gap-3">
+                      <div class="min-w-0"><p class="text-xs font-semibold" x-text="t('ssoVerifyTls')"></p><p class="text-[10.5px] text-muted leading-snug" x-text="t('ssoVerifyTlsDesc')"></p></div>
+                      <button type="button" role="switch" :aria-checked="ssoState.form.verify_tls" @click="ssoState.form.verify_tls = !ssoState.form.verify_tls"
+                      class="relative w-11 h-6 rounded-full transition shrink-0" :class="ssoState.form.verify_tls ? 'bg-emerald-500' : 'bg-slate-600'">
+                <span class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition" :class="ssoState.form.verify_tls ? 'translate-x-5' : ''"></span>
+              </button>
+                    </div>
+                    <label class="block space-y-1">
+                <span class="text-[11px] font-semibold text-muted" x-text="t('ssoScopes')"></span>
+                <input type="text" x-model="ssoState.form.scopes"  autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"
+                       class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" placeholder="openid profile email groups" />
+              </label>
+                    <label class="block space-y-1">
+                <span class="text-[11px] font-semibold text-muted" x-text="t('ssoUserClaim')"></span>
+                <input type="text" x-model="ssoState.form.username_claim"  autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"
+                       class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" placeholder="preferred_username" />
+              </label>
+                    <label class="block space-y-1">
+                <span class="text-[11px] font-semibold text-muted" x-text="t('ssoGroupsClaim')"></span>
+                <input type="text" x-model="ssoState.form.groups_claim"  autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"
+                       class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" placeholder="groups" />
+              </label>
+                    <label class="block space-y-1">
+                <span class="text-[11px] font-semibold text-muted" x-text="t('ssoPublicUrl')"></span>
+                <input type="text" x-model="ssoState.form.public_url"  autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"
+                       class="glass-input w-full rounded-xl px-3 py-2 text-xs font-mono-code" placeholder="https://appmanager.example.com" />
+              </label>
+                    <p class="text-[10.5px] text-subtle leading-snug" x-text="t('ssoPublicUrlDesc')"></p>
+                  </div>
+                </details>
+                <!-- Kết quả kiểm tra -->
+                <template x-if="ssoState.test">
+                  <div class="rounded-2xl px-3.5 py-3 text-[11px] leading-relaxed border"
+                       :class="ssoState.test.ok ? 'bg-emerald-500/10 border-emerald-400/30 text-emerald-200' : 'bg-rose-500/10 border-rose-400/30 text-rose-200'">
+                    <template x-if="ssoState.test.ok">
+                      <div class="space-y-0.5">
+                        <p class="font-semibold" x-text="t('ssoTestOk')"></p>
+                        <p class="font-mono-code break-all" x-text="ssoState.test.issuer"></p>
+                        <p x-text="t('ssoTestKeys').replace('{n}', ssoState.test.keys).replace('{algs}', (ssoState.test.algs || []).join(', ') || '?')"></p>
+                        <p x-show="ssoState.test.scopes_dropped?.length" class="text-amber-200" x-text="t('ssoTestDropped').replace('{s}', (ssoState.test.scopes_dropped || []).join(', '))"></p>
+                      </div>
+                    </template>
+                    <p x-show="!ssoState.test.ok" class="break-words" x-text="ssoState.test.error"></p>
+                  </div>
+                </template>
+                <p x-show="ssoState.error" class="text-[11px] text-rose-300 break-words" x-text="ssoState.error"></p>
+                <div class="grid grid-cols-2 gap-2">
+                  <button @click="testSso()" :disabled="ssoState.testing || !ssoState.form.issuer" class="glass-btn py-2.5 rounded-xl text-xs font-semibold disabled:opacity-50"
+                          x-text="ssoState.testing ? '…' : t('ssoTest')"></button>
+                  <button @click="saveSso()" :disabled="ssoState.saving" class="glass-btn-primary py-2.5 rounded-xl text-xs font-semibold disabled:opacity-50"
+                          x-text="ssoState.saving ? '…' : t('save')"></button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </template>
+
         <!-- TAB: TÀI KHOẢN & QUYỀN (0.22, Quản trị) -->
         <template x-if="settingsModal.tab === 'users'">
           <div class="space-y-3.5">
@@ -2429,6 +2590,7 @@
                     <span class="flex items-center gap-1.5 min-w-0">
                       <span class="font-semibold text-[13px] truncate" :class="u.disabled && 'line-through text-muted'" x-text="u.username"></span>
                       <span x-show="u.username === me.username" class="text-[10px] text-subtle shrink-0" x-text="t('usYou')"></span>
+                      <span x-show="u.auth_source === 'oidc' || u.sso_linked" class="text-[9.5px] px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-400/25 font-semibold shrink-0">SSO</span>
                     </span>
                     <span class="block text-[10.5px] text-subtle truncate"
                           x-text="u.disabled ? t('usDisabled') : (u.last_login ? t('usLastLogin').replace('{t}', utcToLocal(u.last_login)) + (u.last_ip ? ' · ' + u.last_ip : '') : t('usNeverLogin'))"></span>
@@ -3880,7 +4042,8 @@
         </div>
         <p class="text-[10.5px] text-subtle leading-snug" x-text="t('role_' + usersState.form.role + '_desc')"></p>
       </div>
-      <label class="block space-y-1">
+      <p x-show="usersState.form.user?.auth_source === 'oidc'" class="rounded-xl px-3 py-2 bg-violet-500/10 border border-violet-400/25 text-[10.5px] text-violet-200 leading-snug" x-text="t('usSsoNote')"></p>
+      <label x-show="usersState.form.user?.auth_source !== 'oidc'" class="block space-y-1">
         <span class="text-[11px] font-semibold text-muted" x-text="usersState.form.isNew ? t('usPassword') : t('usResetPassword')"></span>
         <input type="password" x-model="usersState.form.password" autocomplete="new-password"
                class="glass-input w-full rounded-xl px-3 py-2 text-xs" :placeholder="usersState.form.isNew ? t('pwNew') : t('usResetPh')" />

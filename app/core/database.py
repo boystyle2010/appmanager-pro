@@ -128,6 +128,10 @@ def init_db() -> None:
             ("last_login", "TEXT DEFAULT ''"),
             ("last_ip", "TEXT DEFAULT ''"),
             ("created_by", "TEXT DEFAULT ''"),
+            # 0.23 SSO (OIDC): 'local' = mật khẩu, 'oidc' = tạo bởi SSO; oidc_sub = "<issuer>|<sub>"
+            ("auth_source", "TEXT DEFAULT 'local'"),
+            ("oidc_sub", "TEXT DEFAULT ''"),
+            ("email", "TEXT DEFAULT ''"),
         ):
             if col not in ucols:
                 conn.execute(f"ALTER TABLE users ADD COLUMN {col} {ddl}")
@@ -254,13 +258,23 @@ def create_user(username: str, password_hash: str, role: str, created_by: str) -
 
 
 _USER_COLS = ("id, username, password_hash, totp_secret, totp_enabled, totp_last_step, backup_codes, totp_pending, "
-              "role, disabled, session_ver, last_login, last_ip, created_by, created_at")
+              "role, disabled, session_ver, last_login, last_ip, created_by, created_at, auth_source, oidc_sub, email")
 
 
 def get_user_by_username(username: str):
     conn = get_connection()
     try:
         return conn.execute(f"SELECT {_USER_COLS} FROM users WHERE username = ? COLLATE NOCASE", (username,)).fetchone()
+    finally:
+        conn.close()
+
+
+def get_user_by_oidc_sub(sub_key: str):
+    if not sub_key:
+        return None
+    conn = get_connection()
+    try:
+        return conn.execute(f"SELECT {_USER_COLS} FROM users WHERE oidc_sub = ?", (sub_key,)).fetchone()
     finally:
         conn.close()
 
@@ -284,7 +298,7 @@ def delete_user(username: str) -> None:
 
 def update_user_fields(username: str, **fields: Any) -> None:
     allowed = {"password_hash", "totp_secret", "totp_enabled", "totp_last_step", "backup_codes", "totp_pending",
-               "role", "disabled", "session_ver", "last_login", "last_ip"}
+               "role", "disabled", "session_ver", "last_login", "last_ip", "auth_source", "oidc_sub", "email"}
     cols = [k for k in fields if k in allowed]
     if not cols:
         return

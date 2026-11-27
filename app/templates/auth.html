@@ -153,6 +153,15 @@
             <span x-text="loading ? t('processing') : (isSetup ? t('createAdmin') : (otpStep ? t('verify') : t('signIn')))"></span>
           </button>
         </form>
+        <!-- Đăng nhập một lần (0.23) -->
+        <div x-show="!isSetup && sso.enabled" x-cloak class="mt-4 space-y-3">
+          <div class="flex items-center gap-3 text-[11px] text-subtle"><span class="flex-1 h-px bg-[var(--glass-border)]"></span><span x-text="t('or')"></span><span class="flex-1 h-px bg-[var(--glass-border)]"></span></div>
+          <a :href="'/api/auth/oidc/login?remember=' + (remember ? 1 : 0)"
+             class="glass-btn w-full py-3 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2">
+            <svg class="w-4 h-4 text-violet-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.864 4.243A7.5 7.5 0 0119.5 10.5c0 2.92-.556 5.709-1.568 8.268M5.742 6.364A7.465 7.465 0 004.5 10.5a7.464 7.464 0 01-1.15 3.993m1.989 3.559A11.209 11.209 0 008.25 10.5a3.75 3.75 0 117.5 0c0 .527-.021 1.049-.064 1.565M12 10.5a14.94 14.94 0 01-3.6 9.75m6.633-4.596a18.666 18.666 0 01-2.485 5.33"/></svg>
+            <span x-text="t('ssoBtn').replace('{p}', sso.label)"></span>
+          </a>
+        </div>
 
         <div class="mt-6 pt-4 border-t border-[var(--glass-border)] flex items-center justify-between text-[11px] text-subtle">
           <span>Argon2id Protected</span>
@@ -176,7 +185,8 @@
           username: 'Username', password: 'Password', confirmPassword: 'Confirm Password',
           remember: 'Keep me signed in for 30 days', createAdmin: 'Create Admin Account',
           signIn: 'Sign In', processing: 'Authenticating...', mismatch: 'Passwords do not match',
-          otpLabel: 'Two-factor code', otpHint: '6-digit code from your authenticator app, or a backup code', verify: 'Verify'
+          otpLabel: 'Two-factor code', otpHint: '6-digit code from your authenticator app, or a backup code', verify: 'Verify',
+          or: 'or', ssoBtn: 'Sign in with {p}', ssoFailed: 'Single sign-on failed'
         },
         vi: {
           firstRunBadge: 'Thiết lập lần đầu', secureBadge: 'Trung tâm điều khiển Docker',
@@ -185,7 +195,8 @@
           username: 'Tên đăng nhập', password: 'Mật khẩu', confirmPassword: 'Xác nhận mật khẩu',
           remember: 'Ghi nhớ đăng nhập trong 30 ngày', createAdmin: 'Tạo tài khoản Admin',
           signIn: 'Đăng nhập', processing: 'Đang xác thực...', mismatch: 'Mật khẩu xác nhận không khớp',
-          otpLabel: 'Mã xác thực 2 lớp', otpHint: 'Mã 6 số trong ứng dụng xác thực, hoặc mã dự phòng', verify: 'Xác minh'
+          otpLabel: 'Mã xác thực 2 lớp', otpHint: 'Mã 6 số trong ứng dụng xác thực, hoặc mã dự phòng', verify: 'Xác minh',
+          or: 'hoặc', ssoBtn: 'Đăng nhập bằng {p}', ssoFailed: 'Đăng nhập một lần không thành công'
         }
       };
 
@@ -194,6 +205,31 @@
         theme: localStorage.getItem('amp_theme') || 'dark',
         username: '', password: '', confirmPassword: '', remember: true,
         showPw: false, loading: false, error: '', otpStep: false, otp: '',
+        sso: { enabled: false, label: 'SSO' },
+        // Lỗi SSO hay gặp -> tiếng Việt (máy chủ trả tiếng Anh; lỗi khác giữ nguyên để dễ tra)
+        ssoMsg(m) {
+          if (this.lang !== 'vi') return m;
+          const rules = [
+            [/^(.+) is not in a group allowed to use AppManager \(groups: (.*)\)/, (x) => `${x[1]} không thuộc nhóm nào được dùng AppManager (nhóm: ${x[2]}). Hãy nhờ Quản trị.`],
+            [/^An AppManager account named (\S+) already exists/, (x) => `Đã có tài khoản AppManager tên ${x[1]}. Quản trị có thể bật "Gắn tài khoản có sẵn cùng tên" trong cài đặt SSO.`],
+            [/^There is no AppManager account for (.+?) \(automatic/, (x) => `Chưa có tài khoản AppManager cho ${x[1]} (đang tắt tự tạo tài khoản). Hãy nhờ Quản trị.`],
+            [/^This account is disabled/, () => 'Tài khoản này đã bị khoá. Hãy nhờ Quản trị mở lại.'],
+            [/^SSO is turned off/, () => 'SSO đang tắt.'],
+            [/^Sign-in expired or was started elsewhere/, () => 'Phiên đăng nhập đã hết hạn hoặc bắt đầu ở tab khác — hãy thử lại.'],
+            [/^The provider refused: (.*)/, (x) => `Nhà cung cấp từ chối: ${x[1]}`],
+            [/^Cannot connect to (\S+?):/, (x) => `Không kết nối được ${x[1]}: kiểm tra địa chỉ và mạng của AppManager.`],
+          ];
+          for (const [re, fn] of rules) { const x = m.match(re); if (x) return fn(x); }
+          return m;
+        },
+        async init() {
+          // Lỗi SSO quay về trang đăng nhập dạng ?sso_error=... (máy chủ đã ghi nhật ký)
+          const q = new URLSearchParams(location.search).get('sso_error');
+          if (q) { this.error = this.t('ssoFailed') + ': ' + this.ssoMsg(q); history.replaceState(null, '', '/login'); }
+          if (!this.isSetup) {
+            try { const r = await fetch('/api/auth/oidc/status'); if (r.ok) this.sso = await r.json(); } catch (_) {}
+          }
+        },
 
         t(key) { return (dict[this.lang] || dict.en)[key] || key; },
         toggleLang() {

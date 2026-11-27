@@ -28,7 +28,7 @@ _SELF = (
 )
 # GET chỉ cho Quản trị (có mật khẩu / biến môi trường / cấu hình nhạy cảm)
 _ADMIN_GET = re.compile(
-    r"^/api/(tokens|users|audit|notify|setup/|system/api-status|system/registry-logins"
+    r"^/api/(tokens|users|audit|sso|notify|setup/|system/api-status|system/registry-logins"
     r"|apps/[^/]+/(compose|compose-convert|run-command|uninstall-check)$)"
 )
 # POST của vai trò Cập nhật
@@ -72,6 +72,7 @@ def public(u: Any) -> dict[str, Any]:
         "username": d["username"], "role": d.get("role") or "admin", "disabled": bool(d.get("disabled")),
         "totp_enabled": bool(d.get("totp_enabled")), "last_login": d.get("last_login") or "",
         "last_ip": d.get("last_ip") or "", "created_by": d.get("created_by") or "", "created_at": str(d.get("created_at") or ""),
+        "auth_source": d.get("auth_source") or "local", "sso_linked": bool(d.get("oidc_sub")), "email": d.get("email") or "",
     }
 
 

@@ -4,6 +4,7 @@ import json
 import threading
 import time
 import re
+import secrets
 from urllib.parse import quote
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -15,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from app.core import api_tokens, jobs, logs as app_logs, servers, users as users_mod
+from app.core import api_tokens, jobs, logs as app_logs, oidc, servers, users as users_mod
 from app.core.app_backup import delete_backup, list_backups, restore_backup
 from app.core.auth import (
     COOKIE_NAME,
@@ -28,6 +29,7 @@ from app.core.auth import (
     get_client_ip,
     get_current_user_optional,
     hash_password,
+    is_https_request,
     is_ip_locked,
     new_backup_codes,
     new_totp_secret,
@@ -63,6 +65,7 @@ from app.core.database import (
     add_audit,
     create_user,
     delete_user,
+    get_user_by_oidc_sub,
     list_users,
     get_app_pref,
     get_audit_log,
@@ -515,7 +518,8 @@ async def api_me(request: Request):
     u = session_user(request.cookies.get(COOKIE_NAME))
     if not u:
         raise HTTPException(status_code=401, detail="Unauthorized")
-    return {"username": u["username"], "role": u["role"] or "admin", "roles": list(users_mod.ROLES)}
+    return {"username": u["username"], "role": u["role"] or "admin", "roles": list(users_mod.ROLES),
+            "auth_source": u["auth_source"] or "local"}
 
 
 # ---------------- Docker & Update APIs ----------------
@@ -1051,6 +1055,143 @@ async def api_user_delete(payload: UserNamePayload, request: Request, me: str = 
     delete_user(cur["username"])
     audit(request, me, "user_delete", cur["username"], cur["role"] or "admin")
     return {"ok": True}
+
+
+# ---------------- Đăng nhập một lần SSO / OIDC (0.23) ----------------
+_OIDC_COOKIE = "amp_oidc"
+
+
+def _base_url(request: Request) -> str:
+    """Địa chỉ AppManager như trình duyệt thấy (dựng Redirect URI khi chưa đặt địa chỉ cố định)."""
+    proto = "https" if is_https_request(request) else "http"
+    host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc).split(",")[0].strip()
+    return f"{proto}://{host}"
+
+
+def _sso_fail(request: Request, msg: str, username: str = "") -> RedirectResponse:
+    audit(request, username, "login_failed", detail=f"SSO: {msg}"[:300], ok=False)
+    resp = RedirectResponse(url="/login?sso_error=" + quote(msg[:300]), status_code=303)
+    resp.delete_cookie(_OIDC_COOKIE, path="/api/auth/oidc")
+    return resp
+
+
+@app.get("/api/auth/oidc/status")
+async def api_oidc_status():
+    """Công khai: trang đăng nhập có hiện nút SSO không (không lộ cấu hình)."""
+    c = oidc.config()
+    return {"enabled": bool(c["enabled"] and c["issuer"] and c["client_id"]), "label": c["label"] or "SSO"}
+
+
+@app.get("/api/auth/oidc/login")
+async def api_oidc_login(request: Request, remember: int = 1):
+    try:
+        url, cookie = await oidc.start(_base_url(request), bool(remember))
+    except oidc.OIDCError as exc:
+        return _sso_fail(request, str(exc))
+    resp = RedirectResponse(url=url, status_code=303)
+    resp.set_cookie(_OIDC_COOKIE, cookie, max_age=oidc.STATE_MAX_AGE, httponly=True, samesite="lax",
+                    secure=is_https_request(request), path="/api/auth/oidc")
+    return resp
+
+
+@app.get("/api/auth/oidc/callback")
+async def api_oidc_callback(request: Request, code: str = "", state: str = "", error: str = "", error_description: str = ""):
+    if error:
+        return _sso_fail(request, f"The provider refused: {error_description or error}")
+    ip = get_client_ip(request)
+    if is_ip_locked(ip):
+        return _sso_fail(request, "Too many failed attempts from this address; try again later")
+    try:
+        info = await oidc.finish(code, state, request.cookies.get(_OIDC_COOKIE, ""))
+    except oidc.OIDCError as exc:
+        # Không tính vào khoá IP: lỗi SSO gần như luôn do cấu hình / nhà cung cấp (không dò được mật khẩu qua đây —
+        # đã có state + PKCE + chữ ký); tính vào sẽ khoá luôn Quản trị đang thử cấu hình. Vẫn ghi nhật ký.
+        return _sso_fail(request, str(exc))
+    cfg = oidc.config()
+    who = info["username"] or info["email"] or info["sub_key"]
+    if info["role"] == "none":
+        return _sso_fail(request, f"{who} is not in a group allowed to use AppManager (groups: {', '.join(info['groups']) or 'none'}). Ask an administrator.", who)
+    u = get_user_by_oidc_sub(info["sub_key"])
+    if not u:
+        name = oidc.safe_username(info["username"] or info["email"].split("@")[0])
+        existing = get_user_by_username(name)
+        if existing and (existing["auth_source"] or "local") != "oidc" and not existing["oidc_sub"] and cfg["link_existing"]:
+            update_user_fields(existing["username"], oidc_sub=info["sub_key"], email=info["email"])  # gắn tài khoản có sẵn
+            audit(request, existing["username"], "sso_linked", existing["username"], info["sub_key"])
+            u = get_user_by_username(existing["username"])
+        elif existing and (existing["auth_source"] or "local") != "oidc":
+            return _sso_fail(request, f"An AppManager account named {name} already exists. An administrator can turn on \"Link existing accounts with the same name\" in SSO settings.", who)
+        else:
+            if not cfg["auto_create"]:
+                return _sso_fail(request, f"There is no AppManager account for {who} (automatic account creation is off). Ask an administrator.", who)
+            base, n = name, 2
+            while get_user_by_username(name):  # cùng tên với tài khoản SSO khác (sub khác)
+                name = f"{base[:36]}-{n}"; n += 1
+            create_user(name, await asyncio.to_thread(hash_password, secrets.token_urlsafe(32)), info["role"], "sso")
+            update_user_fields(name, auth_source="oidc", oidc_sub=info["sub_key"], email=info["email"])
+            audit(request, name, "user_add", name, f"{info['role']} (SSO)")
+            u = get_user_by_username(name)
+    if u["disabled"]:
+        return _sso_fail(request, "This account is disabled. Ask an administrator.", u["username"])
+    # Vai trò của tài khoản do SSO tạo đồng bộ theo nhóm mỗi lần đăng nhập (không hạ Quản trị cuối cùng)
+    if (u["auth_source"] or "local") == "oidc" and info["role"] != (u["role"] or "admin"):
+        demote = (u["role"] or "admin") == "admin"
+        if not (demote and users_mod.active_admins(list_users(), exclude=u["username"]) == 0):
+            update_user_fields(u["username"], role=info["role"])
+            audit(request, u["username"], "user_edit", u["username"], f"role {u['role']} -> {info['role']} (SSO groups)")
+    clear_failed_attempts(ip)
+    update_user_fields(u["username"], last_login=time.strftime("%Y-%m-%d %H:%M:%S"), last_ip=ip, email=info["email"] or u["email"])
+    resp = RedirectResponse(url="/", status_code=303)
+    set_session_cookie(resp, request, u["username"], remember=info["remember"])
+    resp.delete_cookie(_OIDC_COOKIE, path="/api/auth/oidc")
+    audit(request, u["username"], "login", detail=f"SSO ({cfg['label']})")
+    return resp
+
+
+class SSOPayload(BaseModel):
+    enabled: Optional[bool] = None
+    label: Optional[str] = None
+    issuer: Optional[str] = None
+    client_id: Optional[str] = None
+    client_secret: Optional[str] = None
+    scopes: Optional[str] = None
+    username_claim: Optional[str] = None
+    groups_claim: Optional[str] = None
+    admin_groups: Optional[str] = None
+    operator_groups: Optional[str] = None
+    viewer_groups: Optional[str] = None
+    default_role: Optional[str] = None
+    auto_create: Optional[bool] = None
+    link_existing: Optional[bool] = None
+    verify_tls: Optional[bool] = None
+    public_url: Optional[str] = None
+
+
+@app.get("/api/sso")
+async def api_sso_get(request: Request, _: str = Depends(_session_only)):
+    c = oidc.public_config()
+    return {"config": c, "redirect_uri": oidc.redirect_uri(_base_url(request)), "detected_url": _base_url(request)}
+
+
+@app.post("/api/sso")
+async def api_sso_save(payload: SSOPayload, request: Request, user: str = Depends(_session_only)):
+    try:
+        new = await asyncio.to_thread(oidc.save, payload.model_dump(exclude_none=True))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    audit(request, user, "sso_settings", new["issuer"], "on" if new["enabled"] else "off")
+    return {"ok": True, "config": oidc.public_config(), "redirect_uri": oidc.redirect_uri(_base_url(request))}
+
+
+@app.post("/api/sso/test")
+async def api_sso_test(payload: SSOPayload, _: str = Depends(_session_only)):
+    """Thử địa chỉ nhà cung cấp (discovery + khoá) trước khi lưu; không đổi gì."""
+    cfg = {**oidc.config(), **{k: v for k, v in payload.model_dump(exclude_none=True).items() if k != "client_secret" or v}}
+    try:
+        cfg["issuer"] = oidc.normalize_issuer(cfg.get("issuer") or "")
+        return await oidc.test(cfg)
+    except (ValueError, oidc.OIDCError) as exc:
+        return {"ok": False, "error": str(exc)}
 
 
 @app.get("/api/tokens")

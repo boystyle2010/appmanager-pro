@@ -9,6 +9,7 @@ pull() { for i in 1 2 3; do docker pull -q "$1" >/dev/null && return 0; sleep 20
 for i in nginx:1.26-alpine nginx:1.27-alpine busybox:1.35 busybox:1.36 busybox:1.38 busybox:latest redis:7.2-alpine registry:2 httpd:2; do pull "$M/$i"; done
 pull mirror.gcr.io/binwiederhier/ntfy:latest
 pull mirror.gcr.io/gotify/server:latest
+pull mirror.gcr.io/keycloak/keycloak:26.4   # SSO thật (bộ 35)
 for n in registry ntfy gotify; do docker rm -f "$n" >/dev/null 2>&1 || true; done
 docker run -d --name registry --restart unless-stopped -p 5000:5000 "$M/registry:2" >/dev/null
 docker run -d --name ntfy --restart unless-stopped -p 8091:80 mirror.gcr.io/binwiederhier/ntfy:latest serve >/dev/null

@@ -75,7 +75,8 @@
                     backupCodes: [], disablePw: '', disableCode: '', regenCode: '', busy: false },
         pwForm: { current: '', next: '', confirm: '', busy: false },
         auditItems: [], auditUser: '',
-        me: { username: '', role: 'admin' },
+        me: { username: '', role: 'admin', auth_source: 'local' },
+        ssoState: { cfg: null, form: {}, secret: '', redirect: '', loading: false, saving: false, testing: false, test: null, error: '', saved: false },
         usersState: { list: [], loading: false, form: { open: false, isNew: true, username: '', role: 'viewer', password: '', disabled: false, busy: false, error: '' } },
         backupsState: { loading: false, items: [], busyFile: '' },
         restorePicker: { open: false, app: null, items: [], selected: '', server: null },
@@ -457,6 +458,50 @@
               this.loadUsers();
             }
           });
+        },
+
+        // ---------------- SSO / OIDC (0.23) ----------------
+        async loadSso() {
+          const st = this.ssoState;
+          st.loading = true; st.error = ''; st.test = null; st.saved = false;
+          try {
+            const res = await fetch('/api/sso');
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            st.cfg = data.config; st.form = { ...data.config }; st.secret = ''; st.redirect = data.redirect_uri;
+          } catch (err) { st.error = err.message; }
+          finally { st.loading = false; }
+        },
+
+        _ssoBody() {
+          const f = this.ssoState.form;
+          const body = {};
+          for (const k of ['enabled', 'label', 'issuer', 'client_id', 'scopes', 'username_claim', 'groups_claim', 'admin_groups', 'operator_groups',
+                           'viewer_groups', 'default_role', 'auto_create', 'link_existing', 'verify_tls', 'public_url']) body[k] = f[k];
+          if (this.ssoState.secret) body.client_secret = this.ssoState.secret;
+          return body;
+        },
+
+        async testSso() {
+          const st = this.ssoState;
+          st.testing = true; st.test = null;
+          try {
+            const { data } = await this._postJson('/api/sso/test', this._ssoBody());
+            st.test = data;
+          } catch (err) { st.test = { ok: false, error: err.message }; }
+          finally { st.testing = false; }
+        },
+
+        async saveSso() {
+          const st = this.ssoState;
+          st.saving = true; st.error = ''; st.saved = false;
+          try {
+            const { res, data } = await this._postJson('/api/sso', this._ssoBody());
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            st.cfg = data.config; st.form = { ...data.config }; st.secret = ''; st.redirect = data.redirect_uri; st.saved = true;
+            this.showToast(this.t('ssoSaved'));
+          } catch (err) { st.error = err.message; }
+          finally { st.saving = false; }
         },
 
         // Người có trong nhật ký (để lọc): tài khoản + Token + tên đã xuất hiện
@@ -1975,7 +2020,7 @@
         // ---------------- Settings ----------------
         async openSettings() {
           this.settingsModal = { open: true, tab: 'home' };
-          if (this.isAdmin()) { this.refreshDataStatus(); this.loadUsers(); }
+          if (this.isAdmin()) { this.refreshDataStatus(); this.loadUsers(); this.loadSso(); }
           try {
             const res = await fetch('/api/settings');
             if (res.status === 401) { window.location.href = '/login'; return; }
@@ -1995,6 +2040,7 @@
           else if (tab === 'tokens') this.loadTokens();
           else if (tab === 'servers') this.loadServers(true);
           else if (tab === 'users') this.loadUsers();
+          else if (tab === 'sso') this.loadSso();
         },
 
         // ---------------- Nhiều máy chủ (0.18) ----------------
@@ -2296,7 +2342,7 @@
 
         settingsSectionTitle() {
           return {
-            home: this.t('settingsTitle'), schedule: this.t('setGeneral'), storage: this.t('setStorage'), users: this.t('setUsers'),
+            home: this.t('settingsTitle'), schedule: this.t('setGeneral'), storage: this.t('setStorage'), users: this.t('setUsers'), sso: this.t('setSso'),
             notify: this.t('setNotify'), servers: this.t('setServers'), security: this.t('tabSecurity'), tokens: this.t('setTokens'), history: this.t('tabHistory'), about: this.t('tabAbout'),
           }[this.settingsModal.tab] || this.t('settingsTitle');
         },
@@ -2319,6 +2365,7 @@
             amber: 'bg-amber-500/15 border-amber-400/35 text-amber-400', rose: 'bg-rose-500/15 border-rose-400/35 text-rose-400',
             violet: 'bg-violet-500/15 border-violet-400/35 text-violet-400', slate: 'bg-slate-500/15 border-slate-400/35 text-slate-300' };
           const c = (x) => C[x];
+          I.sso = 'M7.864 4.243A7.5 7.5 0 0119.5 10.5c0 2.92-.556 5.709-1.568 8.268M5.742 6.364A7.465 7.465 0 004.5 10.5a7.464 7.464 0 01-1.15 3.993m1.989 3.559A11.209 11.209 0 008.25 10.5a3.75 3.75 0 117.5 0c0 .527-.021 1.049-.064 1.565M12 10.5a14.94 14.94 0 01-3.6 9.75m6.633-4.596a18.666 18.666 0 01-2.485 5.33';
           I.users = 'M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z';
           const admin = this.isAdmin();
           // Không phải Quản trị: chỉ còn tài khoản của mình (mật khẩu / 2FA), lịch sử cập nhật, giới thiệu
@@ -2332,6 +2379,7 @@
             ] },
             { id: 'safety', items: [
               { tab: 'security', title: this.t('tabSecurity'), desc: admin ? this.t('setSecurityDesc') : this.t('setSecurityDescSelf'), icon: I.lock, color: c('rose') },
+              { tab: 'sso', title: this.t('setSso'), desc: this.ssoState.cfg?.enabled ? this.t('ssoOnWith').replace('{p}', this.ssoState.cfg.label || 'SSO') : this.t('setSsoDesc'), icon: I.sso, color: c('violet') },
               { tab: 'users', title: this.t('setUsers'), desc: this.usersState.list.length > 1 ? this.t('usCount').replace('{n}', this.usersState.list.length) : this.t('setUsersDesc'), icon: I.users, color: c('emerald') },
               { tab: 'tokens', title: this.t('setTokens'), desc: this.t('setTokensDesc'), icon: I.key, color: c('sky') },
               { tab: 'history', title: this.t('tabHistory'), desc: this.t('setHistoryDesc'), icon: I.clock, color: c('violet') },

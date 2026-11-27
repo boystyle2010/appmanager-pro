@@ -33,8 +33,9 @@ _NEVER = (
     re.compile(r"^/api/auth(/|$)"),
     re.compile(r"^/api/tokens(/|$)"),
     re.compile(r"^/api/system/registry-logins(/|$)"),
-    re.compile(r"^/api/servers(/|$)"),
-    re.compile(r"^/api/users(/|$)"),     # 0.22: tài khoản người dùng -> chỉ Quản trị đăng nhập trên web   # máy chủ khác: chứa Token của máy khác -> chỉ người đăng nhập
+    re.compile(r"^/api/servers(/|$)"),   # máy chủ khác: chứa Token của máy khác -> chỉ người đăng nhập
+    re.compile(r"^/api/users(/|$)"),     # 0.22: tài khoản người dùng -> chỉ Quản trị đăng nhập trên web
+    re.compile(r"^/api/sso(/|$)"),       # 0.23: cấu hình SSO (Client Secret) -> chỉ Quản trị đăng nhập trên web
 )
 # Quyền "update": ngoài đọc, được kiểm tra bản mới, cập nhật app (qua job), cập nhật tất cả, start/stop/restart,
 # khôi phục bản sao lưu cấu hình app.
