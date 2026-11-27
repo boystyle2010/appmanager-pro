@@ -47,6 +47,7 @@ Hướng dẫn cho Claude khi làm việc trên repo này (Claude Code / phiên 
 ## Kiểm tra trước khi push
 ```bash
 python -m compileall -q app scripts
+python -m pyflakes app scripts tests        # CI chạy đúng lệnh này (import / biến thừa = lỗi)
 python scripts/check_project.py          # import nội bộ, Jinja, file tĩnh (cần jinja2)
 node --check app/static/js/app.js && node --check app/static/js/i18n.js
 bash scripts/verify.sh amp-test smoke    # cần Docker: build image, chạy uvicorn, smoke test
