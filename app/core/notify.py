@@ -16,6 +16,7 @@ import hmac
 import json
 import logging
 import queue
+import re
 import secrets
 import threading
 import time
@@ -44,6 +45,8 @@ REQUIRED = {"telegram": ("bot_token", "chat_id"), "discord": ("webhook_url",), "
             "pushbullet": ("access_token",), "email": ("host", "sender", "to"), "apprise": ("server",), "webpush": ()}
 EMAIL_SECURITY = ("starttls", "ssl", "none")
 ENCRYPTABLE = ("bark", "webhook")  # app nhận tự giải mã được (Bark trên iPhone, máy chủ webhook của bạn)
+# Biểu tượng AppManager cho Bark (iPhone tải ảnh từ địa chỉ công khai, không qua mạng nhà)
+ICON_URL = "https://raw.githubusercontent.com/boystyle2010/appmanager-pro/main/assets/icon.png"
 
 T = {
     "en": {
@@ -54,6 +57,9 @@ T = {
         "test_body": "AppManager Pro can reach this channel.", "private_body": "Open AppManager Pro to see the details.", "used": "used", "free": "free",
         "config": "settings applied", "recovery": "recovered after an interruption",
         "server_offline": "🔌 Server unreachable", "server_online": "✅ Server reachable again", "down_for": "unreachable for",
+        "n_update_one": "Update available", "n_update_many": "{n} updates available", "n_more": "+{n} more",
+        "n_updated": "{app} updated", "n_failed": "Couldn't update {app}", "n_rolled": "{app} update rolled back",
+        "n_test": "Notifications are on", "n_test_body": "This device will receive alerts from AppManager Pro.",
     },
     "vi": {
         "update_available": "🆕 Có bản cập nhật mới", "update_success": "✅ Đã cập nhật", "update_failed": "❌ Cập nhật thất bại",
@@ -63,6 +69,9 @@ T = {
         "test_body": "AppManager Pro gửi được tới kênh này.", "private_body": "Mở AppManager Pro để xem chi tiết.", "used": "đã dùng", "free": "còn trống",
         "config": "đã áp dụng cấu hình", "recovery": "đã phục hồi sau sự cố",
         "server_offline": "🔌 Máy chủ mất kết nối", "server_online": "✅ Máy chủ đã kết nối lại", "down_for": "mất kết nối trong",
+        "n_update_one": "Có bản cập nhật", "n_update_many": "{n} bản cập nhật mới", "n_more": "và {n} app khác",
+        "n_updated": "Đã cập nhật {app}", "n_failed": "Không cập nhật được {app}", "n_rolled": "{app} đã quay về bản cũ",
+        "n_test": "Thông báo đã bật", "n_test_body": "Thiết bị này sẽ nhận thông báo từ AppManager Pro.",
     },
 }
 
@@ -246,6 +255,42 @@ def _send_email(cfg: dict[str, Any], title: str, body: str) -> tuple[bool, str]:
     return (not refused), ("SMTP OK" if not refused else f"refused: {', '.join(refused)}")
 
 
+NATIVE_STYLE = ("webpush", "bark")  # hiện như thông báo của app trên điện thoại: không emoji, tiêu đề gọn
+_LEAD_SYMBOLS = re.compile(r"^[^\w(\[\"']+")
+
+
+def _plain(title: str) -> str:
+    return _LEAD_SYMBOLS.sub("", title or "").strip() or "AppManager Pro"
+
+
+def native(event: str, title: str, body: str, data: dict[str, Any]) -> tuple[str, str]:
+    """Tiêu đề / nội dung kiểu thông báo của app điện thoại (giống App Store, Cài đặt…): không emoji, không dấu "•",
+    tiêu đề nói việc gì xảy ra, nội dung là chi tiết ngắn. Thiếu dữ liệu thì chỉ bỏ emoji của tin gốc."""
+    L = T[_lang()]
+    try:
+        if event == "test":
+            return L["n_test"], L["n_test_body"]
+        if event == "update_available" and data.get("apps"):
+            apps = data["apps"]
+            rows = [f"{a.get('title') or a.get('name')}  {a.get('from') or '?'} → {a.get('to') or '?'}" for a in apps[:4]]
+            if len(apps) > 4:
+                rows.append(L["n_more"].format(n=len(apps) - 4))
+            head = L["n_update_one"] if len(apps) == 1 else L["n_update_many"].format(n=len(apps))
+            return head, "\n".join(rows)
+        if event in ("update_success", "self_update", "update_failed") and data.get("status") and data.get("app") is not None:
+            app = data.get("title") or data.get("app") or "AppManager Pro"
+            what = body.split("\n", 1)[0].strip()
+            rest = body.split("\n", 1)[1].strip() if "\n" in body else ""
+            if data["status"] == "success":
+                return L["n_updated"].format(app=app), what
+            key = "n_rolled" if data["status"] == "rolled_back" else "n_failed"
+            return L[key].format(app=app), "\n".join(x for x in (what, rest) if x)
+    except Exception:
+        logger.exception("native notification format failed")
+    lines = [re.sub(r"^[•\-]\s+", "", x) for x in (body or "").split("\n")]
+    return _plain(title), "\n".join(lines).strip()
+
+
 async def _send(ch: dict[str, Any], title: str, body: str, event: str, data: dict[str, Any]) -> tuple[bool, str]:
     from app.core import net
 
@@ -253,6 +298,8 @@ async def _send(ch: dict[str, Any], title: str, body: str, event: str, data: dic
     t = ch["type"]
     if ch.get("private") and event != "test":  # chế độ riêng tư: chỉ tiêu đề chung, không tên app / IP / chi tiết
         body, data = tr("private_body"), {}
+    if t in NATIVE_STYLE:
+        title, body = native(event, title, body, data) if not (ch.get("private") and event != "test") else (_plain(title), body)
     enc = cfg.get("encrypt") == "1" and t in ENCRYPTABLE
     text = f"{title}\n{body}".strip()
     if t == "email":
@@ -263,7 +310,9 @@ async def _send(ch: dict[str, Any], title: str, body: str, event: str, data: dic
     crit = event in CRITICAL
     if t == "webpush":  # 0.25: đẩy tới mọi thiết bị đã bật (trình duyệt / app thêm vào màn hình chính)
         from app.core import webpush
-        return await webpush.send_all(title, body, urgent=crit, tag=event or "appmanager")
+        return await webpush.send_all(title, body, urgent=crit, tag=event or "appmanager",
+                                      url="/?filter=updates" if event == "update_available" else "/",
+                                      badge=data.get("pending") if event == "update_available" else None)
     async with net.client(timeout=15) as c:
         if t == "telegram":
             r = await c.post(f"https://api.telegram.org/bot{cfg['bot_token']}/sendMessage",
@@ -312,12 +361,14 @@ async def _send(ch: dict[str, Any], title: str, body: str, event: str, data: dic
                 import base64
 
                 from app.core import aes
-                plain = json.dumps({"title": title, "body": body or title, "group": "AppManager Pro", "level": level}, ensure_ascii=False)
+                plain = json.dumps({"title": title, "body": body or title, "group": "AppManager Pro", "level": level,
+                                    "icon": ICON_URL}, ensure_ascii=False)
                 ct = aes.cbc_encrypt(cfg["enc_key"].encode(), cfg["enc_iv"].encode(), plain.encode("utf-8"))
                 payload = {"device_key": cfg["device_key"], "ciphertext": base64.b64encode(ct).decode(), "iv": cfg["enc_iv"],
                            "group": "AppManager Pro", "level": level}
             else:
-                payload = {"device_key": cfg["device_key"], "title": title, "body": body or title, "group": "AppManager Pro", "level": level}
+                payload = {"device_key": cfg["device_key"], "title": title, "body": body or title, "group": "AppManager Pro", "level": level,
+                           "icon": ICON_URL}
             r = await c.post(f"{server}/push", json=payload)
         elif t == "pushover":
             r = await c.post("https://api.pushover.net/1/messages.json",
@@ -480,13 +531,14 @@ def on_history(container: str, title: str, from_v: str, to_v: str, mode: str, st
         if status == "success":
             notify("self_update" if is_self else "update_success",
                    f"{tr('self_update') if is_self else tr('update_success')}: {title}", what,
-                   {"app": container, "from": from_v, "to": to_v, "mode": mode, "status": status})
+                   {"app": container, "title": title, "from": from_v, "to": to_v, "mode": mode, "status": status})
         elif status in ("failed", "rolled_back"):
             head = tr("rolled_back") if status == "rolled_back" else tr("update_failed")
             notify("update_failed", f"{head}: {title}", f"{what}\n{message}".strip(),
-                   {"app": container, "from": from_v, "to": to_v, "mode": mode, "status": status, "message": message})
+                   {"app": container, "title": title, "from": from_v, "to": to_v, "mode": mode, "status": status, "message": message})
             if is_self:
-                notify("self_update", f"{tr('self_update')}: {head}", f"{what}\n{message}".strip(), {"status": status})
+                notify("self_update", f"{tr('self_update')}: {head}", f"{what}\n{message}".strip(),
+                       {"app": container, "title": title, "status": status})
     except Exception:
         logger.exception("notify on_history failed")
 
@@ -509,7 +561,8 @@ def on_updates_found(apps: list[dict[str, Any]]) -> None:
     if fresh:
         lines = [f"• {a.get('title') or a['name']}: {a.get('version') or '?'} → {a.get('remote_version') or '?'}" for a in fresh[:30]]
         notify("update_available", f"{tr('update_available')} ({len(fresh)})", "\n".join(lines),
-               {"apps": [{"name": a["name"], "from": a.get("version"), "to": a.get("remote_version")} for a in fresh]})
+               {"apps": [{"name": a["name"], "title": a.get("title") or a["name"], "from": a.get("version"),
+                          "to": a.get("remote_version")} for a in fresh], "pending": len(current)})
 
 
 def on_security(text: str, data: Optional[dict[str, Any]] = None) -> None:

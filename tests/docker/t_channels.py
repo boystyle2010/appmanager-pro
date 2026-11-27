@@ -84,4 +84,7 @@ rc._detect_channels = empty; asyncio.run(run_check())
 check("C3 a successful check that finds no channel still clears them (beta really gone)", json.loads(get_update_cache_item("bb-latest")["channels"]) == [])
 rc._detect_channels = orig
 sh("docker rm -f bb-latest")
+# C4 image build lại sau khi phát hành (nhãn "latest", tên bản phát hành trong bộ đệm còn cũ) -> không ghi bản cũ hơn là "mới"
+check("C4 an older release name is never shown as the new version (v0.25.0 -> v0.24.0 bug)",
+      rc._older("v0.24.0", "0.25.0") and not rc._older("v0.26.0", "0.25.0") and not rc._older("latest", "0.25.0") and not rc._older("1.27-alpine", "1.26"))
 print(f"\nSUMMARY {sum(R)} / {len(R)}")

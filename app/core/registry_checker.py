@@ -963,6 +963,13 @@ async def _detect_pinned_channels(
     ]
 
 
+def _older(candidate: str, current: str) -> bool:
+    """candidate rõ ràng cũ hơn current (vd image build lại sau khi phát hành, tên bản phát hành trong bộ đệm còn cũ)."""
+    from app.core.update_policy import version_parts
+    a, b = version_parts(candidate), version_parts(current)
+    return bool(a and b and a < b)
+
+
 def pinned_version_label(tag: str) -> str:
     """Phiên bản đọc được từ tag ("v1.2.3-alpine" -> "1.2.3"); tag kênh (latest...) thì trả về ""."""
     p = _parse_pinned_tag(tag or "")
@@ -1372,12 +1379,14 @@ async def _check_single_app_inner(
                     if found_src:
                         result["source_url"] = found_src
 
-                if found_real_ver and found_real_ver.lstrip("v") != current_version.lstrip("v"):
+                if (found_real_ver and found_real_ver.lstrip("v") != current_version.lstrip("v")
+                        and not _older(found_real_ver, current_version)):
                     result["remote_version"] = found_real_ver
                 elif (
                     result["release_tag"]
                     and result["release_tag"] not in NON_TAG_CHANGELOG_SOURCES
                     and result["release_tag"].lstrip("v") != current_version.lstrip("v")
+                    and not _older(result["release_tag"], current_version)  # bản phát hành cũ (bộ đệm) -> không ghi "mới"
                 ):
                     result["remote_version"] = result["release_tag"]
                 elif remote_digest:

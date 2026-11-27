@@ -191,13 +191,15 @@ async def send_one(client: httpx.AsyncClient, s: dict[str, Any], message: dict[s
 
 
 async def send_all(title: str, body: str, *, url: str = "/", tag: str = "", urgent: bool = False,
-                   only: Optional[str] = None) -> tuple[bool, str]:
+                   only: Optional[str] = None, badge: Optional[int] = None) -> tuple[bool, str]:
     """Gửi tới mọi thiết bị (hoặc một thiết bị). Thành công nếu ít nhất một thiết bị nhận."""
     from app.core import net
     targets = [s for s in subscriptions() if not only or s["id"] == only]
     if not targets:
         return False, "No device has turned on push notifications yet"
     msg = {"title": title[:200], "body": (body or "")[:1500], "url": url, "tag": tag or "appmanager", "ts": int(time.time())}
+    if badge is not None:  # số trên biểu tượng app (màn hình chính) = số app đang có bản cập nhật
+        msg["badge"] = max(0, int(badge))
     results = []
     async with net.client(timeout=15, follow_redirects=False) as c:
         for s in targets:

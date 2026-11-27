@@ -9,13 +9,19 @@ self.addEventListener('push', (event) => {
   const opts = {
     body: d.body || '',
     icon: '/assets/icon.png?v=2',
-    badge: '/assets/icon.png?v=2',
+    badge: '/assets/badge.png?v=1',  // Android: biểu tượng nhỏ đơn sắc trên thanh trạng thái
     tag: d.tag || 'appmanager',
     renotify: true,
     timestamp: (d.ts || Math.floor(Date.now() / 1000)) * 1000,
+    lang: d.lang || undefined,
     data: { url: d.url || '/' },
   };
-  event.waitUntil(self.registration.showNotification(title, opts));
+  const jobs = [self.registration.showNotification(title, opts)];
+  // Số trên biểu tượng app ở màn hình chính (như App Store): số app đang có bản cập nhật
+  if (typeof d.badge === 'number' && self.navigator.setAppBadge) {
+    jobs.push((d.badge > 0 ? self.navigator.setAppBadge(d.badge) : self.navigator.clearAppBadge()).catch(() => {}));
+  }
+  event.waitUntil(Promise.all(jobs));
 });
 
 self.addEventListener('notificationclick', (event) => {

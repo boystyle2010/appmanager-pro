@@ -156,6 +156,39 @@ de = a.post("/api/notify/webpush/delete", json={"id": did})
 check("W6 remove a device", de.status_code == 200 and a.get("/api/notify/webpush").json()["devices"] == [])
 nt = a.post("/api/notify/webpush/test", json={}).json()
 check("W6 test with no device explains what to do", not nt["ok"] and "No device" in nt["message"], nt)
+# W8 kiểu thông báo của app điện thoại (0.25.1): không emoji / dấu "•", tiêu đề gọn, gộp nhiều app, số trên biểu tượng
+from app.core import notify  # noqa: E402
+from app.core.database import init_db  # noqa: E402
+init_db()  # dữ liệu riêng của tiến trình test (APP_DATA_DIR = wp_testproc, đặt ở đầu file)
+apps1 = [{"name": "bark", "title": "Bark Server", "from": "v2.4.0", "to": "v2.4.1"}]
+t1 = notify.native("update_available", "🆕 Updates available (1)", "• Bark Server: v2.4.0 → v2.4.1", {"apps": apps1, "pending": 1})
+apps6 = [{"name": f"a{i}", "title": f"App {i}", "from": "1.0", "to": "1.1"} for i in range(6)]
+t6 = notify.native("update_available", "🆕 Updates available (6)", "", {"apps": apps6})
+check("W8 one update: title 'Update available', body 'Bark Server  v2.4.0 → v2.4.1' (no emoji, no bullet)",
+      t1 == ("Update available", "Bark Server  v2.4.0 → v2.4.1"), t1)
+check("W8 six updates: '6 updates available', 4 apps listed + '+2 more'", t6[0] == "6 updates available" and t6[1].split("\n")[-1] == "+2 more" and len(t6[1].split("\n")) == 5, t6)
+ok1 = notify.native("update_success", "✅ Updated: Nextcloud", "29.0 → 30.0", {"app": "nextcloud", "title": "Nextcloud", "status": "success"})
+rb = notify.native("update_failed", "↩️ Update failed — rolled back: Nextcloud", "29.0 → 30.0\nhealth check failed", {"app": "nextcloud", "title": "Nextcloud", "status": "rolled_back"})
+other = notify.native("disk_low", "💾 Disk almost full", "• /DATA 95% used", {})
+check("W8 updated / rolled back / other events read like phone apps",
+      ok1 == ("Nextcloud updated", "29.0 → 30.0") and rb == ("Nextcloud update rolled back", "29.0 → 30.0\nhealth check failed")
+      and other == ("Disk almost full", "/DATA 95% used"), (ok1, rb, other))
+GOT.clear()
+a.post("/api/notify/webpush/subscribe", json={"subscription": sub, "name": "iPhone"})
+import asyncio  # noqa: E402
+os.environ.update({"SSL_CERT_FILE": f"{S}/push.crt", "NO_PROXY": "127.0.0.1,localhost", "no_proxy": "127.0.0.1,localhost"})
+webpush.add(sub, "iPhone", "admin")  # thiết bị trong dữ liệu của tiến trình test -> gửi qua đúng đường của kênh Web Push
+n0 = len(GOT)
+r8 = asyncio.run(notify._send({"type": "webpush", "config": {}}, "🆕 Updates available (1)", "• Bark Server: v2.4.0 → v2.4.1",
+                              "update_available", {"apps": apps1, "pending": 3}))
+m7 = decrypt(GOT[-1]["body"])[1] if len(GOT) > n0 else {}
+check("W8 'update available' push: phone-style text, opens the Updates list, app icon badge = 3 pending updates",
+      r8[0] and m7.get("title") == "Update available" and m7.get("body") == "Bark Server  v2.4.0 → v2.4.1"
+      and m7.get("url") == "/?filter=updates" and m7.get("badge") == 3, (r8, m7))
+ch = next(c for c in a.get("/api/notify").json()["channels"] if c["type"] == "webpush")
+tc = a.post("/api/notify/test", json={"id": ch["id"]})
+m8 = decrypt(GOT[-1]["body"])[1] if GOT else {}
+check("W8 'Send test' arrives as 'Notifications are on' (no emoji)", tc.status_code == 200 and m8.get("title") == "Notifications are on" and "badge" not in m8, m8)
 # quyền
 a.post("/api/users", json={"new": True, "username": "viewer1", "password": "Viewer-Passw0rd!1", "role": "viewer"})
 vw = httpx.Client(base_url=B, headers=H); vw.post("/api/auth/login", json={"username": "viewer1", "password": "Viewer-Passw0rd!1"})

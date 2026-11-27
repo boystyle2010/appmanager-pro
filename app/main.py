@@ -1815,7 +1815,8 @@ async def api_webpush_delete(payload: WebPushIdPayload, request: Request, user: 
 
 @app.post("/api/notify/webpush/test")
 async def api_webpush_test(payload: WebPushIdPayload, _: str = Depends(require_user)):
-    ok, msg = await webpush.send_all(notify.tr("test"), notify.tr("test_body"), only=payload.id or None, tag="test")
+    title, body = notify.native("test", "", "", {})
+    ok, msg = await webpush.send_all(title, body, only=payload.id or None, tag="test")
     return {"ok": ok, "message": msg}
 
 

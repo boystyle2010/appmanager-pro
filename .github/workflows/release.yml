@@ -216,12 +216,19 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: App version (image label)
+        id: appver
+        # Nhãn org.opencontainers.image.version = APP_VERSION thật (không phải "latest"): AppManager đọc nhãn này để biết
+        # bản build lại cùng số phiên bản, không lấy tên bản phát hành cũ trong bộ đệm.
+        run: echo "v=$(sed -n 's/^APP_VERSION = "\(.*\)"/\1/p' app/core/docker_client.py)" >> "$GITHUB_OUTPUT"
+
       - name: Extract Docker metadata (labels)
         id: meta
         uses: docker/metadata-action@v6
         with:
           images: ${{ needs.update.outputs.image }}
           tags: type=raw,value=latest
+          labels: org.opencontainers.image.version=${{ steps.appver.outputs.v }}
 
       - name: Image tags
         id: tags

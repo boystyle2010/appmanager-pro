@@ -396,6 +396,11 @@
               window.scrollTo(0, this._lockY || 0);
             }
           });
+          // Bấm thông báo "có bản cập nhật" -> mở thẳng danh sách cần cập nhật
+          try {
+            const q = new URLSearchParams(location.search);
+            if (q.get('filter') === 'updates') { this.filter = 'updates'; history.replaceState(null, '', location.pathname); }
+          } catch (e) {}
           await this.loadMe();
           await this.loadApps();
           if (this.isAdmin()) this.checkDataSetup();
@@ -711,11 +716,21 @@
             this.updateAllExcluded = data.update_all_excluded || [];
             if (data.auto_update) this.autoCfg = data.auto_update;
             this.apps = data.apps;
+            this._syncAppBadge();
             this.lastChecked = data.last_checked || '';
             this.checkingUpdates = !!data.checking_updates;
             if (this.remote.id === '*' && this.remote.data) this._mergeLocal();
           } catch (err) { this.error = err.message; }
           finally { this.loading = false; }
+        },
+
+        // Số trên biểu tượng app ở màn hình chính (PWA, như App Store) = số app có bản cập nhật; 0 thì xoá số.
+        _syncAppBadge() {
+          try {
+            if (!navigator.setAppBadge) return;
+            const n = (this.apps || []).filter(a => a.has_update && !a.is_skipped).length;
+            (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => {});
+          } catch (e) {}
         },
 
         async checkUpdates(silent = false) {

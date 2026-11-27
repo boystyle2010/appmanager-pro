@@ -21,6 +21,7 @@ class H(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
 threading.Thread(target=HTTPServer(("127.0.0.1", 8097), H).serve_forever, daemon=True).start()
 TITLE, BODY = "❌ Cập nhật thất bại", "nextcloud: 29.0 → 30.0 (đã quay lại) · IP 192.168.68.101"
+NTITLE = "Cập nhật thất bại"  # Bark / Web Push: kiểu thông báo của app điện thoại (không emoji)
 
 # B1 Bark mã hoá (giả lập máy chủ Bark, giải mã như app iPhone)
 seen = []
@@ -34,10 +35,10 @@ for bits, key in ((256, "K" * 32), (128, "abcdefghijklmnop"), (192, "x" * 24)):
     d = Cipher(algorithms.AES(key.encode()), modes.CBC(b"0123456789abcdef")).decryptor()
     u = padding.PKCS7(128).unpadder(); plain = json.loads(u.update(d.update(base64.b64decode(pl["ciphertext"])) + d.finalize()) + u.finalize())
     check(f"B1 Bark AES{bits}-CBC: only ciphertext leaves AppManager, the iPhone key decrypts title + body",
-          ok[0] and "title" not in pl and "body" not in pl and "nextcloud" not in json.dumps(pl) and plain["title"] == TITLE and plain["body"] == BODY and pl["iv"] == "0123456789abcdef", (pl, plain))
+          ok[0] and "title" not in pl and "body" not in pl and "nextcloud" not in json.dumps(pl) and plain["title"] == NTITLE and plain["body"] == BODY and plain.get("icon", "").endswith("/icon.png") and pl["iv"] == "0123456789abcdef", (pl, plain))
 seen.clear()
 asyncio.run(notify._send({"type": "bark", "config": {"device_key": "DK"}}, TITLE, BODY, "update_failed", {}))
-check("B2 Bark without encryption unchanged (plain title/body)", seen[0]["title"] == TITLE and seen[0]["body"] == BODY, seen)
+check("B2 Bark without encryption: same text, phone style (no emoji) + AppManager icon", seen[0]["title"] == NTITLE and seen[0]["body"] == BODY and seen[0]["icon"].endswith("/icon.png"), seen)
 
 # P1 chế độ riêng tư (Telegram giả lập)
 tg = []
