@@ -41,7 +41,7 @@ Hướng dẫn cho Claude khi làm việc trên repo này (Claude Code / phiên 
 - Changelog **chỉ** ghi thay đổi thành phần nền. Ghi chú tự viết cho bản kế tiếp → thêm dòng `- ...` **bằng tiếng Anh** vào `RELEASE_NOTES_NEXT.md` (không tự tạo release). Changelog / release notes luôn viết tiếng Anh.
 - Starlette 1.0: dùng `templates.TemplateResponse(request, "x.html", {...})`.
 - Mọi POST/PUT/PATCH/DELETE `/api/*` và WebSocket phải qua kiểm tra Origin (`origin_allowed`). Ghi audit log (`audit(...)`) cho hành động quan trọng.
-- Thuật ngữ viết hoa chữ đầu trong giao diện tiếng Việt: Token, Script, API Docs, Vai trò.
+- Thuật ngữ viết hoa chữ đầu trong giao diện: Token, Script, API Docs, Vai trò (tiếng Việt) / Role, Roles (tiếng Anh).
 - Báo cáo cho chủ repo: tiếng Việt, nói rõ đã test thật cái gì (Docker thật trong sandbox, xem `tests/docker/README.md`) và cái gì chưa; gửi ảnh chụp giao diện (Playwright, khổ 390×844, deviceScaleFactor 2).
 - UI đã thống nhất: popup căn giữa màn hình; thẻ app có nhãn nguồn (CASAOS/DOCKER/RUN) cao 24px như nút ⋯; công tắc bật/tắt (đỏ cho thao tác nguy hiểm như gỡ app); mọi thao tác nguy hiểm có mục "Sẽ thực hiện" + hộp xác nhận; thuật ngữ tiếng Việt dễ hiểu.
 - **Icon chỉ dùng vector (SVG), KHÔNG dùng emoji / "sticker"** trong giao diện (chủ repo yêu cầu). Trạng thái dùng `toneIcon(tone)` trong app.js; ô `<select class="glass-input">` tự có mũi tên vector (glass.css). Emoji chỉ còn trong nội dung tin nhắn gửi ra ngoài (Telegram, Bark…).
