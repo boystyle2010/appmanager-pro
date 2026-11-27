@@ -164,15 +164,15 @@ apps1 = [{"name": "bark", "title": "Bark Server", "from": "v2.4.0", "to": "v2.4.
 t1 = notify.native("update_available", "🆕 Updates available (1)", "• Bark Server: v2.4.0 → v2.4.1", {"apps": apps1, "pending": 1})
 apps6 = [{"name": f"a{i}", "title": f"App {i}", "from": "1.0", "to": "1.1"} for i in range(6)]
 t6 = notify.native("update_available", "🆕 Updates available (6)", "", {"apps": apps6})
-check("W8 one update: title 'Update available', body 'Bark Server  v2.4.0 → v2.4.1' (no emoji, no bullet)",
-      t1 == ("Update available", "Bark Server  v2.4.0 → v2.4.1"), t1)
-check("W8 six updates: '6 updates available', 4 apps listed + '+2 more'", t6[0] == "6 updates available" and t6[1].split("\n")[-1] == "+2 more" and len(t6[1].split("\n")) == 5, t6)
-ok1 = notify.native("update_success", "✅ Updated: Nextcloud", "29.0 → 30.0", {"app": "nextcloud", "title": "Nextcloud", "status": "success"})
-rb = notify.native("update_failed", "↩️ Update failed — rolled back: Nextcloud", "29.0 → 30.0\nhealth check failed", {"app": "nextcloud", "title": "Nextcloud", "status": "rolled_back"})
+check("W8 one update: title = app name, one short line 'Update available: 2.4.0 → 2.4.1' (no emoji / bullet / 'v')",
+      t1 == ("Bark Server", "Update available: 2.4.0 → 2.4.1"), t1)
+check("W8 six updates: '6 updates available' + one line 'App 0, App 1, App 2 and 3 more'", t6 == ("6 updates available", "App 0, App 1, App 2 and 3 more"), t6)
+ok1 = notify.native("update_success", "✅ Updated: Nextcloud", "29.0 → 30.0", {"app": "nextcloud", "title": "Nextcloud", "from": "29.0", "to": "v30.0", "status": "success"})
+rb = notify.native("update_failed", "↩️ Update failed — rolled back: Nextcloud", "29.0 → 30.0\nhealth check failed", {"app": "nextcloud", "title": "Nextcloud", "from": "29.0", "status": "rolled_back"})
 other = notify.native("disk_low", "💾 Disk almost full", "• /DATA 95% used", {})
 check("W8 updated / rolled back / other events read like phone apps",
-      ok1 == ("Nextcloud updated", "29.0 → 30.0") and rb == ("Nextcloud update rolled back", "29.0 → 30.0\nhealth check failed")
-      and other == ("Disk almost full", "/DATA 95% used"), (ok1, rb, other))
+      ok1 == ("Nextcloud", "Updated to 30.0") and rb == ("Nextcloud", "Update failed, back on 29.0")
+      and other == ("Disk almost full", "/DATA 95% used") and all("\n" not in x for x in ok1 + rb + other + t1 + t6), (ok1, rb, other))
 GOT.clear()
 a.post("/api/notify/webpush/subscribe", json={"subscription": sub, "name": "iPhone"})
 import asyncio  # noqa: E402
@@ -183,7 +183,7 @@ r8 = asyncio.run(notify._send({"type": "webpush", "config": {}}, "🆕 Updates a
                               "update_available", {"apps": apps1, "pending": 3}))
 m7 = decrypt(GOT[-1]["body"])[1] if len(GOT) > n0 else {}
 check("W8 'update available' push: phone-style text, opens the Updates list, app icon badge = 3 pending updates",
-      r8[0] and m7.get("title") == "Update available" and m7.get("body") == "Bark Server  v2.4.0 → v2.4.1"
+      r8[0] and m7.get("title") == "Bark Server" and m7.get("body") == "Update available: 2.4.0 → 2.4.1"
       and m7.get("url") == "/?filter=updates" and m7.get("badge") == 3, (r8, m7))
 ch = next(c for c in a.get("/api/notify").json()["channels"] if c["type"] == "webpush")
 tc = a.post("/api/notify/test", json={"id": ch["id"]})

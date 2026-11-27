@@ -57,9 +57,9 @@ T = {
         "test_body": "AppManager Pro can reach this channel.", "private_body": "Open AppManager Pro to see the details.", "used": "used", "free": "free",
         "config": "settings applied", "recovery": "recovered after an interruption",
         "server_offline": "🔌 Server unreachable", "server_online": "✅ Server reachable again", "down_for": "unreachable for",
-        "n_update_one": "Update available", "n_update_many": "{n} updates available", "n_more": "+{n} more",
-        "n_updated": "{app} updated", "n_failed": "Couldn't update {app}", "n_rolled": "{app} update rolled back",
-        "n_test": "Notifications are on", "n_test_body": "This device will receive alerts from AppManager Pro.",
+        "n_avail": "Update available: {v}", "n_update_many": "{n} updates available", "n_and_more": "{names} and {n} more",
+        "n_updated": "Updated to {v}", "n_failed": "Update failed", "n_rolled": "Update failed, back on {v}",
+        "n_test": "Notifications are on", "n_test_body": "You'll get alerts on this device.",
     },
     "vi": {
         "update_available": "🆕 Có bản cập nhật mới", "update_success": "✅ Đã cập nhật", "update_failed": "❌ Cập nhật thất bại",
@@ -69,9 +69,9 @@ T = {
         "test_body": "AppManager Pro gửi được tới kênh này.", "private_body": "Mở AppManager Pro để xem chi tiết.", "used": "đã dùng", "free": "còn trống",
         "config": "đã áp dụng cấu hình", "recovery": "đã phục hồi sau sự cố",
         "server_offline": "🔌 Máy chủ mất kết nối", "server_online": "✅ Máy chủ đã kết nối lại", "down_for": "mất kết nối trong",
-        "n_update_one": "Có bản cập nhật", "n_update_many": "{n} bản cập nhật mới", "n_more": "và {n} app khác",
-        "n_updated": "Đã cập nhật {app}", "n_failed": "Không cập nhật được {app}", "n_rolled": "{app} đã quay về bản cũ",
-        "n_test": "Thông báo đã bật", "n_test_body": "Thiết bị này sẽ nhận thông báo từ AppManager Pro.",
+        "n_avail": "Có bản cập nhật: {v}", "n_update_many": "{n} bản cập nhật mới", "n_and_more": "{names} và {n} app khác",
+        "n_updated": "Đã cập nhật lên {v}", "n_failed": "Cập nhật thất bại", "n_rolled": "Cập nhật lỗi, đã quay về {v}",
+        "n_test": "Thông báo đã bật", "n_test_body": "Thiết bị này sẽ nhận thông báo.",
     },
 }
 
@@ -263,32 +263,43 @@ def _plain(title: str) -> str:
     return _LEAD_SYMBOLS.sub("", title or "").strip() or "AppManager Pro"
 
 
+def _ver(v: Any) -> str:
+    """'v0.148.8' -> '0.148.8' (gọn như thông báo của app điện thoại); tên kênh / build giữ nguyên."""
+    v = str(v or "").strip()
+    return v[1:] if re.match(r"^[vV]\d", v) else v
+
+
 def native(event: str, title: str, body: str, data: dict[str, Any]) -> tuple[str, str]:
-    """Tiêu đề / nội dung kiểu thông báo của app điện thoại (giống App Store, Cài đặt…): không emoji, không dấu "•",
-    tiêu đề nói việc gì xảy ra, nội dung là chi tiết ngắn. Thiếu dữ liệu thì chỉ bỏ emoji của tin gốc."""
+    """Thông báo kiểu app điện thoại (giống App Store, Nhà…): tiêu đề ngắn là TÊN APP, nội dung MỘT dòng nói việc gì
+    xảy ra; không emoji, không dấu "•", không xuống dòng. Thiếu dữ liệu thì chỉ bỏ emoji / dấu đầu dòng của tin gốc."""
     L = T[_lang()]
     try:
         if event == "test":
             return L["n_test"], L["n_test_body"]
         if event == "update_available" and data.get("apps"):
             apps = data["apps"]
-            rows = [f"{a.get('title') or a.get('name')}  {a.get('from') or '?'} → {a.get('to') or '?'}" for a in apps[:4]]
-            if len(apps) > 4:
-                rows.append(L["n_more"].format(n=len(apps) - 4))
-            head = L["n_update_one"] if len(apps) == 1 else L["n_update_many"].format(n=len(apps))
-            return head, "\n".join(rows)
+            if len(apps) == 1:
+                a = apps[0]
+                v = f"{_ver(a.get('from'))} → {_ver(a.get('to'))}" if a.get("from") else _ver(a.get("to"))
+                return str(a.get("title") or a.get("name")), L["n_avail"].format(v=v)
+            names = [str(a.get("title") or a.get("name")) for a in apps]
+            listed = ", ".join(names[:3])
+            return (L["n_update_many"].format(n=len(apps)),
+                    L["n_and_more"].format(names=listed, n=len(names) - 3) if len(names) > 3 else listed)
         if event in ("update_success", "self_update", "update_failed") and data.get("status") and data.get("app") is not None:
-            app = data.get("title") or data.get("app") or "AppManager Pro"
-            what = body.split("\n", 1)[0].strip()
-            rest = body.split("\n", 1)[1].strip() if "\n" in body else ""
+            app = str(data.get("title") or data.get("app") or "AppManager Pro")
             if data["status"] == "success":
-                return L["n_updated"].format(app=app), what
-            key = "n_rolled" if data["status"] == "rolled_back" else "n_failed"
-            return L[key].format(app=app), "\n".join(x for x in (what, rest) if x)
+                if data.get("to") and data.get("mode") not in ("config", "recovery"):
+                    return app, L["n_updated"].format(v=_ver(data["to"]))
+                return app, body.split("\n", 1)[0].strip()
+            if data["status"] == "rolled_back" and data.get("from"):
+                return app, L["n_rolled"].format(v=_ver(data["from"]))
+            msg = str(data.get("message") or "").strip().split("\n", 1)[0][:90]
+            return app, f"{L['n_failed']}: {msg}" if msg else L["n_failed"]
     except Exception:
         logger.exception("native notification format failed")
-    lines = [re.sub(r"^[•\-]\s+", "", x) for x in (body or "").split("\n")]
-    return _plain(title), "\n".join(lines).strip()
+    lines = [re.sub(r"^[•\-]\s+", "", x).strip() for x in (body or "").split("\n")]
+    return _plain(title), " · ".join(x for x in lines if x)
 
 
 async def _send(ch: dict[str, Any], title: str, body: str, event: str, data: dict[str, Any]) -> tuple[bool, str]:
