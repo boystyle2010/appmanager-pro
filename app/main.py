@@ -1092,7 +1092,11 @@ def _sso_fail(request: Request, msg: str, username: str = "") -> RedirectRespons
 async def api_oidc_status():
     """Công khai: trang đăng nhập có hiện nút SSO không (không lộ cấu hình)."""
     c = oidc.config()
-    return {"enabled": bool(c["enabled"] and c["issuer"] and c["client_id"]), "label": c["label"] or "SSO"}
+    on = bool(c["enabled"] and c["issuer"] and c["client_id"])
+    # provider: biểu tượng nút; signup: SSO tự tạo tài khoản mới (tab Đăng ký trên trang đăng nhập)
+    return {"enabled": on, "label": c["label"] or "SSO", "provider": oidc.provider_kind(c) if on else "",
+            "signup": bool(on and c.get("auto_create") and (c.get("default_role") != "none" or c.get("admin_groups")
+                                                              or c.get("operator_groups") or c.get("viewer_groups")))}
 
 
 @app.get("/api/auth/oidc/login")

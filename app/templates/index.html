@@ -72,7 +72,7 @@
         const u = JSON.parse(localStorage.getItem('amp_ui') || '{}'), h = document.documentElement;
         h.dataset.accent = u.accent || 'sky';
         if (u.text && u.text !== 'm') h.dataset.text = u.text;
-        if (u.radius && u.radius !== 'round') h.dataset.radius = u.radius;
+        if (u.radius && u.radius !== 'soft') h.dataset.radius = u.radius;
         if (u.appIcon && u.appIcon !== 'default') {
           const src = '/assets/icon-' + u.appIcon + '.png';
           document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]').forEach(l => l.href = src);
@@ -1968,10 +1968,10 @@
               <div class="grid grid-cols-3 gap-2.5">
                 <template x-for="r in uiOptions().radius" :key="r">
                   <button type="button" @click="setUi('radius', r)" :aria-pressed="ui.radius === r" class="flex flex-col items-center gap-1.5">
-                    <span class="w-full h-16 glass-inset flex items-center justify-center border-2 transition"
-                          :class="ui.radius === r ? 'border-sky-400' : 'border-transparent'"
-                          :style="`border-radius: ${ { round: 20, soft: 13, crisp: 7 }[r] }px`">
-                      <span class="w-14 h-7 bg-sky-500/80" :style="`border-radius: ${ { round: 999, soft: 9, crisp: 4 }[r] }px`"></span>
+                    <span class="lp-sample w-full h-16 flex items-center justify-center border-2 transition bg-white/[0.04]"
+                          :class="ui.radius === r ? 'border-sky-400' : 'border-[var(--glass-border)]'"
+                          :style="{ borderRadius: uiOptions().radiusPx[r][0] + 'px' }">
+                      <span class="lp-sample w-14 h-7 bg-sky-500/80" :style="{ borderRadius: uiOptions().radiusPx[r][1] + 'px' }"></span>
                     </span>
                     <span class="text-[11.5px] font-semibold" :class="ui.radius === r ? 'text-sky-400' : 'text-muted'" x-text="t('rad_' + r)"></span>
                   </button>

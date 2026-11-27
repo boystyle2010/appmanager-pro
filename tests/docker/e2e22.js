@@ -38,6 +38,12 @@ const results = []; const check = (n, c, d = '') => { results.push(!!c); console
   await q.goto(B + '/login'); await sleep(1500);
   await q.locator('.lp-power').click(); await sleep(1200);  // trang đăng nhập: bấm nút nguồn để hiện ô đăng nhập
   check('Login page shows "Đăng nhập bằng Authentik"', await q.getByText('Đăng nhập bằng Authentik').isVisible());
+  const st = await q.evaluate(async () => (await fetch('/api/auth/oidc/status')).json());
+  check('Status tells the page which provider icon to show + that SSO can create accounts', st.provider === 'oidc' || st.provider === 'authentik', JSON.stringify(st));
+  await q.getByRole('tab', { name: 'Đăng ký' }).click(); await sleep(500);
+  check('Sign up tab offers "Đăng ký bằng Authentik" when SSO creates accounts', await q.getByText('Đăng ký bằng Authentik').isVisible() === !!st.signup, JSON.stringify(st));
+  await q.screenshot({ path: OUT + '/s4b-signup-sso.png' });
+  await q.getByRole('tab', { name: 'Đăng nhập' }).click(); await sleep(300);
   await q.screenshot({ path: OUT + '/s4-login-sso.png' });
   await ctx2.request.post(MOCK + '/admin', { data: { user: { sub: 'u-5', preferred_username: 'minh', email: 'minh@example.com', groups: ['random'] }, fault: '' } });
   await q.getByText('Đăng nhập bằng Authentik').click(); await sleep(2500);

@@ -446,12 +446,19 @@ html[data-accent]:not([data-accent="sky"]) .glass-btn-primary { background: line
 html[data-text="s"] body { zoom: .92; }
 html[data-text="l"] body { zoom: 1.06; }
 html[data-text="xl"] body { zoom: 1.12; }
-html[data-radius="soft"] { --radius-lg: .375rem; --radius-xl: .5rem; --radius-2xl: .75rem; --radius-3xl: 1rem; }
-html[data-radius="soft"] .rounded-\[28px\], html[data-radius="soft"] .rounded-\[26px\], html[data-radius="soft"] .rounded-\[20px\] { border-radius: 14px; }
+/* Kiểu bo góc: "soft" = thiết kế gốc (mặc định, không đổi gì); "round" = nút / ô nhập / chip hình viên thuốc + thẻ bo lớn
+   (giống ô mẫu "Bo tròn"); "crisp" = góc nhỏ (giống ô mẫu "Vuông"). */
+html[data-radius="round"] :is(button, a, label, span, div):is(.glass-btn, .glass-btn-primary, .glass-btn-update, .glass-dock):is(.rounded-lg, .rounded-xl, .rounded-2xl, .rounded-\[10px\], .rounded-\[12px\], .rounded-\[13px\], .rounded-\[14px\], .rounded-\[16px\]),
+html[data-radius="round"] :is(button, a):is(.rounded-lg, .rounded-xl, .rounded-2xl, .rounded-\[10px\], .rounded-\[14px\], .rounded-\[16px\]),
+html[data-radius="round"] :is(input, select).glass-input { border-radius: 9999px; }
+html[data-radius="round"] textarea.glass-input { border-radius: 20px; }
+html[data-radius="round"] :is(.glass-inset, .glass-card, .glass-panel):is(.rounded-xl, .rounded-2xl, .rounded-\[20px\], .rounded-\[18px\]),
+html[data-radius="round"] div.rounded-2xl:not(.glass-btn) { border-radius: 26px; }
+html[data-radius="round"] :is(.rounded-\[28px\], .rounded-\[26px\]) { border-radius: 32px; }
 html[data-radius="crisp"] { --radius-lg: .25rem; --radius-xl: .3125rem; --radius-2xl: .4375rem; --radius-3xl: .5rem; }
-html[data-radius="crisp"] .rounded-\[28px\], html[data-radius="crisp"] .rounded-\[26px\], html[data-radius="crisp"] .rounded-\[20px\] { border-radius: 9px; }
-html[data-radius="crisp"] .rounded-\[12px\], html[data-radius="crisp"] .rounded-\[13px\], html[data-radius="crisp"] .rounded-\[14px\] { border-radius: 6px; }
-html[data-radius="crisp"] .rounded-full:not(.w-2):not(.w-1\.5):not(.keep-round) { border-radius: 8px; }
+html[data-radius="crisp"] :is(.rounded-\[28px\], .rounded-\[26px\], .rounded-\[20px\], .rounded-\[18px\], .rounded-\[16px\]) { border-radius: 9px; }
+html[data-radius="crisp"] :is(.rounded-\[12px\], .rounded-\[13px\], .rounded-\[14px\], .rounded-\[10px\]) { border-radius: 5px; }
+html[data-radius="crisp"] .rounded-full:not(.w-2):not(.w-1\.5):not(.keep-round) { border-radius: 6px; }
 /* Cài đặt toàn màn hình: nền giống trang chính (quầng màu Liquid Glass) */
 .settings-screen {
   background:

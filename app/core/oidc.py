@@ -59,6 +59,27 @@ def config() -> dict[str, Any]:
     return {**DEFAULT, **(data if isinstance(data, dict) else {})}
 
 
+PROVIDERS = ("google", "authentik", "keycloak", "authelia", "gitlab", "okta", "auth0", "cloudflare", "nextcloud")
+
+
+def provider_kind(c: Optional[dict[str, Any]] = None) -> str:
+    """Nhận ra nhà cung cấp (để trang đăng nhập hiện đúng biểu tượng) từ tên hiển thị + địa chỉ issuer."""
+    c = c or config()
+    text = f"{c.get('label') or ''} {urlparse(c.get('issuer') or '').hostname or ''} {c.get('issuer') or ''}".lower()
+    if "accounts.google.com" in text or "google" in text:
+        return "google"
+    if "cloudflareaccess.com" in text:
+        return "cloudflare"
+    for p in PROVIDERS:
+        if p in text:
+            return p
+    if "/realms/" in text:
+        return "keycloak"
+    if "/application/o/" in text:
+        return "authentik"
+    return "oidc"
+
+
 def public_config() -> dict[str, Any]:
     c = config()
     out = {k: v for k, v in c.items() if k != "client_secret"}

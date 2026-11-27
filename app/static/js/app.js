@@ -59,7 +59,7 @@
         settingsModal: { open: false, tab: 'home' },
         settingsBase: null,
         // Giao diện theo thiết bị (localStorage amp_ui): xem trước ngay, Lưu / Huỷ ở thanh thay đổi
-        ui: (() => { const d = { accent: 'sky', text: 'm', radius: 'round', icons: 'tint', appIcon: 'default' };
+        ui: (() => { const d = { accent: 'sky', text: 'm', radius: 'soft', icons: 'tint', appIcon: 'default' };
           try { return { ...d, ...JSON.parse(localStorage.getItem('amp_ui') || '{}') }; } catch (_) { return d; } })(),
         uiBase: null,
         settingsForm: {
@@ -652,6 +652,8 @@
             accent: [{ id: 'sky', c: '#38bdf8' }, { id: 'violet', c: '#8b5cf6' }, { id: 'pink', c: '#ec4899' }, { id: 'emerald', c: '#10b981' }, { id: 'amber', c: '#f59e0b' }],
             text: [{ id: 's', px: 12 }, { id: 'm', px: 15 }, { id: 'l', px: 18 }, { id: 'xl', px: 21 }],
             radius: ['round', 'soft', 'crisp'], icons: ['tint', 'solid', 'mono'],
+            // ô mẫu dùng ĐÚNG độ bo áp dụng cho app (glass.css html[data-radius]): thẻ / nút
+            radiusPx: { round: [26, 9999], soft: [16, 12], crisp: [9, 5] },
             appIcon: ['default', 'violet', 'pink', 'emerald', 'amber', 'graphite'],
           };
         },
@@ -660,7 +662,7 @@
           const h = document.documentElement, u = this.ui;
           h.dataset.accent = u.accent || 'sky';
           if (u.text && u.text !== 'm') h.dataset.text = u.text; else delete h.dataset.text;
-          if (u.radius && u.radius !== 'round') h.dataset.radius = u.radius; else delete h.dataset.radius;
+          if (u.radius && u.radius !== 'soft') h.dataset.radius = u.radius; else delete h.dataset.radius;
           const src = this.appIconSrc();
           document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]').forEach(l => { l.href = src; });
           const m = document.querySelector('link[rel="manifest"]');
