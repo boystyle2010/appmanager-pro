@@ -1,5 +1,1 @@
 # Ghi chú cho bản phát hành kế tiếp — mỗi dòng bắt đầu bằng "- "
-- Web Push notifications (Settings → Notifications): turn on push for this browser or the AppManager icon on the Home Screen (iPhone / iPad iOS 16.4+, Android, Windows, macOS, Linux) — no extra notification app needed. Name each device, send a test, remove devices; a "Web Push" channel with all events is created the first time and works with quiet hours and event selection like other channels.
-- Push messages are end-to-end encrypted (RFC 8291) and signed with VAPID (RFC 8292) using pure-Python P-256 — no extra library, works on ARMv7. Devices that unsubscribe or expire are removed automatically.
-- Browsers only allow push over HTTPS: when AppManager is opened over plain http the page explains why and shows step-by-step options (Tailscale HTTPS, reverse proxy with your own domain, Cloudflare Tunnel); on iPhone it explains how to add AppManager to the Home Screen first.
-- Configuration backups now include Web Push keys and devices (Notifications part).

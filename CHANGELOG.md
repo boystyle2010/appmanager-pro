@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.25.0
+
+*Released: 2026-11-27*
+
+### 📦 Component & Version Matrix
+
+- **App Release:** Bumped from `v0.24.0` ➡️ `v0.25.0`
+- **Supported Architectures:** `linux/amd64` (x86_64), `linux/arm64` (ARM64) & `linux/arm/v7` (ARMv7 32-bit) *(Multi-arch GHCR Image)*
+- **Python Base Image:** `python 3.15.2`
+- **Docker CLI:** `docker 29.10.1`
+- **Core Python Stack:** `FastAPI 0.165.0` • `Uvicorn 0.54.0` • `Docker SDK 7.2.0` • `ruamel.yaml 0.19.1` • `Argon2 25.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.29.0` • `APScheduler 3.11.3` • `segno 1.6.6`
+- **Frontend Libraries:** `Alpine.js 3.17.5` • `Tailwind CSS 4.3.5` • `marked 18.3.0` • `DOMPurify 3.5.0`
+
+### 🚀 What's Changed
+
+- Web Push notifications (Settings → Notifications): turn on push for this browser or the AppManager icon on the Home Screen (iPhone / iPad iOS 16.4+, Android, Windows, macOS, Linux) — no extra notification app needed. Name each device, send a test, remove devices; a "Web Push" channel with all events is created the first time and works with quiet hours and event selection like other channels.
+- Push messages are end-to-end encrypted (RFC 8291) and signed with VAPID (RFC 8292) using pure-Python P-256 — no extra library, works on ARMv7. Devices that unsubscribe or expire are removed automatically.
+- Browsers only allow push over HTTPS: when AppManager is opened over plain http the page explains why and shows step-by-step options (Tailscale HTTPS, reverse proxy with your own domain, Cloudflare Tunnel); on iPhone it explains how to add AppManager to the Home Screen first.
+- Configuration backups now include Web Push keys and devices (Notifications part).
+
 ## 0.24.0
 
 *Released: 2026-11-27*
