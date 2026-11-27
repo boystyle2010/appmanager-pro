@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.23.0
+
+*Released: 2026-11-27*
+
+### 📦 Component & Version Matrix
+
+- **App Release:** Bumped from `v0.22.0` ➡️ `v0.23.0`
+- **Supported Architectures:** `linux/amd64` (x86_64), `linux/arm64` (ARM64) & `linux/arm/v7` (ARMv7 32-bit) *(Multi-arch GHCR Image)*
+- **Python Base Image:** `python 3.15.2`
+- **Docker CLI:** `docker 29.10.1`
+- **Core Python Stack:** `FastAPI 0.165.0` • `Uvicorn 0.54.0` • `Docker SDK 7.2.0` • `ruamel.yaml 0.19.1` • `Argon2 25.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.29.0` • `APScheduler 3.11.3` • `segno 1.6.6`
+- **Frontend Libraries:** `Alpine.js 3.17.5` • `Tailwind CSS 4.3.5` • `marked 18.3.0` • `DOMPurify 3.5.0`
+
+### 🚀 What's Changed
+
+- Single sign-on with OpenID Connect (Settings → Single sign-on): sign in with Authentik, Authelia, Keycloak, Pocket ID, Zitadel, Google, Microsoft and other OIDC providers. The login page shows a "Sign in with …" button; password sign-in keeps working so you cannot lock yourself out.
+- SSO roles come from provider groups (Admin / Update / View only groups, highest match wins, updated at every sign-in; people in no group are refused by default). Accounts are created on first sign-in (optional) and tied to the provider's subject, never to a matching name; linking existing accounts with the same name is an explicit option.
+- SSO security: Authorization Code with PKCE, state and nonce; issuer, audience, expiry and nonce are checked; RS256/384/512 signatures are verified against the provider keys (pure Python, works on ARMv7); other algorithms are only accepted directly from an HTTPS token endpoint. Scopes the provider does not support (e.g. `groups` on Keycloak) are skipped automatically, and Test shows them.
+
 ## 0.22.0
 
 *Released: 2026-11-27*
