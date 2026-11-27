@@ -2254,7 +2254,8 @@
             pad = getComputedStyle(document.querySelector('.glass-header')).paddingTop;
           } catch (_) {}
           const pwa = h.classList.contains('pwa') || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
-          return `${pwa ? 'PWA' : 'Browser'} · safe-area ${sat} · header ${pad} · build ${document.querySelector('meta[name="amp-build"]')?.content || '?'}`;
+          const bar = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')?.content || '?';
+          return `${pwa ? 'PWA' : 'Browser'} · bar ${bar} · safe-area ${sat} · header ${pad} · ${Math.round(innerHeight)}/${screen.height}px · build ${document.querySelector('meta[name="amp-build"]')?.content || '?'}`;
         },
         openSettingsSection(tab) {
           if (this.settingsModal.tab === 'home') this._homeScroll = this.$refs.settingsScroll?.scrollTop || 0;
