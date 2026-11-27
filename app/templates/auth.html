@@ -19,7 +19,7 @@
   <script>window.addEventListener('load',function(){if(!window.Alpine){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/alpinejs@3.17.5/dist/cdn.min.js';document.head.appendChild(s)}});</script>
   <link rel="stylesheet" href="/static/css/glass.css?v={{ build }}" />
   <style>
-    /* Trang đăng nhập "đèn bàn" (0.25.1): căn phòng tối, kéo dây bật đèn, chùm sáng chiếu vào ô đăng nhập.
+    /* Trang đăng nhập (0.25.1): phòng máy tối, bấm nút nguồn máy chủ -> máy chiếu hologram chiếu sáng ô đăng nhập.
        Không có JS / Alpine lỗi -> ô đăng nhập vẫn hiện (chỉ ẩn khi body có lp-ready + lp-off). */
     body.lp { background: radial-gradient(120% 90% at 30% 20%, #10131b 0%, #07080c 60%, #040507 100%) fixed; color: #e8eaf0; min-height: 100lvh; overflow-x: hidden; }
     .lp { --lamp: 242 244 248; --lamp-ink: #0b0d12; }
@@ -30,20 +30,29 @@
     .lp-on .lp-beam { opacity: 1; animation: lp-flicker .7s linear 1; }
     @keyframes lp-flicker { 0% { opacity: 0; } 12% { opacity: .9; } 20% { opacity: .15; } 32% { opacity: 1; } 40% { opacity: .35; } 55%, 100% { opacity: 1; } }
     .lp-room { position: relative; z-index: 2; }
-    /* đèn */
-    .lp-lamp { width: 150px; height: 196px; flex: none; position: relative; }
-    @media (min-width: 768px) { .lp-lamp { width: 210px; height: 274px; } }
+    /* máy chủ + máy chiếu hologram */
+    .lp-lamp { width: 152px; height: 190px; flex: none; position: relative; }
+    @media (min-width: 768px) { .lp-lamp { width: 240px; height: 300px; } }
     .lp-lamp svg { width: 100%; height: 100%; overflow: visible; }
-    .lp-bulb { fill: #3a3e48; transition: fill .3s ease; }
-    .lp-inner { fill: #15171d; transition: fill .3s ease; }
-    .lp-on .lp-bulb { fill: rgb(var(--lamp)); filter: drop-shadow(0 0 10px rgb(var(--lamp))); }
-    .lp-on .lp-inner { fill: rgb(var(--lamp) / .55); }
+    .lp-led { fill: #2b2f38; }
+    .lp-on .lp-led { fill: rgb(var(--lamp)); animation: lp-blink 1.6s steps(2, jump-none) infinite; filter: drop-shadow(0 0 3px rgb(var(--lamp))); }
+    .lp-on .lp-led.lp-steady { animation: none; fill: #4ade80; filter: drop-shadow(0 0 3px #4ade80); }
+    @keyframes lp-blink { 0% { opacity: 1; } 50% { opacity: .25; } 100% { opacity: 1; } }
+    .lp-lens { fill: #1a1d24; transition: fill .3s ease; }
+    .lp-on .lp-lens { fill: rgb(var(--lamp)); filter: drop-shadow(0 0 9px rgb(var(--lamp))); }
     .lp-glow { opacity: 0; transition: opacity .5s ease; }
     .lp-on .lp-glow { opacity: 1; }
-    .lp-cord { transition: transform .45s cubic-bezier(.34, 1.56, .64, 1); cursor: grab; touch-action: none; }
-    .lp-cord.lp-drag { transition: none; cursor: grabbing; }
-    .lp-bead { fill: #d9b14a; }
-    .lp-on .lp-bead { fill: rgb(var(--lamp)); }
+    .lp-scan { opacity: 0; }
+    .lp-on .lp-scan { opacity: .9; animation: lp-scan 2.4s linear infinite; }
+    @keyframes lp-scan { 0% { transform: translateX(0); } 100% { transform: translateX(34px); } }
+    .lp-power { cursor: pointer; transition: transform .12s ease; transform-box: fill-box; transform-origin: center; outline: none; }
+    .lp-power:active { transform: scale(.88); }
+    .lp-power-ring { stroke: #d9b14a; }
+    .lp-on .lp-power-ring { stroke: rgb(var(--lamp)); filter: drop-shadow(0 0 5px rgb(var(--lamp))); }
+    .lp-power:focus-visible .lp-power-ring { stroke-width: 3.4; }
+    .lp-hit { animation: lp-pulse 2.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+    .lp-on .lp-hit { animation: none; opacity: 0; }
+    @keyframes lp-pulse { 0%, 100% { opacity: .0; transform: scale(.9); } 50% { opacity: .55; transform: scale(1.25); } }
     .lp-hint { font-size: 11px; color: #8a90a0; text-align: center; transition: opacity .4s ease; white-space: nowrap; }
     .lp-on .lp-hint { opacity: 0; }
     /* ô đăng nhập */
@@ -62,7 +71,7 @@
     .lp-dot { width: 18px; height: 18px; border-radius: 9999px; border: 2px solid transparent; transition: transform .15s ease, border-color .15s ease; }
     .lp-dot[aria-pressed="true"] { border-color: #fff; transform: scale(1.12); }
     .lp-pill { background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .08); }
-    @media (prefers-reduced-motion: reduce) { .lp-on .lp-beam { animation: none; } .lp-star { animation: none; } .lp-card, .lp-cord { transition: none; } }
+    @media (prefers-reduced-motion: reduce) { .lp-on .lp-beam { animation: none; } .lp-star { animation: none; } .lp-card { transition: none; } .lp-on .lp-led, .lp-on .lp-scan, .lp-hit { animation: none; } }
   </style>
 </head>
 <body class="lp" x-data="authApp({{ 'true' if is_setup else 'false' }})" :class="{ 'lp-ready': ready, 'lp-on': lampOn, 'lp-off': !lampOn }"
@@ -94,42 +103,53 @@
     </button>
   </div>
 
-  <div class="lp-room min-h-[100lvh] flex flex-col md:flex-row items-center justify-center gap-2 md:gap-16 px-5 pb-10 safe-bottom"
+  <div class="lp-room min-h-[100lvh] flex flex-col md:flex-row items-center justify-center gap-2 md:gap-44 px-5 pb-10 safe-bottom"
        style="padding-top: calc(4.25rem + env(safe-area-inset-top));">
-    <!-- Đèn bàn (tự vẽ) -->
+    <!-- Máy chủ + máy chiếu hologram (tự vẽ) -->
     <div class="flex flex-col items-center self-start md:self-center ml-2 md:ml-0 md:mt-0">
       <div class="lp-lamp">
-        <svg viewBox="0 0 200 262" aria-hidden="true">
+        <svg viewBox="0 0 200 250">
           <defs>
-            <linearGradient id="lpShade" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3a3d46"/><stop offset="1" stop-color="#121318"/></linearGradient>
-            <radialGradient id="lpHalo"><stop offset="0" :stop-color="`rgb(${lampColors[color]})`" stop-opacity=".55"/><stop offset="1" :stop-color="`rgb(${lampColors[color]})`" stop-opacity="0"/></radialGradient>
+            <linearGradient id="lpRack" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2c2f38"/><stop offset="1" stop-color="#14161b"/></linearGradient>
+            <linearGradient id="lpUnit" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f2229"/><stop offset="1" stop-color="#17191f"/></linearGradient>
+            <radialGradient id="lpHalo"><stop offset="0" :stop-color="`rgb(${lampColors[color]})`" stop-opacity=".6"/><stop offset="1" :stop-color="`rgb(${lampColors[color]})`" stop-opacity="0"/></radialGradient>
           </defs>
-          <!-- đế -->
-          <ellipse cx="64" cy="248" rx="54" ry="10" fill="#000" opacity=".5"/>
-          <path d="M14 244 Q14 234 64 233 Q114 234 114 244 Q114 250 64 251 Q14 250 14 244 Z" fill="#1b1d23" stroke="#2c2f38"/>
-          <!-- tay đèn -->
-          <line x1="64" y1="236" x2="34" y2="146" stroke="#2a2d35" stroke-width="7" stroke-linecap="round"/>
-          <line x1="34" y1="146" x2="96" y2="76" stroke="#2a2d35" stroke-width="7" stroke-linecap="round"/>
-          <circle cx="64" cy="236" r="7" fill="#15171c" stroke="#d9b14a" stroke-width="3"/>
-          <circle cx="34" cy="146" r="7" fill="#15171c" stroke="#d9b14a" stroke-width="3"/>
-          <!-- chao đèn: miệng hướng xuống bên phải (về phía ô đăng nhập) -->
-          <g transform="translate(110 66) rotate(-38)">
-            <circle class="lp-glow" cx="0" cy="26" r="46" fill="url(#lpHalo)"/>
-            <path d="M-46 22 Q-44 -36 0 -40 Q44 -36 46 22 Z" fill="url(#lpShade)" stroke="#40444e" stroke-width="1.2"/>
-            <ellipse class="lp-inner" cx="0" cy="22" rx="46" ry="9"/>
-            <ellipse cx="0" cy="22" rx="46" ry="9" fill="none" stroke="#d9b14a" stroke-width="2.2"/>
-            <circle class="lp-bulb" cx="0" cy="20" r="10"/>
-            <circle x-ref="rimA" cx="-46" cy="22" r=".5" fill="none"/>
-            <circle x-ref="rimB" cx="46" cy="22" r=".5" fill="none"/>
-            <circle x-ref="mouth" cx="0" cy="24" r=".5" fill="none"/>
-          </g>
-          <!-- dây kéo: chạm hoặc kéo xuống -->
-          <g class="lp-cord" :class="{ 'lp-drag': drag.on }" :style="`transform: translateY(${drag.y}px)`"
-             @pointerdown="cordDown($event)" @keydown.enter.prevent="toggleLamp()" @keydown.space.prevent="toggleLamp()"
+          <ellipse cx="80" cy="241" rx="70" ry="8" fill="#000" opacity=".55"/>
+          <!-- máy chủ 3 tầng -->
+          <rect x="18" y="96" width="124" height="140" rx="11" fill="url(#lpRack)" stroke="#3a3e48"/>
+          <rect x="30" y="232" width="16" height="7" rx="2" fill="#23262e"/><rect x="114" y="232" width="16" height="7" rx="2" fill="#23262e"/>
+          <rect x="27" y="106" width="106" height="36" rx="6" fill="url(#lpUnit)" stroke="#2e3139"/>
+          <path d="M36 115v18M42 115v18M48 115v18M54 115v18" stroke="#30343d" stroke-width="2.4" stroke-linecap="round"/>
+          <rect x="64" y="118" width="32" height="12" rx="2.5" fill="#101216" stroke="#2c2f37"/><rect x="68" y="123" width="18" height="2" rx="1" fill="#2a2d35"/>
+          <rect x="27" y="148" width="106" height="36" rx="6" fill="url(#lpUnit)" stroke="#2e3139"/>
+          <path d="M36 157v18M42 157v18M48 157v18M54 157v18" stroke="#30343d" stroke-width="2.4" stroke-linecap="round"/>
+          <rect x="64" y="160" width="32" height="12" rx="2.5" fill="#101216" stroke="#2c2f37"/><rect x="68" y="165" width="18" height="2" rx="1" fill="#2a2d35"/>
+          <rect x="27" y="190" width="106" height="36" rx="6" fill="url(#lpUnit)" stroke="#2e3139"/>
+          <path d="M36 199v18M42 199v18M48 199v18M54 199v18" stroke="#30343d" stroke-width="2.4" stroke-linecap="round"/>
+          <rect x="64" y="202" width="32" height="12" rx="2.5" fill="#101216" stroke="#2c2f37"/><rect x="68" y="207" width="18" height="2" rx="1" fill="#2a2d35"/>
+          <!-- đèn LED (tầng 1, 2) -->
+          <circle class="lp-led lp-steady" cx="112" cy="124" r="3"/><circle class="lp-led" cx="122" cy="124" r="3" style="animation-delay: .3s"/>
+          <circle class="lp-led lp-steady" cx="112" cy="166" r="3"/><circle class="lp-led" cx="122" cy="166" r="3" style="animation-delay: .9s"/>
+          <circle class="lp-led" cx="104" cy="208" r="2.4" style="animation-delay: .5s"/>
+          <!-- máy chiếu hologram trên nóc, ống kính hướng sang phải / xuống ô đăng nhập -->
+          <rect x="40" y="64" width="72" height="32" rx="8" fill="url(#lpRack)" stroke="#3a3e48"/>
+          <rect x="49" y="74" width="28" height="3" rx="1.5" fill="#2a2d35"/><rect x="49" y="80" width="20" height="3" rx="1.5" fill="#2a2d35"/>
+          <rect x="110" y="66" width="14" height="28" rx="4" fill="#23262e" stroke="#3a3e48"/>
+          <circle class="lp-glow" cx="132" cy="80" r="36" fill="url(#lpHalo)"/>
+          <ellipse cx="127" cy="80" rx="7" ry="15" fill="#101216" stroke="#d9b14a" stroke-width="2.2"/>
+          <ellipse class="lp-lens" cx="127.8" cy="80" rx="4.2" ry="10"/>
+          <rect class="lp-scan" x="49" y="89" width="10" height="1.8" rx=".9" :fill="`rgb(${lampColors[color]})`"/>
+          <circle x-ref="rimA" cx="130" cy="64" r=".5" fill="none"/>
+          <circle x-ref="rimB" cx="130" cy="96" r=".5" fill="none"/>
+          <circle x-ref="mouth" cx="132" cy="80" r=".5" fill="none"/>
+          <!-- nút nguồn: chạm để khởi động / tắt -->
+          <g class="lp-power" @click="toggleLamp()" @keydown.enter.prevent="toggleLamp()" @keydown.space.prevent="toggleLamp()"
              role="button" tabindex="0" :aria-label="t('pullHint')" :aria-pressed="lampOn">
-            <line x1="134" y1="86" x2="134" y2="146" stroke="#d9b14a" stroke-width="1.6"/>
-            <circle class="lp-bead" cx="134" cy="151" r="6"/>
-            <circle cx="134" cy="140" r="24" fill="transparent"/>
+            <circle class="lp-hit" cx="120" cy="208" r="12" fill="none" stroke="#d9b14a" stroke-width="1.5"/>
+            <circle cx="120" cy="208" r="10" fill="#101216"/>
+            <circle class="lp-power-ring" cx="120" cy="208" r="10" fill="none" stroke-width="2.2"/>
+            <path class="lp-power-ring" d="M116.3 204.6a5.2 5.2 0 1 0 7.4 0M120 202v5.4" fill="none" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="120" cy="208" r="22" fill="transparent"/>
           </g>
         </svg>
       </div>
@@ -262,7 +282,7 @@
           otpLabel: 'Two-factor code', otpHint: '6-digit code from your authenticator app, or a backup code', verify: 'Verify',
           or: 'or', ssoBtn: 'Sign in with {p}', ssoFailed: 'Single sign-on failed',
           welcome: 'Welcome back', welcomeSetup: 'Welcome', userPh: 'Enter your username', showPw: 'Show password',
-          pullHint: 'Pull the cord to turn on the light', lampColor: 'Lamp color'
+          pullHint: 'Press the power button to start', lampColor: 'Light color'
         },
         vi: {
           firstRunBadge: 'Thiết lập lần đầu', secureBadge: 'Trung tâm điều khiển Docker',
@@ -274,16 +294,15 @@
           otpLabel: 'Mã xác thực 2 lớp', otpHint: 'Mã 6 số trong ứng dụng xác thực, hoặc mã dự phòng', verify: 'Xác minh',
           or: 'hoặc', ssoBtn: 'Đăng nhập bằng {p}', ssoFailed: 'Đăng nhập một lần không thành công',
           welcome: 'Chào mừng trở lại', welcomeSetup: 'Chào mừng', userPh: 'Nhập tên đăng nhập', showPw: 'Hiện mật khẩu',
-          pullHint: 'Kéo dây để bật đèn', lampColor: 'Màu đèn'
+          pullHint: 'Bấm nút nguồn để khởi động', lampColor: 'Màu ánh sáng'
         }
       };
 
       return {
         isSetup, lang: localStorage.getItem('amp_lang') || 'vi',
-        // Đèn bàn: bật / tắt + màu nhớ trong trình duyệt (lần sau mở trang đèn tự bật)
+        // Máy chủ + máy chiếu: bật / tắt + màu nhớ trong trình duyệt (lần sau mở trang tự bật)
         lampColors: { amber: '245 181 74', cyan: '94 224 240', pink: '244 114 182', green: '74 222 128', white: '242 244 248' },
         color: 'white', lampOn: false, ready: false,
-        drag: { on: false, y: 0, startY: 0, moved: false },
         beam: { points: '', cx: 0, cy: 0, r: 1 },
         username: '', password: '', confirmPassword: '', remember: true,
         showPw: false, loading: false, error: '', otpStep: false, otp: '',
@@ -323,9 +342,6 @@
           this.ready = true;
           if (keepOn) setTimeout(() => this.setLamp(true, false), 250);
           window.addEventListener('resize', () => this.calcBeam());
-          window.addEventListener('pointermove', (e) => this.cordMove(e));
-          window.addEventListener('pointerup', () => this.cordUp());
-          window.addEventListener('pointercancel', () => this.cordUp());
           this.$nextTick(() => this.calcBeam());
         },
         setColor(c) { this.color = c; this._store('amp_lamp_color', c); if (!this.lampOn) this.setLamp(true); },
@@ -337,22 +353,7 @@
           });
         },
         toggleLamp() { this.setLamp(!this.lampOn); },
-        // Kéo dây: chạm = bật / tắt; kéo xuống > 24px rồi thả cũng vậy. Dây nảy về chỗ cũ.
-        cordDown(e) { this.drag = { on: true, y: 0, startY: e.clientY, moved: false }; try { e.target.setPointerCapture?.(e.pointerId); } catch (_) {} },
-        cordMove(e) {
-          if (!this.drag.on) return;
-          const dy = Math.max(0, Math.min(46, e.clientY - this.drag.startY));
-          this.drag.y = dy; if (dy > 4) this.drag.moved = true;
-        },
-        cordUp() {
-          if (!this.drag.on) return;
-          const pulled = !this.drag.moved || this.drag.y > 24;
-          if (!this.drag.moved) { this.drag.y = 18; }  // chạm: dây giật xuống một chút cho có cảm giác
-          this.drag.on = false;
-          requestAnimationFrame(() => { this.drag.y = 0; });
-          if (pulled) this.toggleLamp();
-        },
-        // Chùm sáng = bao lồi của miệng chao đèn + 4 góc ô đăng nhập, sáng nhất ở miệng đèn
+        // Chùm sáng = bao lồi của ống kính máy chiếu + 4 góc ô đăng nhập, sáng nhất ở ống kính
         calcBeam() {
           const A = this.$refs.rimA?.getBoundingClientRect(), Bm = this.$refs.rimB?.getBoundingClientRect();
           const M = this.$refs.mouth?.getBoundingClientRect(), C = this.$refs.cardBox?.getBoundingClientRect();

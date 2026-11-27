@@ -1,5 +1,5 @@
-// Trang đăng nhập "đèn bàn": đèn tắt -> ô đăng nhập ẩn; kéo dây (kéo chuột / chạm) -> đèn bật, chùm sáng, ô đăng nhập hiện;
-// chấm màu đổi màu đèn + nút; đăng nhập thật; lần sau đèn tự bật; khổ máy tính; tắt JavaScript vẫn đăng nhập được.
+// Trang đăng nhập "máy chủ + máy chiếu": tắt -> ô đăng nhập ẩn; bấm nút nguồn -> LED nhấp nháy, chùm sáng, ô đăng nhập hiện;
+// chấm màu đổi màu ánh sáng + nút; đăng nhập thật; lần sau đèn tự bật; khổ máy tính; tắt JavaScript vẫn đăng nhập được.
 // argv: OUT, base URL (uvicorn đã tạo admin / Test-Passw0rd!x)
 const { chromium } = require('playwright');
 const OUT = process.argv[2], B = process.argv[3] || 'http://localhost:8771';
@@ -10,12 +10,8 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   await p.goto(B + '/login'); await sleep(1200);
   await p.screenshot({ path: OUT + '/l1-off.png' });
   const vis0 = await p.evaluate(() => getComputedStyle(document.querySelector('.lp-card')).visibility);
-  // kéo dây
-  const bead = await p.locator('.lp-bead').boundingBox();
-  await p.mouse.move(bead.x + bead.width / 2, bead.y + bead.height / 2); await p.mouse.down();
-  for (let i = 1; i <= 10; i++) { await p.mouse.move(bead.x + bead.width / 2, bead.y + bead.height / 2 + i * 4); await sleep(20); }
-  await sleep(150); await p.screenshot({ path: OUT + '/l2-pulling.png' });
-  await p.mouse.up(); await sleep(1400);
+  // bấm nút nguồn máy chủ
+  await p.locator('.lp-power').click(); await sleep(1400);
   const vis1 = await p.evaluate(() => getComputedStyle(document.querySelector('.lp-card')).visibility);
   await p.screenshot({ path: OUT + '/l3-on-white.png' });
   await p.locator('.lp-dot').nth(3).click(); await sleep(700);
@@ -32,7 +28,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   // máy tính
   const ctx3 = await b.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
   const p3 = await ctx3.newPage(); await p3.goto(B + '/login'); await sleep(800);
-  await p3.locator('.lp-cord').click(); await sleep(1400);
+  await p3.locator('.lp-power').click(); await sleep(1400);
   await p3.locator('.lp-dot').nth(1).click(); await sleep(600);
   await p3.screenshot({ path: OUT + '/l6-desktop-cyan.png' });
   // không có JS -> ô đăng nhập vẫn hiện
@@ -41,10 +37,10 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     const cardVisibleNoJs = await p4.locator('.lp-card').isVisible();
   const R = [];
   const check = (n, c, d = '') => { R.push(!!c); console.log((c ? 'PASS ' : 'FAIL ') + n + (c ? '' : ' :: ' + d)); };
-  check('Lamp off: the sign-in card is hidden, hint shown', vis0 === 'hidden');
-  check('Pulling the cord turns the lamp on and shows the card', vis1 === 'visible');
+  check('Server off: the sign-in card is hidden, hint shown', vis0 === 'hidden');
+  check('Pressing the server power button starts the projector and shows the card', vis1 === 'visible');
   check('Signing in from the lamp page works', url1 === B + '/', url1);
-  check('Next visit: the lamp is already on', vis2 === 'visible');
+  check('Next visit: already on', vis2 === 'visible');
   check('Without JavaScript the sign-in card is still visible', cardVisibleNoJs);
   check('No JavaScript errors', !errs.length, errs.join(' | '));
   console.log(`SUMMARY ${R.filter(Boolean).length} / ${R.length}`);
