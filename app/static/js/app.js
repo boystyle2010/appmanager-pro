@@ -76,6 +76,8 @@
         pwForm: { current: '', next: '', confirm: '', busy: false },
         auditItems: [], auditUser: '',
         me: { username: '', role: 'admin', auth_source: 'local' },
+        cfgState: { loading: false, sections: [], current: {}, safety: [], exp: { pw: '', pw2: '', sel: {}, busy: false, error: '' },
+                    imp: { name: '', text: '', pw: '', info: null, sel: {}, busy: false, error: '', result: null } },
         ssoState: { cfg: null, form: {}, secret: '', redirect: '', loading: false, saving: false, testing: false, test: null, error: '', saved: false },
         usersState: { list: [], loading: false, form: { open: false, isNew: true, username: '', role: 'viewer', password: '', disabled: false, busy: false, error: '' } },
         backupsState: { loading: false, items: [], busyFile: '' },
@@ -458,6 +460,102 @@
               this.loadUsers();
             }
           });
+        },
+
+        // ---------------- Sao lưu / khôi phục cấu hình AppManager (0.24) ----------------
+        async loadConfigBackup() {
+          const st = this.cfgState;
+          st.loading = true;
+          try {
+            const res = await fetch('/api/config/sections');
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            st.sections = data.sections; st.current = data.current; st.safety = data.safety || [];
+            if (!Object.keys(st.exp.sel).length) data.sections.forEach(x => { st.exp.sel[x] = true; });
+          } catch (err) { this.showToast(err.message); }
+          finally { st.loading = false; }
+        },
+
+        cfgCount(sum, sec) {
+          const x = (sum || {})[sec];
+          if (!x) return '';
+          if (sec === 'sso') return x.issuer ? (x.enabled ? this.t('cfgSsoOn').replace('{p}', x.label || 'SSO') : this.t('cfgSsoOff')) : this.t('cfgNone');
+          return x.count ? this.t('cfgItems').replace('{n}', x.count) : this.t('cfgNone');
+        },
+
+        _download(name, text) {
+          const blob = new Blob([text], { type: 'application/octet-stream' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+          setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+        },
+
+        async exportConfig() {
+          const e = this.cfgState.exp;
+          e.error = '';
+          if (e.pw.length < 8) { e.error = this.t('cfgPwShort'); return; }
+          if (e.pw !== e.pw2) { e.error = this.t('pwMismatch'); return; }
+          e.busy = true;
+          try {
+            const sections = this.cfgState.sections.filter(x => e.sel[x]);
+            const { res, data } = await this._postJson('/api/config/export', { password: e.pw, sections });
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            this._download(data.filename, data.data);
+            this.showToast(this.t('cfgExported').replace('{f}', data.filename));
+            e.pw = ''; e.pw2 = '';
+          } catch (err) { e.error = err.message; }
+          finally { e.busy = false; }
+        },
+
+        pickConfigFile(ev) {
+          const f = ev.target.files && ev.target.files[0];
+          const i = this.cfgState.imp;
+          Object.assign(i, { name: '', text: '', info: null, sel: {}, error: '', result: null });
+          if (!f) return;
+          if (f.size > 20 * 1024 * 1024) { i.error = this.t('cfgTooBig'); return; }
+          const r = new FileReader();
+          r.onload = () => { i.name = f.name; i.text = String(r.result || ''); };
+          r.onerror = () => { i.error = this.t('cfgReadFail'); };
+          r.readAsText(f);
+        },
+
+        async inspectConfig() {
+          const i = this.cfgState.imp;
+          i.busy = true; i.error = ''; i.info = null; i.result = null;
+          try {
+            const { res, data } = await this._postJson('/api/config/inspect', { data: i.text, password: i.pw });
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            i.info = data; i.sel = {};
+            (data.header.sections || []).forEach(x => { i.sel[x] = true; });
+          } catch (err) { i.error = err.message; }
+          finally { i.busy = false; }
+        },
+
+        confirmRestoreConfig() {
+          const i = this.cfgState.imp;
+          const secs = (i.info?.header.sections || []).filter(x => i.sel[x]);
+          if (!secs.length) { i.error = this.t('cfgPickOne'); return; }
+          const acc = secs.includes('accounts') && i.info.summary.accounts;
+          const lost = acc && !acc.items.some(u => u.username.toLowerCase() === this.me.username.toLowerCase());
+          this.askConfirm({
+            tone: 'danger', title: this.t('cfgRestoreTitle'),
+            message: this.t('cfgRestoreMsg').replace('{s}', secs.map(x => this.t('cfgSec_' + x)).join(', ')) + (lost ? ' ' + this.t('cfgRestoreLoseMe') : ''),
+            confirmLabel: this.t('cfgRestoreBtn'), onConfirm: () => this.restoreConfig(secs)
+          });
+        },
+
+        async restoreConfig(secs) {
+          const i = this.cfgState.imp;
+          i.busy = true; i.error = '';
+          try {
+            const { res, data } = await this._postJson('/api/config/restore', { data: i.text, password: i.pw, sections: secs });
+            if (!res.ok) throw new Error(data.detail || 'Failed');
+            i.result = data; i.pw = '';
+            this.showToast(this.t('cfgRestored'));
+            if (data.signed_out) { setTimeout(() => { window.location.href = '/login'; }, 2500); return; }
+            await this.loadMe(); this.loadConfigBackup(); this.loadApps();
+          } catch (err) { i.error = err.message; }
+          finally { i.busy = false; }
         },
 
         // ---------------- SSO / OIDC (0.23) ----------------
@@ -2041,6 +2139,7 @@
           else if (tab === 'servers') this.loadServers(true);
           else if (tab === 'users') this.loadUsers();
           else if (tab === 'sso') this.loadSso();
+          else if (tab === 'config') this.loadConfigBackup();
         },
 
         // ---------------- Nhiều máy chủ (0.18) ----------------
@@ -2342,7 +2441,7 @@
 
         settingsSectionTitle() {
           return {
-            home: this.t('settingsTitle'), schedule: this.t('setGeneral'), storage: this.t('setStorage'), users: this.t('setUsers'), sso: this.t('setSso'),
+            home: this.t('settingsTitle'), schedule: this.t('setGeneral'), storage: this.t('setStorage'), users: this.t('setUsers'), sso: this.t('setSso'), config: this.t('setConfig'),
             notify: this.t('setNotify'), servers: this.t('setServers'), security: this.t('tabSecurity'), tokens: this.t('setTokens'), history: this.t('tabHistory'), about: this.t('tabAbout'),
           }[this.settingsModal.tab] || this.t('settingsTitle');
         },
@@ -2365,6 +2464,7 @@
             amber: 'bg-amber-500/15 border-amber-400/35 text-amber-400', rose: 'bg-rose-500/15 border-rose-400/35 text-rose-400',
             violet: 'bg-violet-500/15 border-violet-400/35 text-violet-400', slate: 'bg-slate-500/15 border-slate-400/35 text-slate-300' };
           const c = (x) => C[x];
+          I.archive = 'M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m8.25 3v6.75m0 0l-3-3m3 3l3-3M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z';
           I.sso = 'M7.864 4.243A7.5 7.5 0 0119.5 10.5c0 2.92-.556 5.709-1.568 8.268M5.742 6.364A7.465 7.465 0 004.5 10.5a7.464 7.464 0 01-1.15 3.993m1.989 3.559A11.209 11.209 0 008.25 10.5a3.75 3.75 0 117.5 0c0 .527-.021 1.049-.064 1.565M12 10.5a14.94 14.94 0 01-3.6 9.75m6.633-4.596a18.666 18.666 0 01-2.485 5.33';
           I.users = 'M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z';
           const admin = this.isAdmin();
@@ -2381,6 +2481,7 @@
               { tab: 'security', title: this.t('tabSecurity'), desc: admin ? this.t('setSecurityDesc') : this.t('setSecurityDescSelf'), icon: I.lock, color: c('rose') },
               { tab: 'sso', title: this.t('setSso'), desc: this.ssoState.cfg?.enabled ? this.t('ssoOnWith').replace('{p}', this.ssoState.cfg.label || 'SSO') : this.t('setSsoDesc'), icon: I.sso, color: c('violet') },
               { tab: 'users', title: this.t('setUsers'), desc: this.usersState.list.length > 1 ? this.t('usCount').replace('{n}', this.usersState.list.length) : this.t('setUsersDesc'), icon: I.users, color: c('emerald') },
+              { tab: 'config', title: this.t('setConfig'), desc: this.t('setConfigDesc'), icon: I.archive, color: c('amber') },
               { tab: 'tokens', title: this.t('setTokens'), desc: this.t('setTokensDesc'), icon: I.key, color: c('sky') },
               { tab: 'history', title: this.t('tabHistory'), desc: this.t('setHistoryDesc'), icon: I.clock, color: c('violet') },
             ] },

@@ -28,7 +28,7 @@ _SELF = (
 )
 # GET chỉ cho Quản trị (có mật khẩu / biến môi trường / cấu hình nhạy cảm)
 _ADMIN_GET = re.compile(
-    r"^/api/(tokens|users|audit|sso|notify|setup/|system/api-status|system/registry-logins"
+    r"^/api/(tokens|users|audit|sso|config|notify|setup/|system/api-status|system/registry-logins"
     r"|apps/[^/]+/(compose|compose-convert|run-command|uninstall-check)$)"
 )
 # POST của vai trò Cập nhật

@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from app.core import api_tokens, jobs, logs as app_logs, oidc, servers, users as users_mod
+from app.core import api_tokens, config_backup, jobs, logs as app_logs, oidc, servers, users as users_mod
 from app.core.app_backup import delete_backup, list_backups, restore_backup
 from app.core.auth import (
     COOKIE_NAME,
@@ -1192,6 +1192,79 @@ async def api_sso_test(payload: SSOPayload, _: str = Depends(_session_only)):
         return await oidc.test(cfg)
     except (ValueError, oidc.OIDCError) as exc:
         return {"ok": False, "error": str(exc)}
+
+
+# ---------------- Sao lưu / khôi phục cấu hình AppManager (0.24) ----------------
+class ConfigExportPayload(BaseModel):
+    password: str
+    sections: Optional[list[str]] = None
+
+
+class ConfigFilePayload(BaseModel):
+    data: str
+    password: str
+    sections: Optional[list[str]] = None
+
+
+@app.get("/api/config/sections")
+async def api_config_sections(_: str = Depends(_session_only)):
+    """Các phần có thể sao lưu + tóm tắt cấu hình hiện tại."""
+    cur = await asyncio.to_thread(config_backup.collect)
+    return {"sections": list(config_backup.SECTIONS), "current": config_backup.summary(cur), "safety": config_backup.safety_files()}
+
+
+@app.post("/api/config/export")
+async def api_config_export(payload: ConfigExportPayload, request: Request, user: str = Depends(_session_only)):
+    try:
+        data = await asyncio.to_thread(config_backup.collect, payload.sections)
+        text = await asyncio.to_thread(config_backup.encrypt, data, payload.password, APP_VERSION)
+    except config_backup.ConfigError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    audit(request, user, "config_export", detail=", ".join(data.keys()))
+    return {"filename": config_backup.filename(), "data": text, "sections": list(data.keys())}
+
+
+@app.post("/api/config/inspect")
+async def api_config_inspect(payload: ConfigFilePayload, _: str = Depends(_session_only)):
+    """Giải mã và tóm tắt file (không thay đổi gì)."""
+    try:
+        header, data = await asyncio.to_thread(config_backup.decrypt, payload.data, payload.password)
+    except config_backup.ConfigError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"header": {k: header.get(k) for k in ("app_version", "created", "host", "sections")}, "summary": config_backup.summary(data)}
+
+
+@app.post("/api/config/restore")
+async def api_config_restore(payload: ConfigFilePayload, request: Request, user: str = Depends(_session_only)):
+    try:
+        _, data = await asyncio.to_thread(config_backup.decrypt, payload.data, payload.password)
+        res = await asyncio.to_thread(config_backup.restore, data, payload.sections or [], payload.password, APP_VERSION)
+    except config_backup.ConfigError as exc:
+        audit(request, user, "config_restore", detail=str(exc)[:200], ok=False)
+        raise HTTPException(status_code=400, detail=str(exc))
+    # Áp dụng ngay: tài khoản registry cho Docker, lịch chạy, bộ đệm SSO
+    try:
+        await asyncio.to_thread(net.apply_docker_logins)
+    except Exception:
+        pass
+    try:
+        configure_jobs()
+    except Exception:
+        pass
+    oidc._DISCOVERY_CACHE.clear(); oidc._JWKS_CACHE.clear()
+    audit(request, user, "config_restore", detail=", ".join(f"{k}: {v}" for k, v in res["restored"].items()))
+    still = session_user(request.cookies.get(COOKIE_NAME))  # tài khoản của chính mình có thể đã đổi theo file
+    return {**res, "signed_out": not still}
+
+
+@app.get("/api/config/safety/{name}")
+async def api_config_safety(name: str, _: str = Depends(_session_only)):
+    try:
+        p = config_backup.safety_path(name)
+    except config_backup.ConfigError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return Response(content=p.read_text(), media_type="application/octet-stream",
+                    headers={"Content-Disposition": f'attachment; filename="{p.name}"'})
 
 
 @app.get("/api/tokens")
