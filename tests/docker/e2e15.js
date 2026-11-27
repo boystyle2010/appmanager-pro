@@ -1,4 +1,4 @@
-// 16 kênh thông báo: nhóm Chat / Đẩy lên điện thoại / Khác, dấu iPhone, dòng "Nhận được trên", form Email (ô chọn), Bark, Gotify (không có iPhone).
+// 17 kênh thông báo: nhóm Chat / Đẩy lên điện thoại / Khác, dấu iPhone, dòng "Nhận được trên", form Email (ô chọn), Bark, Gotify (không có iPhone).
 // AppManager chạy bằng uvicorn từ repo ở argv[3] (đã tạo admin). argv: OUT, base URL.
 const { chromium } = require('playwright');
 const OUT = process.argv[2]; const B = process.argv[3] || 'http://localhost:8794';
@@ -15,14 +15,14 @@ const results = []; const check = (n, c, d = '') => { results.push(!!c); console
   await D('d.newNotifyChannel()'); await sleep(500);
   const shot = async (name) => { await p.evaluate(() => document.querySelector('[x-model="notifyState.edit.name"]')?.parentElement?.scrollIntoView({ block: 'start' })); await sleep(300); await p.screenshot({ path: OUT + '/' + name }); };
   const types = await D('return d.notifyGroups().flatMap(g => g.types)');
-  check('16 channel types in 3 groups', types.length === 16, JSON.stringify(types));
+  check('17 channel types in 3 groups', types.length === 17, JSON.stringify(types));
   check('Telegram shows 6 platform icons, no dots on the picker', await p.evaluate(() => [...document.querySelectorAll('svg')].filter(x => x.getAttribute('x-html') === 'platformIcon(pf)' && x.getBoundingClientRect().width > 0).length) === 6
         && await p.evaluate(() => [...document.querySelectorAll('button')].filter(b => /Telegram|Discord|Bark|Signal/.test(b.textContent) && b.querySelector('.rounded-full')).length) === 0);
   const iconOk = await p.evaluate(() => [...document.querySelectorAll('svg')].filter(x => x.getAttribute('x-html') === 'notifyIcon(tp).svg' && x.innerHTML.length > 20).length);
-  check('Every channel button shows its icon (16)', iconOk === 16, iconOk);
+  check('Every channel button shows its icon (17)', iconOk === 17, iconOk);
   for (const w of [390, 320]) {  // iPhone thường và iPhone SE: tên kênh không bị cắt
     await p.setViewportSize({ width: w, height: 844 }); await sleep(300);
-    const cut = await p.evaluate(() => [...document.querySelectorAll('button')].filter(b => b.getAttribute('x-text') === null && b.querySelector('span') && /^(Telegram|Discord|Slack|Teams|Google Chat|Mattermost|Matrix|Signal|ntfy|Bark|Pushover|Pushbullet|Gotify|Email|Apprise|Webhook)$/.test(b.textContent.trim()) && (b.scrollWidth > b.clientWidth + 1 || b.querySelector('span').scrollWidth > b.querySelector('span').clientWidth + 1)).map(b => b.textContent.trim()));
+    const cut = await p.evaluate(() => [...document.querySelectorAll('button')].filter(b => b.getAttribute('x-text') === null && b.querySelector('span') && /^(Telegram|Discord|Slack|Teams|Google Chat|Mattermost|Matrix|Signal|Web Push|ntfy|Bark|Pushover|Pushbullet|Gotify|Email|Apprise|Webhook)$/.test(b.textContent.trim()) && (b.scrollWidth > b.clientWidth + 1 || b.querySelector('span').scrollWidth > b.querySelector('span').clientWidth + 1)).map(b => b.textContent.trim()));
     check(`Channel names not cut at ${w}px`, cut.length === 0, JSON.stringify(cut));
   }
   await p.setViewportSize({ width: 390, height: 844 }); await sleep(300);

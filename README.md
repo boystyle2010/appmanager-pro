@@ -260,17 +260,19 @@ docker compose pull && docker compose up -d
 
 ### Notifications
 
-*Settings → Notifications*: add one or more channels and choose the events per channel. 16 channel types:
+*Settings → Notifications*: add one or more channels and choose the events per channel. 17 channel types:
 
 | Group | Channels | iPhone |
 |---|---|---|
 | Chat apps | **Telegram**, **Discord**, **Slack**, **Microsoft Teams** (Workflows webhook), **Google Chat**, **Mattermost** (also Rocket.Chat webhooks), **Matrix**, **Signal** (via signal-cli-rest-api) | ✅ all |
-| Push to your phone | **ntfy**, **Bark** (iPhone only), **Pushover**, **Pushbullet**, **Gotify** | ✅ ntfy, Bark, Pushover — ❌ Gotify (Android / web only), Pushbullet (mainly Android / browser) |
+| Push to your phone | **Web Push** (this browser or the AppManager icon on the Home Screen, no extra app; needs HTTPS), **ntfy**, **Bark** (iPhone only), **Pushover**, **Pushbullet**, **Gotify** | ✅ Web Push (iOS 16.4+, added to Home Screen), ntfy, Bark, Pushover — ❌ Gotify (Android / web only), Pushbullet (mainly Android / browser) |
 | Other | **Email** (SMTP: STARTTLS / SSL / none), **Apprise API** (100+ more services: WhatsApp, LINE, SMS…), generic **Webhook** (JSON, optional HMAC signature in `X-AppManager-Signature`) | ✅ Email, Apprise |
 
 **Privacy options (per channel):**
 - **Encrypt message content** — Bark (AES-128/192/256-CBC, decrypted by the Bark app on your iPhone; enter the same key and IV in Bark → Push Encryption) and Webhook (AES-256-GCM, key = SHA-256 of your passphrase, body `{"encrypted": base64(nonce + ciphertext + tag), "alg": "AES-256-GCM"}`). Other apps cannot decrypt messages, so they rely on transport encryption (HTTPS / TLS).
 - **Private mode** — any channel: only a generic title (e.g. "❌ Update failed") is sent, without app names, IP addresses or details.
+
+**Web Push needs HTTPS** (browsers refuse push on plain `http://` except `localhost`): open AppManager through Tailscale HTTPS (`tailscale serve --bg <port>`), a reverse proxy with your own domain and Let's Encrypt, or a Cloudflare Tunnel, then turn it on in Settings → Notifications. On iPhone add AppManager to the Home Screen (Share → Add to Home Screen) and open it from that icon first.
 
 Self-hosted ntfy + iPhone: add `upstream-base-url: "https://ntfy.sh"` to the ntfy `server.yml` so iPhones are woken up instantly (only a wake-up signal goes through ntfy.sh; the message stays on your server).
 

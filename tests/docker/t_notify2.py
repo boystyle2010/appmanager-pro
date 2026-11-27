@@ -106,7 +106,7 @@ try:
     notify.upsert_channel({"id": p["id"], "type": "pushover", "name": "PO2", "config": {"app_token": "", "user_key": ""}})
     kept = next(c for c in notify.channels() if c["id"] == p["id"])["config"]
     check("S1 Pushover keys masked; empty on edit keeps them", mc["app_token"] == "" and mc["has_user_key"] and kept["app_token"] == "APPTOK" and kept["user_key"] == "USERKEY", (mc, kept))
-    check("S2 all 16 channel types known", len(notify.CHANNEL_TYPES) == 16 and set(notify.REQUIRED) == set(notify.CHANNEL_TYPES) == set(notify.SECRET_FIELDS))
+    check("S2 all 17 channel types known", len(notify.CHANNEL_TYPES) == 17 and set(notify.REQUIRED) == set(notify.CHANNEL_TYPES) == set(notify.SECRET_FIELDS))
 
     # Q1 sự kiện thật qua hàng đợi: email nhận "cập nhật thất bại", kênh chỉ chọn sự kiện khác thì không
     httpx.delete("http://localhost:8025/api/v1/messages")
