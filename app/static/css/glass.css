@@ -122,8 +122,8 @@ body {
 /* PWA (mở từ màn hình chính, thanh trạng thái trong suốt): nền kính của header phủ cả vùng giờ / pin (như app iOS), nội dung
    header nằm dưới Dynamic Island / tai thỏ thêm 8px. Chỉ đổi padding — header có class top-0 của Tailwind (luôn thắng),
    nên KHÔNG đặt top ở đây. */
-html.pwa .glass-header { padding-top: calc(var(--sat) + 8px); }
-@media (display-mode: standalone), (display-mode: fullscreen) { .glass-header { padding-top: calc(var(--sat) + 8px); } }
+html.pwa .glass-header { padding-top: calc(var(--sat) + min(var(--sat), 8px)); }
+@media (display-mode: standalone), (display-mode: fullscreen) { .glass-header { padding-top: calc(var(--sat) + min(var(--sat), 8px)); } }
 
 .glass-panel {
   background: var(--glass-bg-elevated);

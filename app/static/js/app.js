@@ -732,6 +732,7 @@
 
         setTheme(mode) {
           this.theme = mode; localStorage.setItem('amp_theme', mode);
+          try { document.cookie = `amp_theme=${mode}; path=/; max-age=31536000; SameSite=Lax`; } catch (_) {}
           const isLight = mode === 'light';
           document.documentElement.classList.toggle('light', isLight);
           document.documentElement.classList.toggle('dark', !isLight);

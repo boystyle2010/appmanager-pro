@@ -6,7 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#090f1d" id="meta-theme-color" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <!-- thanh trạng thái đặc: iOS giữ riêng dải giờ / pin, trang bắt đầu ngay bên dưới (không bị lẹm, không chừa trống) -->
+  <meta name="apple-mobile-web-app-status-bar-style" content="{{ status_bar or 'black' }}" />
   <script>/* PWA (thêm vào MH chính): chữ trạng thái iPhone đè lên trang -> chừa thêm chỗ */try{if(navigator.standalone||matchMedia("(display-mode: standalone)").matches)document.documentElement.classList.add("pwa")}catch(e){}</script>
   <link rel="manifest" href="/manifest.json" />
   <title>App Manager Pro</title>
@@ -67,6 +68,7 @@
       document.documentElement.classList.toggle('light', isLight);
       document.documentElement.classList.toggle('dark', !isLight);
       document.getElementById('meta-theme-color').setAttribute('content', isLight ? '#e5eef9' : '#090f1d');
+      try { if (!/(^|; )amp_theme=/.test(document.cookie)) document.cookie = 'amp_theme=' + saved + '; path=/; max-age=31536000; SameSite=Lax'; } catch (e) {}
       // Giao diện (Cài đặt → Giao diện): áp dụng trước khi vẽ trang để không nháy màu
       try {
         const u = JSON.parse(localStorage.getItem('amp_ui') || '{}'), h = document.documentElement;

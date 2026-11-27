@@ -358,7 +358,9 @@ async def dashboard_page(request: Request):
     if not has_admin_user() or not get_current_user_optional(request):
         return RedirectResponse(url="/login", status_code=302)
     # Cú pháp mới (request đứng đầu): bắt buộc từ Starlette 1.0, vẫn chạy với bản cũ
-    return templates.TemplateResponse(request, "index.html", {"version": app.version})
+    # PWA iPhone: thanh trạng thái ĐẶC (không đè lên trang): tối -> "black", sáng -> "default" (theo cookie amp_theme)
+    status_bar = "default" if request.cookies.get("amp_theme") == "light" else "black"
+    return templates.TemplateResponse(request, "index.html", {"version": app.version, "status_bar": status_bar})
 
 
 @app.get("/login", response_class=HTMLResponse)
