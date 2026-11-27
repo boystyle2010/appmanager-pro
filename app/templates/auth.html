@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#0a1122" id="meta-theme-color" />
+  <meta name="theme-color" content="#07080c" id="meta-theme-color" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <script>/* PWA (thêm vào MH chính): chữ trạng thái iPhone đè lên trang -> chừa thêm chỗ */try{if(navigator.standalone||matchMedia("(display-mode: standalone)").matches)document.documentElement.classList.add("pwa")}catch(e){}</script>
@@ -18,91 +18,163 @@
   <script defer src="/static/vendor/alpine.min.js?v={{ build }}"></script>
   <script>window.addEventListener('load',function(){if(!window.Alpine){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/alpinejs@3.17.5/dist/cdn.min.js';document.head.appendChild(s)}});</script>
   <link rel="stylesheet" href="/static/css/glass.css?v={{ build }}" />
-  <script>
-    (function () {
-      const saved = localStorage.getItem('amp_theme') || 'dark';
-      const isLight = saved === 'light';
-      document.documentElement.classList.toggle('light', isLight);
-      document.documentElement.classList.toggle('dark', !isLight);
-      document.getElementById('meta-theme-color').setAttribute('content', isLight ? '#e4eefb' : '#0a1122');
-    })();
-  </script>
+  <style>
+    /* Trang đăng nhập "đèn bàn" (0.25.1): căn phòng tối, kéo dây bật đèn, chùm sáng chiếu vào ô đăng nhập.
+       Không có JS / Alpine lỗi -> ô đăng nhập vẫn hiện (chỉ ẩn khi body có lp-ready + lp-off). */
+    body.lp { background: radial-gradient(120% 90% at 30% 20%, #10131b 0%, #07080c 60%, #040507 100%) fixed; color: #e8eaf0; min-height: 100lvh; overflow-x: hidden; }
+    .lp { --lamp: 242 244 248; --lamp-ink: #0b0d12; }
+    .lp-stars { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+    .lp-star { position: absolute; width: 2px; height: 2px; border-radius: 9999px; background: #fff; opacity: .25; animation: lp-twinkle 4s ease-in-out infinite; }
+    @keyframes lp-twinkle { 0%, 100% { opacity: .12; } 50% { opacity: .55; } }
+    .lp-beam { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; opacity: 0; transition: opacity .6s ease; }
+    .lp-on .lp-beam { opacity: 1; animation: lp-flicker .7s linear 1; }
+    @keyframes lp-flicker { 0% { opacity: 0; } 12% { opacity: .9; } 20% { opacity: .15; } 32% { opacity: 1; } 40% { opacity: .35; } 55%, 100% { opacity: 1; } }
+    .lp-room { position: relative; z-index: 2; }
+    /* đèn */
+    .lp-lamp { width: 150px; height: 196px; flex: none; position: relative; }
+    @media (min-width: 768px) { .lp-lamp { width: 210px; height: 274px; } }
+    .lp-lamp svg { width: 100%; height: 100%; overflow: visible; }
+    .lp-bulb { fill: #3a3e48; transition: fill .3s ease; }
+    .lp-inner { fill: #15171d; transition: fill .3s ease; }
+    .lp-on .lp-bulb { fill: rgb(var(--lamp)); filter: drop-shadow(0 0 10px rgb(var(--lamp))); }
+    .lp-on .lp-inner { fill: rgb(var(--lamp) / .55); }
+    .lp-glow { opacity: 0; transition: opacity .5s ease; }
+    .lp-on .lp-glow { opacity: 1; }
+    .lp-cord { transition: transform .45s cubic-bezier(.34, 1.56, .64, 1); cursor: grab; touch-action: none; }
+    .lp-cord.lp-drag { transition: none; cursor: grabbing; }
+    .lp-bead { fill: #d9b14a; }
+    .lp-on .lp-bead { fill: rgb(var(--lamp)); }
+    .lp-hint { font-size: 11px; color: #8a90a0; text-align: center; transition: opacity .4s ease; white-space: nowrap; }
+    .lp-on .lp-hint { opacity: 0; }
+    /* ô đăng nhập */
+    .lp-card { background: rgba(17, 19, 26, .86); border: 1px solid rgba(255, 255, 255, .08); border-radius: 26px;
+      box-shadow: 0 30px 80px -30px rgb(0 0 0 / .9), 0 0 0 1px rgb(var(--lamp) / .04), 0 0 90px -30px rgb(var(--lamp) / .55);
+      backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+      transition: opacity .55s ease .15s, transform .55s cubic-bezier(.2, .8, .2, 1) .15s, visibility 0s linear 0s, box-shadow .4s ease; }
+    .lp-ready.lp-off .lp-card { opacity: 0; transform: translateY(14px) scale(.97); visibility: hidden; pointer-events: none;
+      transition: opacity .3s ease, transform .3s ease, visibility 0s linear .3s; }
+    .lp-card .glass-input { background: rgba(255, 255, 255, .035); border-color: rgba(255, 255, 255, .08); color: #e8eaf0; }
+    .lp-card .glass-input:focus { border-color: rgb(var(--lamp) / .7); box-shadow: 0 0 0 3px rgb(var(--lamp) / .16); }
+    .lp-btn { background: linear-gradient(180deg, rgb(var(--lamp)) 0%, rgb(var(--lamp) / .82) 100%); color: var(--lamp-ink);
+      box-shadow: 0 10px 28px -10px rgb(var(--lamp) / .75), inset 0 1px 0 rgb(255 255 255 / .35); transition: filter .15s ease, transform .12s ease; }
+    .lp-btn:hover { filter: brightness(1.06); } .lp-btn:active { transform: scale(.985); }
+    .lp-check { accent-color: rgb(var(--lamp)); }
+    .lp-dot { width: 18px; height: 18px; border-radius: 9999px; border: 2px solid transparent; transition: transform .15s ease, border-color .15s ease; }
+    .lp-dot[aria-pressed="true"] { border-color: #fff; transform: scale(1.12); }
+    .lp-pill { background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .08); }
+    @media (prefers-reduced-motion: reduce) { .lp-on .lp-beam { animation: none; } .lp-star { animation: none; } .lp-card, .lp-cord { transition: none; } }
+  </style>
 </head>
-<body x-data="authApp({{ 'true' if is_setup else 'false' }})">
-  <div class="ambient-bg"></div>
-  <div class="ambient-grid"></div>
+<body class="lp" x-data="authApp({{ 'true' if is_setup else 'false' }})" :class="{ 'lp-ready': ready, 'lp-on': lampOn, 'lp-off': !lampOn }"
+      :style="`--lamp: ${lampColors[color]}`">
+  <div class="lp-stars" x-ref="stars"></div>
+  <!-- Chùm sáng: đa giác từ miệng chao đèn tới ô đăng nhập (tính lại khi đổi cỡ màn hình) -->
+  <svg class="lp-beam" aria-hidden="true">
+    <defs>
+      <radialGradient id="lpBeamGrad" gradientUnits="userSpaceOnUse" :cx="beam.cx" :cy="beam.cy" :r="beam.r">
+        <stop offset="0" :stop-color="`rgb(${lampColors[color]})`" stop-opacity=".55"/>
+        <stop offset=".55" :stop-color="`rgb(${lampColors[color]})`" stop-opacity=".16"/>
+        <stop offset="1" :stop-color="`rgb(${lampColors[color]})`" stop-opacity="0"/>
+      </radialGradient>
+      <filter id="lpBeamBlur" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="14"/></filter>
+    </defs>
+    <polygon :points="beam.points" fill="url(#lpBeamGrad)" filter="url(#lpBeamBlur)"/>
+  </svg>
 
-  <div class="page-layer min-h-[100lvh] flex flex-col items-center justify-center px-5 py-10 safe-bottom">
-    <!-- Top Right Controls -->
-    <div class="fixed right-4 z-20 flex items-center gap-1 p-1 rounded-2xl glass-panel"
-         style="top: calc(0.75rem + env(safe-area-inset-top));">
-      <button @click="toggleLang()" type="button"
-              class="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-muted hover:text-[var(--text-primary)] hover:bg-[var(--glass-surface-hover)] transition">
-        <span x-text="lang === 'vi' ? 'VN' : 'EN'"></span>
-      </button>
-      <div class="w-px h-4 bg-[var(--glass-border)]"></div>
-      <button @click="toggleTheme()" type="button" aria-label="Toggle theme"
-              class="p-1.5 rounded-xl text-muted hover:text-[var(--text-primary)] hover:bg-[var(--glass-surface-hover)] transition">
-        <svg x-show="theme === 'dark'" class="w-4 h-4 text-amber-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <circle cx="12" cy="12" r="4"/><path stroke-linecap="round" d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41"/>
+  <!-- Thanh trên: màu đèn + ngôn ngữ -->
+  <div class="fixed inset-x-0 z-20 flex items-center justify-between px-4" style="top: calc(0.75rem + env(safe-area-inset-top));">
+    <div class="lp-pill flex items-center gap-2 px-2.5 py-2 rounded-full" role="group" :aria-label="t('lampColor')">
+      <template x-for="c in Object.keys(lampColors)" :key="c">
+        <button type="button" class="lp-dot" :style="`background: rgb(${lampColors[c]})`" :aria-pressed="color === c"
+                :aria-label="c" @click="setColor(c)"></button>
+      </template>
+    </div>
+    <button @click="toggleLang()" type="button" class="lp-pill px-3 py-1.5 rounded-full text-xs font-semibold text-[#c9cdd8]">
+      <span x-text="lang === 'vi' ? 'VN' : 'EN'"></span>
+    </button>
+  </div>
+
+  <div class="lp-room min-h-[100lvh] flex flex-col md:flex-row items-center justify-center gap-2 md:gap-16 px-5 pb-10 safe-bottom"
+       style="padding-top: calc(4.25rem + env(safe-area-inset-top));">
+    <!-- Đèn bàn (tự vẽ) -->
+    <div class="flex flex-col items-center self-start md:self-center ml-2 md:ml-0 md:mt-0">
+      <div class="lp-lamp">
+        <svg viewBox="0 0 200 262" aria-hidden="true">
+          <defs>
+            <linearGradient id="lpShade" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3a3d46"/><stop offset="1" stop-color="#121318"/></linearGradient>
+            <radialGradient id="lpHalo"><stop offset="0" :stop-color="`rgb(${lampColors[color]})`" stop-opacity=".55"/><stop offset="1" :stop-color="`rgb(${lampColors[color]})`" stop-opacity="0"/></radialGradient>
+          </defs>
+          <!-- đế -->
+          <ellipse cx="64" cy="248" rx="54" ry="10" fill="#000" opacity=".5"/>
+          <path d="M14 244 Q14 234 64 233 Q114 234 114 244 Q114 250 64 251 Q14 250 14 244 Z" fill="#1b1d23" stroke="#2c2f38"/>
+          <!-- tay đèn -->
+          <line x1="64" y1="236" x2="34" y2="146" stroke="#2a2d35" stroke-width="7" stroke-linecap="round"/>
+          <line x1="34" y1="146" x2="96" y2="76" stroke="#2a2d35" stroke-width="7" stroke-linecap="round"/>
+          <circle cx="64" cy="236" r="7" fill="#15171c" stroke="#d9b14a" stroke-width="3"/>
+          <circle cx="34" cy="146" r="7" fill="#15171c" stroke="#d9b14a" stroke-width="3"/>
+          <!-- chao đèn: miệng hướng xuống bên phải (về phía ô đăng nhập) -->
+          <g transform="translate(110 66) rotate(-38)">
+            <circle class="lp-glow" cx="0" cy="26" r="46" fill="url(#lpHalo)"/>
+            <path d="M-46 22 Q-44 -36 0 -40 Q44 -36 46 22 Z" fill="url(#lpShade)" stroke="#40444e" stroke-width="1.2"/>
+            <ellipse class="lp-inner" cx="0" cy="22" rx="46" ry="9"/>
+            <ellipse cx="0" cy="22" rx="46" ry="9" fill="none" stroke="#d9b14a" stroke-width="2.2"/>
+            <circle class="lp-bulb" cx="0" cy="20" r="10"/>
+            <circle x-ref="rimA" cx="-46" cy="22" r=".5" fill="none"/>
+            <circle x-ref="rimB" cx="46" cy="22" r=".5" fill="none"/>
+            <circle x-ref="mouth" cx="0" cy="24" r=".5" fill="none"/>
+          </g>
+          <!-- dây kéo: chạm hoặc kéo xuống -->
+          <g class="lp-cord" :class="{ 'lp-drag': drag.on }" :style="`transform: translateY(${drag.y}px)`"
+             @pointerdown="cordDown($event)" @keydown.enter.prevent="toggleLamp()" @keydown.space.prevent="toggleLamp()"
+             role="button" tabindex="0" :aria-label="t('pullHint')" :aria-pressed="lampOn">
+            <line x1="134" y1="86" x2="134" y2="146" stroke="#d9b14a" stroke-width="1.6"/>
+            <circle class="lp-bead" cx="134" cy="151" r="6"/>
+            <circle cx="134" cy="140" r="24" fill="transparent"/>
+          </g>
         </svg>
-        <svg x-show="theme === 'light'" x-cloak class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
-        </svg>
-      </button>
+      </div>
+      <p class="lp-hint -mt-1 md:mt-1" x-text="t('pullHint')"></p>
     </div>
 
-    <div class="w-full max-w-[400px] relative">
-      <div class="absolute -inset-1 rounded-[32px] bg-linear-to-br from-sky-500/20 via-indigo-500/15 to-purple-500/20 blur-2xl opacity-70 pointer-events-none"></div>
-
-      <div class="glass-panel relative rounded-[28px] p-7 sm:p-8">
-        <div class="flex flex-col items-center text-center mb-7">
-          <div class="relative mb-4">
-            <div class="absolute -inset-2 rounded-3xl bg-sky-500/30 blur-xl opacity-55"></div>
-            <div class="brand-squircle relative w-[68px] h-[68px]">
-              <img src="/assets/icon.png" alt="AppManager Pro" />
-            </div>
+    <!-- Ô đăng nhập -->
+    <div class="w-full max-w-[380px] relative" x-ref="cardBox">
+      <div class="lp-card relative p-6 sm:p-7">
+        <div class="flex items-center gap-2.5 mb-5">
+          <div class="brand-squircle w-9 h-9 shrink-0"><img src="/assets/icon.png" alt="AppManager Pro" /></div>
+          <div class="flex items-center gap-1.5">
+            <span class="text-[15px] font-bold tracking-tight">App Manager</span>
+            <span class="pro-badge !h-[18px] !text-[10px] !px-1.5 !rounded-[5px]">PRO</span>
           </div>
-
-          <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-sky-500/15 text-sky-400 border border-sky-400/25 mb-2">
-            <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
-            <span x-text="isSetup ? t('firstRunBadge') : t('secureBadge')"></span>
-          </div>
-
-          <div class="flex items-center justify-center gap-2">
-            <h1 class="text-2xl font-bold leading-none tracking-tight">App Manager</h1>
-            <span class="pro-badge !h-[22px] !text-[11px] !px-2 !rounded-[6px] !pt-[1px] relative top-[1px]">PRO</span>
-          </div>
-          <p class="text-xs sm:text-sm text-muted mt-1.5 leading-relaxed max-w-[280px]"
-             x-text="isSetup ? t('setupSubtitle') : t('loginSubtitle')"></p>
         </div>
+        <h1 class="text-[26px] font-bold leading-tight tracking-tight" x-text="isSetup ? t('welcomeSetup') : t('welcome')"></h1>
+        <p class="text-[13px] text-[#8a90a0] mt-1 mb-5 leading-relaxed" x-text="isSetup ? t('setupSubtitle') : t('loginSubtitle')"></p>
 
         <div x-show="error" x-cloak x-transition
-             class="mb-5 px-3.5 py-3 rounded-2xl bg-rose-500/15 border border-rose-500/35 text-rose-400 text-xs font-medium flex items-start gap-2.5">
+             class="mb-4 px-3.5 py-3 rounded-2xl bg-rose-500/15 border border-rose-500/35 text-rose-300 text-xs font-medium flex items-start gap-2.5">
           <svg class="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="10"/><path stroke-linecap="round" d="M12 8v4m0 4h.01"/>
           </svg>
           <span x-text="error"></span>
         </div>
 
-        <form @submit.prevent="submit()" class="space-y-4">
+        <form @submit.prevent="submit()" class="space-y-3.5">
           <div>
-            <label class="block text-xs font-semibold text-muted mb-1.5 ml-1" x-text="t('username')"></label>
+            <label class="block text-xs font-semibold text-[#a3a8b6] mb-1.5 ml-1" x-text="t('username')"></label>
             <div class="relative">
-              <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-subtle pointer-events-none">
+              <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6b7180] pointer-events-none">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 20.118a7.5 7.5 0 0115 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.5-1.632z"/>
                 </svg>
               </span>
-              <input type="text" x-model="username" required autocomplete="username" minlength="3"
-                     class="glass-input w-full rounded-2xl pl-10 pr-4 py-3 text-sm" placeholder="admin" />
+              <input type="text" x-model="username" x-ref="userInput" required autocomplete="username" minlength="3"
+                     class="glass-input w-full rounded-2xl pl-10 pr-4 py-3 text-sm" :placeholder="t('userPh')" />
             </div>
           </div>
 
           <div>
-            <label class="block text-xs font-semibold text-muted mb-1.5 ml-1" x-text="t('password')"></label>
+            <label class="block text-xs font-semibold text-[#a3a8b6] mb-1.5 ml-1" x-text="t('password')"></label>
             <div class="relative">
-              <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-subtle pointer-events-none">
+              <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6b7180] pointer-events-none">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                   <rect x="4" y="11" width="16" height="10" rx="2"/><path stroke-linecap="round" d="M8 11V7a4 4 0 118 0v4"/>
                 </svg>
@@ -111,8 +183,8 @@
                      :autocomplete="isSetup ? 'new-password' : 'current-password'"
                      :minlength="isSetup ? 8 : 1"
                      class="glass-input w-full rounded-2xl pl-10 pr-11 py-3 text-sm" placeholder="••••••••" />
-              <button type="button" @click="showPw = !showPw"
-                      class="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-subtle hover:text-[var(--text-primary)] transition">
+              <button type="button" @click="showPw = !showPw" :aria-label="t('showPw')"
+                      class="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-[#6b7180] hover:text-white transition">
                 <svg x-show="!showPw" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/>
                   <circle cx="12" cy="12" r="3"/>
@@ -126,7 +198,7 @@
 
           <template x-if="isSetup">
             <div>
-              <label class="block text-xs font-semibold text-muted mb-1.5 ml-1" x-text="t('confirmPassword')"></label>
+              <label class="block text-xs font-semibold text-[#a3a8b6] mb-1.5 ml-1" x-text="t('confirmPassword')"></label>
               <input :type="showPw ? 'text' : 'password'" x-model="confirmPassword" required
                      autocomplete="new-password" minlength="8"
                      class="glass-input w-full rounded-2xl px-4 py-3 text-sm" placeholder="••••••••" />
@@ -135,43 +207,44 @@
 
           <template x-if="otpStep">
             <div>
-              <label class="block text-xs font-semibold text-muted mb-1.5 ml-1" x-text="t('otpLabel')"></label>
+              <label class="block text-xs font-semibold text-[#a3a8b6] mb-1.5 ml-1" x-text="t('otpLabel')"></label>
               <input type="text" x-model="otp" x-ref="otpInput" inputmode="numeric" autocomplete="one-time-code"
                      class="glass-input w-full rounded-2xl px-4 py-3 text-lg tracking-[0.35em] text-center font-semibold" placeholder="123456" />
-              <p class="text-[11px] text-subtle mt-1.5 ml-1" x-text="t('otpHint')"></p>
+              <p class="text-[11px] text-[#6b7180] mt-1.5 ml-1" x-text="t('otpHint')"></p>
             </div>
           </template>
 
           <template x-if="!isSetup">
-            <label class="flex items-center gap-2.5 text-xs font-medium text-muted cursor-pointer select-none pt-1 ml-1">
-              <input type="checkbox" x-model="remember" class="w-4 h-4 rounded accent-sky-500" />
+            <label class="flex items-center gap-2.5 text-xs font-medium text-[#a3a8b6] cursor-pointer select-none pt-0.5 ml-1">
+              <input type="checkbox" x-model="remember" class="lp-check w-4 h-4 rounded" />
               <span x-text="t('remember')"></span>
             </label>
           </template>
 
           <button type="submit" :disabled="loading"
-                  class="glass-btn-primary w-full rounded-2xl py-3.5 text-sm font-semibold mt-2 flex items-center justify-center gap-2 disabled:opacity-60">
+                  class="lp-btn w-full rounded-2xl py-3.5 text-sm font-bold mt-1 flex items-center justify-center gap-2 disabled:opacity-60">
             <span x-text="loading ? t('processing') : (isSetup ? t('createAdmin') : (otpStep ? t('verify') : t('signIn')))"></span>
+            <svg x-show="!loading" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg>
           </button>
         </form>
         <!-- Đăng nhập một lần (0.23) -->
         <div x-show="!isSetup && sso.enabled" x-cloak class="mt-4 space-y-3">
-          <div class="flex items-center gap-3 text-[11px] text-subtle"><span class="flex-1 h-px bg-[var(--glass-border)]"></span><span x-text="t('or')"></span><span class="flex-1 h-px bg-[var(--glass-border)]"></span></div>
+          <div class="flex items-center gap-3 text-[11px] text-[#6b7180]"><span class="flex-1 h-px bg-white/10"></span><span x-text="t('or')"></span><span class="flex-1 h-px bg-white/10"></span></div>
           <a :href="'/api/auth/oidc/login?remember=' + (remember ? 1 : 0)"
-             class="glass-btn w-full py-3 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2">
-            <svg class="w-4 h-4 text-violet-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.864 4.243A7.5 7.5 0 0119.5 10.5c0 2.92-.556 5.709-1.568 8.268M5.742 6.364A7.465 7.465 0 004.5 10.5a7.464 7.464 0 01-1.15 3.993m1.989 3.559A11.209 11.209 0 008.25 10.5a3.75 3.75 0 117.5 0c0 .527-.021 1.049-.064 1.565M12 10.5a14.94 14.94 0 01-3.6 9.75m6.633-4.596a18.666 18.666 0 01-2.485 5.33"/></svg>
+             class="w-full py-3 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2 bg-white/[0.04] border border-white/10 hover:bg-white/[0.07] transition">
+            <svg class="w-4 h-4" :style="`color: rgb(${lampColors[color]})`" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.864 4.243A7.5 7.5 0 0119.5 10.5c0 2.92-.556 5.709-1.568 8.268M5.742 6.364A7.465 7.465 0 004.5 10.5a7.464 7.464 0 01-1.15 3.993m1.989 3.559A11.209 11.209 0 008.25 10.5a3.75 3.75 0 117.5 0c0 .527-.021 1.049-.064 1.565M12 10.5a14.94 14.94 0 01-3.6 9.75m6.633-4.596a18.666 18.666 0 01-2.485 5.33"/></svg>
             <span x-text="t('ssoBtn').replace('{p}', sso.label)"></span>
           </a>
         </div>
 
-        <div class="mt-6 pt-4 border-t border-[var(--glass-border)] flex items-center justify-between text-[11px] text-subtle">
+        <div class="mt-5 pt-4 border-t border-white/[0.07] flex items-center justify-between text-[11px] text-[#6b7180]">
           <span>Argon2id Protected</span>
           <span>v{{ version }}</span>
         </div>
       </div>
-      <p class="mt-4 text-center text-[11px] text-subtle">
-        © 2026 <a href="https://github.com/boystyle2010" target="_blank" rel="noopener" class="hover:text-[var(--text-primary)]">boystyle2010</a>
-        · <a href="https://github.com/boystyle2010/appmanager-pro/blob/main/LICENSE" target="_blank" rel="noopener" class="hover:text-[var(--text-primary)]">MIT License</a>
+      <p class="mt-4 text-center text-[11px] text-[#5d6372]">
+        © 2026 <a href="https://github.com/boystyle2010" target="_blank" rel="noopener" class="hover:text-white">boystyle2010</a>
+        · <a href="https://github.com/boystyle2010/appmanager-pro/blob/main/LICENSE" target="_blank" rel="noopener" class="hover:text-white">MIT License</a>
       </p>
     </div>
   </div>
@@ -187,7 +260,9 @@
           remember: 'Keep me signed in for 30 days', createAdmin: 'Create Admin Account',
           signIn: 'Sign In', processing: 'Authenticating...', mismatch: 'Passwords do not match',
           otpLabel: 'Two-factor code', otpHint: '6-digit code from your authenticator app, or a backup code', verify: 'Verify',
-          or: 'or', ssoBtn: 'Sign in with {p}', ssoFailed: 'Single sign-on failed'
+          or: 'or', ssoBtn: 'Sign in with {p}', ssoFailed: 'Single sign-on failed',
+          welcome: 'Welcome back', welcomeSetup: 'Welcome', userPh: 'Enter your username', showPw: 'Show password',
+          pullHint: 'Pull the cord to turn on the light', lampColor: 'Lamp color'
         },
         vi: {
           firstRunBadge: 'Thiết lập lần đầu', secureBadge: 'Trung tâm điều khiển Docker',
@@ -197,13 +272,19 @@
           remember: 'Ghi nhớ đăng nhập trong 30 ngày', createAdmin: 'Tạo tài khoản Admin',
           signIn: 'Đăng nhập', processing: 'Đang xác thực...', mismatch: 'Mật khẩu xác nhận không khớp',
           otpLabel: 'Mã xác thực 2 lớp', otpHint: 'Mã 6 số trong ứng dụng xác thực, hoặc mã dự phòng', verify: 'Xác minh',
-          or: 'hoặc', ssoBtn: 'Đăng nhập bằng {p}', ssoFailed: 'Đăng nhập một lần không thành công'
+          or: 'hoặc', ssoBtn: 'Đăng nhập bằng {p}', ssoFailed: 'Đăng nhập một lần không thành công',
+          welcome: 'Chào mừng trở lại', welcomeSetup: 'Chào mừng', userPh: 'Nhập tên đăng nhập', showPw: 'Hiện mật khẩu',
+          pullHint: 'Kéo dây để bật đèn', lampColor: 'Màu đèn'
         }
       };
 
       return {
         isSetup, lang: localStorage.getItem('amp_lang') || 'vi',
-        theme: localStorage.getItem('amp_theme') || 'dark',
+        // Đèn bàn: bật / tắt + màu nhớ trong trình duyệt (lần sau mở trang đèn tự bật)
+        lampColors: { amber: '245 181 74', cyan: '94 224 240', pink: '244 114 182', green: '74 222 128', white: '242 244 248' },
+        color: 'white', lampOn: false, ready: false,
+        drag: { on: false, y: 0, startY: 0, moved: false },
+        beam: { points: '', cx: 0, cy: 0, r: 1 },
         username: '', password: '', confirmPassword: '', remember: true,
         showPw: false, loading: false, error: '', otpStep: false, otp: '',
         sso: { enabled: false, label: 'SSO' },
@@ -223,12 +304,81 @@
           for (const [re, fn] of rules) { const x = m.match(re); if (x) return fn(x); }
           return m;
         },
+        _store(k, v) { try { localStorage.setItem(k, v); } catch (_) {} },
+        _load(k) { try { return localStorage.getItem(k); } catch (_) { return null; } },
+        initLamp() {
+          const c = this._load('amp_lamp_color');
+          if (c && this.lampColors[c]) this.color = c;
+          // sao lấp lánh
+          const box = this.$refs.stars;
+          for (let i = 0; i < 46; i++) {
+            const d = document.createElement('span'); d.className = 'lp-star';
+            d.style.left = (Math.random() * 100) + '%'; d.style.top = (Math.random() * 100) + '%';
+            d.style.animationDelay = (Math.random() * 4) + 's';
+            if (Math.random() < .25) { d.style.width = d.style.height = '3px'; }
+            box.appendChild(d);
+          }
+          // Có lỗi cần đọc / đang thiết lập lần đầu / đã bật lần trước -> bật đèn luôn (không bắt kéo dây lại)
+          const keepOn = this._load('amp_lamp_on') === '1' || !!this.error || this.isSetup;
+          this.ready = true;
+          if (keepOn) setTimeout(() => this.setLamp(true, false), 250);
+          window.addEventListener('resize', () => this.calcBeam());
+          window.addEventListener('pointermove', (e) => this.cordMove(e));
+          window.addEventListener('pointerup', () => this.cordUp());
+          window.addEventListener('pointercancel', () => this.cordUp());
+          this.$nextTick(() => this.calcBeam());
+        },
+        setColor(c) { this.color = c; this._store('amp_lamp_color', c); if (!this.lampOn) this.setLamp(true); },
+        setLamp(on, focus = true) {
+          this.lampOn = on; this._store('amp_lamp_on', on ? '1' : '0');
+          this.$nextTick(() => {
+            this.calcBeam();
+            if (on && focus && !this.username && window.matchMedia('(pointer: fine)').matches) setTimeout(() => this.$refs.userInput?.focus(), 450);
+          });
+        },
+        toggleLamp() { this.setLamp(!this.lampOn); },
+        // Kéo dây: chạm = bật / tắt; kéo xuống > 24px rồi thả cũng vậy. Dây nảy về chỗ cũ.
+        cordDown(e) { this.drag = { on: true, y: 0, startY: e.clientY, moved: false }; try { e.target.setPointerCapture?.(e.pointerId); } catch (_) {} },
+        cordMove(e) {
+          if (!this.drag.on) return;
+          const dy = Math.max(0, Math.min(46, e.clientY - this.drag.startY));
+          this.drag.y = dy; if (dy > 4) this.drag.moved = true;
+        },
+        cordUp() {
+          if (!this.drag.on) return;
+          const pulled = !this.drag.moved || this.drag.y > 24;
+          if (!this.drag.moved) { this.drag.y = 18; }  // chạm: dây giật xuống một chút cho có cảm giác
+          this.drag.on = false;
+          requestAnimationFrame(() => { this.drag.y = 0; });
+          if (pulled) this.toggleLamp();
+        },
+        // Chùm sáng = bao lồi của miệng chao đèn + 4 góc ô đăng nhập, sáng nhất ở miệng đèn
+        calcBeam() {
+          const A = this.$refs.rimA?.getBoundingClientRect(), Bm = this.$refs.rimB?.getBoundingClientRect();
+          const M = this.$refs.mouth?.getBoundingClientRect(), C = this.$refs.cardBox?.getBoundingClientRect();
+          if (!A || !Bm || !M || !C) return;
+          const c = (r) => [r.left + r.width / 2, r.top + r.height / 2];
+          const pts = [c(A), c(Bm), [C.left, C.top], [C.right, C.top], [C.right, C.bottom], [C.left, C.bottom]];
+          const hull = (P) => {
+            P = P.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+            const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+            const lo = [], up = [];
+            for (const p of P) { while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+            for (const p of P.slice().reverse()) { while (up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+            return lo.slice(0, -1).concat(up.slice(0, -1));
+          };
+          const [mx, my] = c(M);
+          const far = Math.max(...pts.map(p => Math.hypot(p[0] - mx, p[1] - my)));
+          this.beam = { points: hull(pts).map(p => p.map(v => v.toFixed(1)).join(',')).join(' '), cx: mx, cy: my, r: far };
+        },
         async init() {
           // Lỗi SSO quay về trang đăng nhập dạng ?sso_error=... (máy chủ đã ghi nhật ký)
           const q = new URLSearchParams(location.search).get('sso_error');
           if (q) { this.error = this.t('ssoFailed') + ': ' + this.ssoMsg(q); history.replaceState(null, '', '/login'); }
+          this.initLamp();
           if (!this.isSetup) {
             try { const r = await fetch('/api/auth/oidc/status'); if (r.ok) this.sso = await r.json(); } catch (_) {}
+            this.$nextTick(() => this.calcBeam());
           }
         },
 
@@ -236,14 +386,6 @@
         toggleLang() {
           this.lang = this.lang === 'vi' ? 'en' : 'vi';
           localStorage.setItem('amp_lang', this.lang);
-        },
-        toggleTheme() {
-          this.theme = this.theme === 'dark' ? 'light' : 'dark';
-          localStorage.setItem('amp_theme', this.theme);
-          const isLight = this.theme === 'light';
-          document.documentElement.classList.toggle('light', isLight);
-          document.documentElement.classList.toggle('dark', !isLight);
-          document.getElementById('meta-theme-color').setAttribute('content', isLight ? '#e4eefb' : '#0a1122');
         },
         async submit() {
           this.error = '';

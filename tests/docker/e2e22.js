@@ -36,6 +36,7 @@ const results = []; const check = (n, c, d = '') => { results.push(!!c); console
   const ctx2 = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   const q = await ctx2.newPage(); q.on('pageerror', e => errs.push(e.message));
   await q.goto(B + '/login'); await sleep(1500);
+  await q.locator('.lp-cord').click(); await sleep(1200);  // trang đăng nhập "đèn bàn": bật đèn để hiện ô đăng nhập
   check('Login page shows "Đăng nhập bằng Authentik"', await q.getByText('Đăng nhập bằng Authentik').isVisible());
   await q.screenshot({ path: OUT + '/s4-login-sso.png' });
   await ctx2.request.post(MOCK + '/admin', { data: { user: { sub: 'u-5', preferred_username: 'minh', email: 'minh@example.com', groups: ['random'] }, fault: '' } });

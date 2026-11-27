@@ -33,6 +33,7 @@ Hướng dẫn cho Claude khi làm việc trên repo này (Claude Code / phiên 
   - Cài đặt (0.17): trang đầu là danh sách mục (`settingsMenu()` trong app.js, `settingsModal.tab = 'home'`), mỗi mục mở trang con có nút ‹. Thêm mục mới = thêm 1 dòng vào `settingsMenu()` + `<template x-if="settingsModal.tab === '…'">` + tiêu đề trong `settingsSectionTitle()`.
   - `self_update_helper.py`: hỗ trợ cả AppManager chạy bằng docker run (`run_body` trong job), chạy với `restart=on-failure`, chỉ kết thúc khi AppManager chắc chắn chạy (`finish()`), phục hồi khi bị chạy lại (`self-update-progress.json`).
 - Frontend: Alpine.js — `app/templates/index.html` (markup), `app/static/js/app.js` (logic), `app/static/js/i18n.js` (EN/VI, **mọi key phải có ở cả hai ngôn ngữ**), `app/templates/auth.html`.
+- Trang đăng nhập `auth.html` (0.25.1) = "đèn bàn": căn phòng tối, đèn SVG tự vẽ, kéo / chạm dây (`.lp-cord`) bật đèn → chùm sáng (`calcBeam`: bao lồi miệng chao + 4 góc ô đăng nhập) + ô đăng nhập hiện; chấm màu (`lampColors`, nhớ `amp_lamp_color`), lần sau đèn tự bật (`amp_lamp_on`), có lỗi / thiết lập lần đầu thì bật sẵn; không JS thì ô đăng nhập vẫn hiện (chỉ ẩn khi body có `lp-ready lp-off`). Trang luôn tối (không có nút sáng / tối). Test tự động mở trang đăng nhập phải bấm `.lp-cord` trước.
 - CSS: **Tailwind v4** biên dịch lúc build image từ `app/static/css/tailwind.input.css` (stage `css` trong Dockerfile). `glass.css` và khối `<style>` trong `index.html` nằm trong `@layer components` để class tiện ích Tailwind luôn thắng. File `tailwind.css` là sản phẩm build, không commit.
 - Mã build (`BUILD_ID` trong main.py = băm JS/CSS/template): dùng cho `?v=` file tĩnh và `<meta name="amp-build">`; `/api/apps` trả `build`, trang cũ tự tải lại 1 lần (Safari giữ tab sau khi cập nhật). HTML gửi `Cache-Control: no-cache`.
 - Thư viện JS (Alpine, marked, DOMPurify) và font được tải vào image bởi `scripts/fetch_vendor.py`, có CDN dự phòng trong HTML.
@@ -56,7 +57,7 @@ python scripts/check_project.py          # import nội bộ, Jinja, file tĩnh 
 node --check app/static/js/app.js && node --check app/static/js/i18n.js
 bash scripts/verify.sh amp-test smoke    # cần Docker: build image, chạy uvicorn, smoke test
 ```
-Test kịch bản trên Docker thật (40 bộ, ~2,5 giờ): làm đúng theo **`tests/docker/README.md`** (dựng dockerd, image mirror, registry/ntfy/Gotify, build image test, chạy `run_everything.sh`, chụp ảnh). Thay đổi lớn ở cập nhật/rollback/docker run/thông báo → chạy lại các bộ liên quan trước khi phát hành; thêm kịch bản mới vào `tests/docker/` (không để chỉ trong scratchpad).
+Test kịch bản trên Docker thật (41 bộ, ~2,5 giờ): làm đúng theo **`tests/docker/README.md`** (dựng dockerd, image mirror, registry/ntfy/Gotify, build image test, chạy `run_everything.sh`, chụp ảnh). Thay đổi lớn ở cập nhật/rollback/docker run/thông báo → chạy lại các bộ liên quan trước khi phát hành; thêm kịch bản mới vào `tests/docker/` (không để chỉ trong scratchpad).
 
 ## CI (`.github/workflows/release.yml`)
 - Chạy hằng ngày, khi push `main` (bỏ qua thay đổi chỉ `*.md`/LICENSE), hoặc bấm tay (`force_release`, `version`). Chỉ bấm tay mới phát hành (xem dưới).
