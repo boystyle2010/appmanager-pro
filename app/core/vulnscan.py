@@ -34,7 +34,8 @@ SEVERITIES = ("CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN")
 SETTING = "vuln_settings"
 INFO_SETTING = "vuln_trivy"
 DEFAULT = {"enabled": False, "schedule": "daily", "time": "04:40", "weekday": 6, "after_update": True,
-           "severities": ["CRITICAL", "HIGH"], "fixable_only": False}
+           "severities": ["CRITICAL", "HIGH"], "fixable_only": False, "card_badge": True}
+ACK_SETTING = "vuln_ack"   # {container: {"keys": ["CVE|pkg", ...], "at": ts, "by": user}} — lỗi đã "chấp nhận"
 MAX_FINDINGS = 500
 RESCAN_AFTER = 24 * 3600
 TRIVY_DIR = DATA_DIR / "trivy"
@@ -67,7 +68,7 @@ def save_settings(data: dict[str, Any]) -> dict[str, Any]:
         cur["time"] = data["time"]
     if "weekday" in data:
         cur["weekday"] = max(0, min(6, int(data["weekday"])))
-    for k in ("after_update", "fixable_only"):
+    for k in ("after_update", "fixable_only", "card_badge"):
         if k in data:
             cur[k] = bool(data[k])
     if "severities" in data:
@@ -211,26 +212,93 @@ def _ensure_table() -> None:
         conn.execute("""CREATE TABLE IF NOT EXISTS vuln_scans (
             container TEXT PRIMARY KEY, image TEXT, image_id TEXT, scanned_at INTEGER, duration REAL,
             counts TEXT, fixable TEXT, findings TEXT, error TEXT DEFAULT '')""")
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(vuln_scans)").fetchall()}
+        if "allkeys" not in cols:  # 0.26.1: khoá của MỌI lỗi (findings chỉ giữ 500 lỗi nặng nhất) để chấp nhận / báo lỗi mới cho đúng
+            conn.execute("ALTER TABLE vuln_scans ADD COLUMN allkeys TEXT DEFAULT ''")
         conn.commit()
     finally:
         conn.close()
 
 
+def acks() -> dict[str, dict[str, Any]]:
+    try:
+        data = json.loads(get_setting(ACK_SETTING, "") or "{}")
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _row_keys(r) -> list[tuple[str, str, bool]]:
+    """[(severity, "CVE|pkg", có bản vá)] của MỌI lỗi; bản quét cũ (chưa có allkeys) thì lấy từ findings."""
+    raw = r["allkeys"] if "allkeys" in r.keys() else ""
+    if raw:
+        out = []
+        for x in json.loads(raw):
+            sev, fx, key = x.split("|", 2)
+            out.append((sev, key, fx == "1"))
+        return out
+    return [(f["severity"], f"{f['id']}|{f['pkg']}", bool(f["fixed"])) for f in json.loads(r["findings"] or "[]")]
+
+
 def results(with_findings: bool = False) -> dict[str, dict[str, Any]]:
+    """Kết quả mọi app. `open` / `open_fixable` = số lỗi CHƯA chấp nhận theo mức (huy hiệu + thông báo dùng số này),
+    `accepted` = số lỗi hiện có đã được chấp nhận, `ack_at` / `ack_by` = lúc / người chấp nhận."""
     _ensure_table()
     conn = get_connection()
     try:
         rows = conn.execute("SELECT * FROM vuln_scans").fetchall()
     finally:
         conn.close()
+    ak = acks()
     out = {}
     for r in rows:
         d = {"image": r["image"], "image_id": r["image_id"], "scanned_at": r["scanned_at"], "duration": r["duration"],
              "counts": json.loads(r["counts"] or "{}"), "fixable": json.loads(r["fixable"] or "{}"), "error": r["error"] or ""}
+        a = ak.get(r["container"]) or {}
+        acked = set(a.get("keys") or [])
+        if acked:
+            op, opf, n = {s: 0 for s in SEVERITIES}, {s: 0 for s in SEVERITIES}, 0
+            for sev, key, fx in _row_keys(r):
+                if key in acked:
+                    n += 1
+                    continue
+                op[sev] = op.get(sev, 0) + 1
+                if fx:
+                    opf[sev] = opf.get(sev, 0) + 1
+            d.update(open=op, open_fixable=opf, accepted=n, ack_at=a.get("at"), ack_by=a.get("by", ""))
+        else:
+            d.update(open=d["counts"], open_fixable=d["fixable"], accepted=0, ack_at=None, ack_by="")
         if with_findings:
             d["findings"] = json.loads(r["findings"] or "[]")
+            for f in d["findings"]:
+                f["accepted"] = f"{f['id']}|{f['pkg']}" in acked
         out[r["container"]] = d
     return out
+
+
+def accept(container: str, user: str = "") -> dict[str, Any]:
+    """Chấp nhận mọi lỗi hiện có của app (image của bên thứ ba: chỉ nhà phát triển sửa được). Huy hiệu ẩn tới khi
+    lần quét sau thấy lỗi MỚI; lỗi đã chấp nhận vẫn được chấp nhận khi image đổi (theo CVE + gói)."""
+    _ensure_table()
+    conn = get_connection()
+    try:
+        r = conn.execute("SELECT * FROM vuln_scans WHERE container = ?", (container,)).fetchone()
+    finally:
+        conn.close()
+    if not r:
+        raise KeyError(container)
+    ak = acks()
+    keys = set((ak.get(container) or {}).get("keys") or []) | {k for _, k, _ in _row_keys(r)}
+    ak[container] = {"keys": sorted(keys), "at": int(time.time()), "by": user}
+    set_setting(ACK_SETTING, json.dumps(ak))
+    return results().get(container) or {}
+
+
+def unaccept(container: str) -> dict[str, Any]:
+    ak = acks()
+    ak.pop(container, None)
+    set_setting(ACK_SETTING, json.dumps(ak))
+    return results().get(container) or {}
 
 
 def result(container: str) -> Optional[dict[str, Any]]:
@@ -238,13 +306,14 @@ def result(container: str) -> Optional[dict[str, Any]]:
 
 
 def _save(container: str, image: str, image_id: str, duration: float, counts: dict, fixable: dict,
-          findings: list, error: str = "") -> None:
+          findings: list, error: str = "", allkeys: Optional[list] = None) -> None:
     _ensure_table()
     conn = get_connection()
     try:
-        conn.execute("INSERT OR REPLACE INTO vuln_scans (container, image, image_id, scanned_at, duration, counts, fixable, findings, error) "
-                     "VALUES (?,?,?,?,?,?,?,?,?)", (container, image, image_id, int(time.time()), round(duration, 1),
-                                                    json.dumps(counts), json.dumps(fixable), json.dumps(findings), error))
+        conn.execute("INSERT OR REPLACE INTO vuln_scans (container, image, image_id, scanned_at, duration, counts, fixable, findings, error, allkeys) "
+                     "VALUES (?,?,?,?,?,?,?,?,?,?)", (container, image, image_id, int(time.time()), round(duration, 1),
+                                                      json.dumps(counts), json.dumps(fixable), json.dumps(findings), error,
+                                                      json.dumps(allkeys) if allkeys else ""))
         conn.commit()
     finally:
         conn.close()
@@ -260,9 +329,23 @@ def forget(missing: set[str]) -> None:
         conn.commit()
     finally:
         conn.close()
+    ak = acks()
+    if any(m in ak for m in missing):
+        set_setting(ACK_SETTING, json.dumps({k: v for k, v in ak.items() if k not in missing}))
 
 
-def parse_report(data: dict[str, Any]) -> tuple[dict[str, int], dict[str, int], list[dict[str, Any]]]:
+def all_keys(items: list[dict[str, Any]]) -> list[str]:
+    """Khoá gọn của MỌI lỗi: "MỨC|1 (có bản vá) / 0|CVE|gói" (không trùng)."""
+    seen, out = set(), []
+    for f in items:
+        k = f"{f['severity']}|{1 if f['fixed'] else 0}|{f['id']}|{f['pkg']}"
+        if k not in seen:
+            seen.add(k)
+            out.append(k)
+    return out
+
+
+def parse_report(data: dict[str, Any], limit: int = MAX_FINDINGS) -> tuple[dict[str, int], dict[str, int], list[dict[str, Any]]]:
     counts = {s: 0 for s in SEVERITIES}
     fixable = {s: 0 for s in SEVERITIES}
     seen, items = set(), []
@@ -281,7 +364,7 @@ def parse_report(data: dict[str, Any]) -> tuple[dict[str, int], dict[str, int], 
                           "url": v.get("PrimaryURL", ""), "target": res.get("Target", "")[:120]})
     rank = {s: i for i, s in enumerate(SEVERITIES)}
     items.sort(key=lambda x: (rank[x["severity"]], 0 if x["fixed"] else 1, x["id"]))
-    return counts, fixable, items[:MAX_FINDINGS]
+    return counts, fixable, items[:limit] if limit else items
 
 
 def scan_one(app: dict[str, Any], force: bool = False) -> Optional[dict[str, Any]]:
@@ -297,16 +380,24 @@ def scan_one(app: dict[str, Any], force: bool = False) -> Optional[dict[str, Any
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=1200)
         if r.returncode != 0:
             raise RuntimeError((r.stderr or r.stdout or "Trivy failed").strip().splitlines()[-1][:300])
-        counts, fixable, items = parse_report(json.loads(r.stdout or "{}"))
-        _save(name, app.get("image", ""), image_id, time.time() - t0, counts, fixable, items)
+        counts, fixable, items = parse_report(json.loads(r.stdout or "{}"), limit=0)
+        _save(name, app.get("image", ""), image_id, time.time() - t0, counts, fixable, items[:MAX_FINDINGS], allkeys=all_keys(items))
     except Exception as exc:
         _save(name, app.get("image", ""), image_id, time.time() - t0, {}, {}, [], str(exc)[:300])
     return result(name)
 
 
-def _keys(res: Optional[dict[str, Any]], sev: list[str], fixable_only: bool) -> set[tuple[str, str]]:
-    return {(f["id"], f["pkg"]) for f in (res or {}).get("findings") or []
-            if f["severity"] in sev and (f["fixed"] or not fixable_only)}
+def _keys(container: str, sev: list[str], fixable_only: bool) -> dict[str, str]:
+    """{"CVE|gói": mức} của mọi lỗi hiện có ở các mức đang báo (đọc cả allkeys, không chỉ 500 lỗi lưu chi tiết)."""
+    _ensure_table()
+    conn = get_connection()
+    try:
+        r = conn.execute("SELECT * FROM vuln_scans WHERE container = ?", (container,)).fetchone()
+    finally:
+        conn.close()
+    if not r or r["error"]:
+        return {}
+    return {k: s for s, k, fx in _row_keys(r) if s in sev and (fx or not fixable_only)}
 
 
 def scan_apps(names: Optional[list[str]] = None, force: bool = False, notify_new: bool = True) -> dict[str, Any]:
@@ -325,16 +416,17 @@ def scan_apps(names: Optional[list[str]] = None, force: bool = False, notify_new
         news = []
         for a in apps:
             state["current"] = a.get("title") or a["name"]
-            before = result(a["name"])
+            before = _keys(a["name"], cfg["severities"], cfg["fixable_only"])
             after = scan_one(a, force=force)
             state["done"] += 1
             if after and not after["error"]:
-                new = _keys(after, cfg["severities"], cfg["fixable_only"]) - _keys(before, cfg["severities"], cfg["fixable_only"])
+                now = _keys(a["name"], cfg["severities"], cfg["fixable_only"])
+                accepted = set((acks().get(a["name"]) or {}).get("keys") or [])
+                new = set(now) - set(before) - accepted  # lỗi đã chấp nhận không báo lại
                 if new:
                     sev = {s: 0 for s in cfg["severities"]}
-                    for f in after["findings"]:
-                        if (f["id"], f["pkg"]) in new and f["severity"] in sev:
-                            sev[f["severity"]] += 1
+                    for k in new:
+                        sev[now[k]] += 1
                     news.append({"name": a["name"], "title": a.get("title") or a["name"], "new": len(new), "by_severity": sev})
         if news and notify_new:
             _notify(news)

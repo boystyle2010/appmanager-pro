@@ -85,6 +85,34 @@ check("Re-scan one app on request", st3["apps"]["web"]["scanned_at"] > t_before,
 time.sleep(2)
 check("No second notification when nothing new was found", len(GOT) == 1, len(GOT))
 
+# 0.26.1 chấp nhận lỗi (image bên thứ ba): huy hiệu = lỗi chưa chấp nhận, chỉ báo lỗi MỚI
+import sqlite3  # noqa: E402
+def drop_one_key():  # giả lập "lần quét trước chưa có lỗi này" -> lần quét sau thấy nó là lỗi mới
+    db = sqlite3.connect(f"{data}/appmanager.db")
+    keys = json.loads(db.execute("SELECT allkeys FROM vuln_scans WHERE container='web'").fetchone()[0])
+    hi = next(k for k in keys if k.startswith(("CRITICAL|", "HIGH|")))
+    db.execute("UPDATE vuln_scans SET allkeys=? WHERE container='web'", (json.dumps([k for k in keys if k != hi]),)); db.commit(); db.close()
+r0 = a.get("/api/vulns").json()["apps"]["web"]
+check("All findings keyed (more than the 500 kept in detail when needed)", r0.get("open") == r0["counts"] and r0.get("accepted") == 0, r0)
+acc = a.post("/api/vulns/accept", json={"name": "web"}).json().get("result", {})
+check("Accept: nothing open any more, accepted = every finding, who + when stored",
+      sum(acc["open"].values()) == 0 and acc["accepted"] == sum(r0["counts"].values()) and acc["ack_by"] == "admin" and acc["ack_at"], acc)
+d1 = a.get("/api/vulns/web").json()
+check("Details mark accepted findings", d1["findings"] and all(f["accepted"] for f in d1["findings"]))
+drop_one_key(); n0 = len(GOT)
+a.post("/api/vulns/scan", json={"name": "web", "force": True}); wait_scan(); time.sleep(2)
+check("Accepted vulnerability seen again as 'new' -> no notification, still accepted",
+      len(GOT) == n0 and sum(a.get("/api/vulns").json()["apps"]["web"]["open"].values()) == 0, (len(GOT), n0))
+un = a.post("/api/vulns/accept", json={"name": "web", "accept": False}).json().get("result", {})
+check("Undo: counts come back", un["open"] == un["counts"] and un["accepted"] == 0, un)
+drop_one_key()
+a.post("/api/vulns/scan", json={"name": "web", "force": True}); wait_scan(); time.sleep(2)
+check("Not accepted + really new -> notification sent", len(GOT) == n0 + 1 and GOT[-1].get("event") == "vuln_found", GOT[-1:])
+check("Accept unknown app -> 404", a.post("/api/vulns/accept", json={"name": "nope"}).status_code == 404)
+cb = a.post("/api/vulns/settings", json={"card_badge": False}).json()
+check("Setting: hide the shield on app cards", cb["settings"]["card_badge"] is False, cb)
+a.post("/api/vulns/settings", json={"card_badge": True})
+
 # quyền
 for role, u in (("viewer", "viewer1"), ("operator", "oper1")):
     a.post("/api/users", json={"new": True, "username": u, "password": "Role-Passw0rd!1", "role": role})
@@ -96,6 +124,8 @@ check("View only: sees results, cannot scan / change settings / install",
 check("Update role: can start a scan, not settings / install",
       o.post("/api/vulns/scan", json={"name": "bb-none"}).status_code == 200 and o.post("/api/vulns/settings", json={"enabled": False}).status_code == 403
       and o.post("/api/vulns/install").status_code == 403)
+check("Accept: View only refused, Update role allowed",
+      v.post("/api/vulns/accept", json={"name": "web"}).status_code == 403 and o.post("/api/vulns/accept", json={"name": "web", "accept": False}).status_code == 200)
 wait_scan()
 tok = a.post("/api/tokens", json={"name": "ha", "scope": "update", "days": 0}).json().get("token", "")
 th = {"Authorization": f"Bearer {tok}"}
@@ -109,7 +139,7 @@ sched = subprocess.run([sys.executable, "-c", "import sys;sys.path.insert(0,'.')
                        env=env, capture_output=True, text=True).stdout.strip()
 check("Schedule stored (daily)", sched == "daily", sched)
 sys.path.insert(0, "."); from app.core import config_backup  # noqa: E402
-check("Configuration backup includes the scan settings", "vuln_settings" in config_backup.SETTING_SECTIONS["settings"])
+check("Configuration backup includes the scan settings + accepted vulnerabilities", {"vuln_settings", "vuln_ack"} <= set(config_backup.SETTING_SECTIONS["settings"]))
 un = a.post("/api/vulns/uninstall")
 st4 = a.get("/api/vulns").json()
 check("Uninstall removes Trivy (results kept)", un.status_code == 200 and not st4["trivy"]["installed"] and "web" in st4["apps"], st4["trivy"])

@@ -960,10 +960,12 @@
             else if (prevRunning && this.vuln.modal.open && this.vuln.modal.app) this.openVulns(this.vuln.modal.app, true);
           } catch (_) {}
         },
-        vulnBadge(app) {
+        // Số lỗi CHƯA chấp nhận ở các mức đang báo; onCard: thẻ app (có thể tắt trong cài đặt)
+        vulnBadge(app, onCard = false) {
           const d = this.vuln.data; const r = d?.apps?.[app.name];
           if (!r || r.error || !d.settings) return null;
-          const src = d.settings.fixable_only ? r.fixable : r.counts;
+          if (onCard && d.settings.card_badge === false) return null;
+          const src = d.settings.fixable_only ? (r.open_fixable || r.fixable) : (r.open || r.counts);
           const n = d.settings.severities.reduce((t, s) => t + (src?.[s] || 0), 0);
           if (!n) return null;
           const crit = (src?.CRITICAL || 0) > 0;
@@ -1012,10 +1014,24 @@
               this.loadVulns();
             } });
         },
+        // Chấp nhận lỗi hiện có của 1 app (image bên thứ ba): ẩn huy hiệu tới khi có lỗi mới
+        async acceptVulns(app, accept = true) {
+          const { res, data } = await this._postJson('/api/vulns/accept', { name: app.name, accept });
+          if (!res.ok) { this.showToast(data.detail || 'Failed'); return; }
+          this.showToast(accept ? this.t('vulnAccepted') : this.t('vulnUnaccepted'));
+          await this.loadVulns();
+          await this.openVulns(app, true);
+        },
+        // Link báo lỗi cho nhà phát triển (trang Issues nếu là GitHub / GitLab)
+        vulnReportUrl(app) {
+          const u = String(app?.source_url || '').replace(/\.git$/, '').replace(/\/+$/, '');
+          if (!/^https?:\/\//.test(u)) return '';
+          return /^https:\/\/(github\.com|gitlab\.com)\/[^/]+\/[^/]+$/.test(u) ? u + '/issues' : u;
+        },
         vulnApps() {
           const d = this.vuln.data; if (!d?.apps) return [];
           const byName = Object.fromEntries((this.apps || []).map(a => [a.name, a]));
-          const rank = (r) => -((r.counts?.CRITICAL || 0) * 1e6 + (r.counts?.HIGH || 0) * 1e3 + (r.counts?.MEDIUM || 0));
+          const rank = (r) => { const c = r.open || r.counts || {}; return -((c.CRITICAL || 0) * 1e6 + (c.HIGH || 0) * 1e3 + (c.MEDIUM || 0)); };
           return Object.entries(d.apps).map(([name, r]) => ({ name, r, app: byName[name] || { name, title: name } }))
             .sort((x, y) => rank(x.r) - rank(y.r));
         },

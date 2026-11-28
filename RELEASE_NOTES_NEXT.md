@@ -1,1 +1,4 @@
 # Ghi chú cho bản phát hành kế tiếp — mỗi dòng bắt đầu bằng "- "
+- Vulnerability Scan: new "What can you do?" box in the details window — explains that only the image's developer can fix vulnerabilities in a third-party image, shows the available update (with a button), how to lower the risk (keep the app inside your network / behind a VPN) and a link to report it to the developer.
+- Vulnerability Scan: "Accept" the current vulnerabilities of an app — the shield on its card is hidden and you are only notified when new ones appear (accepted ones stay accepted after updates; Undo any time; who and when is shown and logged). Update accounts and API Tokens with Update scope can accept. New option to hide the shield on app cards entirely.
+- Vulnerability Scan: new findings are now detected across all vulnerabilities of an image, not only the 500 most severe ones kept for the details list.

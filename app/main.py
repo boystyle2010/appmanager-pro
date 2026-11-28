@@ -1932,6 +1932,7 @@ class VulnSettingsPayload(BaseModel):
     weekday: Optional[int] = None
     after_update: Optional[bool] = None
     fixable_only: Optional[bool] = None
+    card_badge: Optional[bool] = None
     severities: Optional[list[str]] = None
 
 
@@ -1952,7 +1953,7 @@ async def api_vuln_detail(container_name: str, user: str = Depends(require_user)
 @app.post("/api/vulns/scan")
 async def api_vuln_scan(payload: VulnScanPayload, request: Request, user: str = Depends(require_user)):
     if not vulnscan.installed():
-        raise HTTPException(status_code=409, detail="Trivy is not installed — an administrator can install it in Settings → Vulnerability scan")
+        raise HTTPException(status_code=409, detail="Trivy is not installed — an administrator can install it in Settings → Vulnerability Scan")
     if vulnscan.state["running"]:
         return {"ok": True, "busy": True, "state": vulnscan.state}
     names = [payload.name] if payload.name else None
@@ -1966,6 +1967,24 @@ async def api_vuln_scan(payload: VulnScanPayload, request: Request, user: str = 
     threading.Thread(target=_run, daemon=True).start()
     await asyncio.sleep(0.2)
     return {"ok": True, "state": vulnscan.state}
+
+
+class VulnAcceptPayload(BaseModel):
+    name: str
+    accept: bool = True
+
+
+@app.post("/api/vulns/accept")
+async def api_vuln_accept(payload: VulnAcceptPayload, request: Request, user: str = Depends(require_user)):
+    """Chấp nhận (hoặc bỏ chấp nhận) mọi lỗi hiện có của 1 app: image của bên thứ ba chỉ nhà phát triển sửa được,
+    nên huy hiệu ẩn tới khi có lỗi MỚI (và thông báo chỉ gửi cho lỗi mới)."""
+    try:
+        res = await asyncio.to_thread(vulnscan.accept if payload.accept else vulnscan.unaccept, *(
+            (payload.name, user) if payload.accept else (payload.name,)))
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Not scanned yet")
+    audit(request, user, "vuln_accept" if payload.accept else "vuln_unaccept", payload.name)
+    return {"ok": True, "result": res}
 
 
 @app.post("/api/vulns/settings")

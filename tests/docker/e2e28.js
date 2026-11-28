@@ -44,6 +44,18 @@ const R = []; const check = (n, c, d = '') => { R.push(!!c); console.log((c ? 'P
   await p.locator('[data-vuln-modal] button').filter({ hasText: /^\s*Có bản vá\s*$/ }).first().click(); await sleep(300);
   const fixed = await D("return d.vulnFindings().every(f => f.fixed)");
   check('Filters: severity + "Có bản vá"', onlyCrit && fixed, [onlyCrit, fixed]);
+  // 0.26.1: "Có thể làm gì?" + Chấp nhận
+  await D("d.vuln.modal.sev = 'ALL'; d.vuln.modal.fixable = false"); await sleep(200);
+  await p.evaluate(() => document.querySelector('[data-vuln-modal] .overflow-y-auto').scrollTo(0, 0)); await sleep(200);
+  check('"What can you do?" explains third-party images + update / network / accept', (await p.textContent('[data-vuln-what]')).includes('Chỉ nhà phát triển') && await p.locator('[data-vuln-accept]').isVisible());
+  await p.screenshot({ path: OUT + '/v6-what-to-do.png' });
+  await p.locator('[data-vuln-accept]').click(); await sleep(1500);
+  const accTxt = await p.textContent('[data-vuln-what]');
+  check('Accept: modal says how many were accepted, findings tagged', accTxt.includes('Đã chấp nhận') && (await p.locator('[data-finding]', { hasText: 'đã chấp nhận' }).count()) > 0, accTxt.slice(0, 200));
+  await p.screenshot({ path: OUT + '/v7-accepted.png' });
+  check('Accepted: shield gone from the card', !(await D("return d.vulnBadge(d.apps.find(a => a.name === 'web'), true)")));
+  await p.locator('[data-vuln-unaccept]').click(); await sleep(1200);
+  check('Undo brings the shield back', !!(await D("return d.vulnBadge(d.apps.find(a => a.name === 'web'), true)")));
   await D('d.vuln.modal.open = false'); await sleep(300);
   // menu ⋯
   await D("d.openActionSheet(d.apps.find(a => a.name === 'web'))"); await sleep(500);
