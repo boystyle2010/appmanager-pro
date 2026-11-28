@@ -13,6 +13,13 @@
 - **Core Python Stack:** `FastAPI 0.165.0` • `Uvicorn 0.54.0` • `Docker SDK 7.2.0` • `ruamel.yaml 0.19.1` • `Argon2 25.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.29.0` • `APScheduler 3.11.3` • `segno 1.6.6`
 - **Frontend Libraries:** `Alpine.js 3.17.5` • `Tailwind CSS 4.3.5` • `marked 18.3.0` • `DOMPurify 3.5.0`
 
+### 🔐 Package Integrity (GHCR Multi-Arch)
+
+- **Image:** `boystyle2010/appmanager-pro:0.27.0`
+- **Digest:** `sha256:4fd88f95b19e…`
+- **Provenance:** ✅ Signed by GitHub · [View attestation](https://github.com/boystyle2010/appmanager-pro/attestations)
+- **Vulnerability Scan (Trivy):** 0 critical • 0 high (fixable only)
+
 ### 🚀 What's Changed
 
 - Vulnerability Scan: new "What can you do?" box in the details window — explains that only the image's developer can fix vulnerabilities in a third-party image, shows the available update (with a button), how to lower the risk (keep the app inside your network / behind a VPN) and a link to report it to the developer.
