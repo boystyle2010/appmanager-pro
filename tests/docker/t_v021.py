@@ -170,7 +170,7 @@ set_setting("notify_known_events", "")
 set_setting("notify_channels", json.dumps([{"id": "a1", "type": "ntfy", "name": "Phone", "enabled": True, "config": {"topic": "x"},
                                             "events": ["update_failed", "disk_low"]}]))
 ch = notify.channels()
-check("N1 existing channel gets the new 'server unreachable' event once", ch[0]["events"] == ["update_failed", "disk_low", "server_offline"], ch)
+check("N1 existing channel gets the new 'server unreachable' event once", ch[0]["events"][:3] == ["update_failed", "disk_low", "server_offline"] and ch[0]["events"].count("server_offline") == 1, ch)  # sự kiện mới hơn (vd vuln_found 0.26) cũng được thêm
 ch[0]["events"] = ["update_failed"]; notify._save_channels(ch)
 check("N1 turning it off afterwards is kept (not re-added)", notify.channels()[0]["events"] == ["update_failed"])
 check("N2 server_offline is critical (sent even in quiet hours) and listed as an event", "server_offline" in notify.CRITICAL and "server_offline" in notify.EVENTS)

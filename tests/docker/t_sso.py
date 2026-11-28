@@ -44,7 +44,8 @@ def me(c):
 
 # S1 cấu hình
 st = httpx.get(B + "/api/auth/oidc/status").json()
-check("S1 SSO is off by default; the login page gets only enabled + label", st == {"enabled": False, "label": "SSO"}, st)
+check("S1 SSO is off by default; the login page gets only public fields (enabled, label, provider icon, sign-up)",
+      st.get("enabled") is False and st.get("label") == "SSO" and set(st) <= {"enabled", "label", "provider", "signup"}, st)
 g = adm.get("/api/sso").json()
 check("S1 settings show the Redirect URI to register at the provider", g["redirect_uri"] == B + "/api/auth/oidc/callback" and not g["config"]["has_secret"], g)
 t = adm.post("/api/sso/test", json={"issuer": MOCK + "/.well-known/openid-configuration"}).json()
@@ -57,7 +58,8 @@ cfg = {"enabled": True, "label": "Authentik", "issuer": MOCK, "client_id": "appm
        "admin_groups": "amp-admins", "operator_groups": "amp-ops, /Operators", "viewer_groups": "amp-view", "default_role": "none"}
 sv = adm.post("/api/sso", json=cfg)
 check("S1 save: Client Secret never returned to the browser", sv.status_code == 200 and "s3cret" not in sv.text and sv.json()["config"]["has_secret"], sv.text)
-check("S1 login page now offers the SSO button", httpx.get(B + "/api/auth/oidc/status").json() == {"enabled": True, "label": "Authentik"})
+st2 = httpx.get(B + "/api/auth/oidc/status").json()
+check("S1 login page now offers the SSO button", st2.get("enabled") is True and st2.get("label") == "Authentik" and set(st2) <= {"enabled", "label", "provider", "signup"}, st2)
 
 # S2 đăng nhập đầy đủ
 mock(reset_counters=True)
