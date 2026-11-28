@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.27.0
+
+*Released: 2026-11-28*
+
+### 📦 Component & Version Matrix
+
+- **App Release:** Bumped from `v0.26.0` ➡️ `v0.27.0`
+- **Supported Architectures:** `linux/amd64` (x86_64), `linux/arm64` (ARM64) & `linux/arm/v7` (ARMv7 32-bit) *(Multi-arch GHCR Image)*
+- **Python Base Image:** `python 3.15.2`
+- **Docker CLI:** `docker 29.10.1`
+- **Core Python Stack:** `FastAPI 0.165.0` • `Uvicorn 0.54.0` • `Docker SDK 7.2.0` • `ruamel.yaml 0.19.1` • `Argon2 25.1.0` • `itsdangerous 2.2.0` • `Jinja2 3.1.6` • `python-multipart 0.0.34` • `HTTPX 0.29.0` • `APScheduler 3.11.3` • `segno 1.6.6`
+- **Frontend Libraries:** `Alpine.js 3.17.5` • `Tailwind CSS 4.3.5` • `marked 18.3.0` • `DOMPurify 3.5.0`
+
+### 🚀 What's Changed
+
+- Vulnerability Scan: new "What can you do?" box in the details window — explains that only the image's developer can fix vulnerabilities in a third-party image, shows the available update (with a button), how to lower the risk (keep the app inside your network / behind a VPN) and a link to report it to the developer.
+- Vulnerability Scan: "Accept" the current vulnerabilities of an app — the shield on its card is hidden and you are only notified when new ones appear (accepted ones stay accepted after updates; Undo any time; who and when is shown and logged). Update accounts and API Tokens with Update scope can accept. New option to hide the shield on app cards entirely.
+- Vulnerability Scan: new findings are now detected across all vulnerabilities of an image, not only the 500 most severe ones kept for the details list.
+- New languages: 简体中文, Español, Deutsch, Français and 日本語 (in addition to English and Tiếng Việt) — the whole app, the sign-in page and notification messages. The first visit follows the browser language; change it in Settings → Language or with the new language picker on the sign-in page. Dates and times follow the chosen language.
+- The new translations are a machine-assisted first draft, marked as such in Settings → Language; corrections from native speakers are very welcome. Each language is one JSON file (`app/static/i18n/<code>.json`), loaded only when chosen; missing texts fall back to English. New guide TRANSLATING.md, a *Translation* issue template, and `scripts/i18n.py` (check / status / missing) that also runs on every pull request. A new language appears automatically once its file is added.
+- Messages that were still written directly in English / Vietnamese in the code (uninstall plan, several confirmations, security alerts, single sign-on errors) are now translatable.
+
 ## 0.26.0
 
 *Released: 2026-11-27*
