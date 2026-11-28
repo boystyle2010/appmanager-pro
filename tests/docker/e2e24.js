@@ -8,7 +8,7 @@ const PW = 'Test-Passw0rd!x';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const check = (n, c, d = '') => { results.push(!!c); console.log((c ? 'PASS ' : 'FAIL ') + n + (c ? '' : ' :: ' + d)); };
 const open = async (b, base, opts = {}) => {
-  const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, ...opts });
+  const ctx = await b.newContext({ locale: 'vi-VN', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, ...opts });
   if (opts.perm) await ctx.grantPermissions(['notifications'], { origin: base });
   await ctx.request.post(base + '/api/auth/login', { data: { username: 'admin', password: PW }, headers: { Origin: base } });
   const p = await ctx.newPage(); p._errs = []; p.on('pageerror', e => p._errs.push(e.message));

@@ -1,0 +1,24 @@
+name: Translation
+description: Correct a translation or offer a new language (no GitHub editing needed)
+labels: [translation]
+body:
+  - type: input
+    id: language
+    attributes:
+      label: Language
+      placeholder: e.g. Deutsch (de)
+    validations:
+      required: true
+  - type: textarea
+    id: corrections
+    attributes:
+      label: Corrections
+      description: Where you saw the text (screen / button), what it says now and what it should say. A screenshot helps.
+    validations:
+      required: true
+  - type: checkboxes
+    id: native
+    attributes:
+      label: About you
+      options:
+        - label: I am a native or fluent speaker of this language

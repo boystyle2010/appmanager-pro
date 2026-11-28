@@ -3,7 +3,7 @@
 const { chromium } = require('playwright'); const { execSync } = require('child_process'); const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 (async () => {
   const B = process.argv[3], S = process.argv[4];
-  const b = await chromium.launch(); const c = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const b = await chromium.launch(); const c = await b.newContext({ locale: 'vi-VN', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   const p = await c.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.goto(B + '/login'); await sleep(2500);
   const swOk = await p.evaluate(async () => !!(await navigator.serviceWorker.getRegistration('/')));

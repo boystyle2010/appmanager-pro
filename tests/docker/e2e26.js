@@ -5,7 +5,7 @@ const OUT = process.argv[2], B = process.argv[3];
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const R = []; const check = (n, c, d = '') => { R.push(!!c); console.log((c ? 'PASS ' : 'FAIL ') + n + (c ? '' : ' :: ' + d)); };
 (async () => {
-  const b = await chromium.launch(); const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const b = await chromium.launch(); const ctx = await b.newContext({ locale: 'vi-VN', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await ctx.request.post(B + '/api/auth/login', { data: { username: 'admin', password: 'Test-Passw0rd!x' }, headers: { Origin: B } });
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   const D = (code) => p.evaluate((c) => (new Function('d', c))(Alpine.$data(document.body)), code);

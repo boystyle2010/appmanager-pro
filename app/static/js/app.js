@@ -10,7 +10,8 @@
       ];
 
       return {
-        lang: localStorage.getItem('amp_lang') || 'vi',
+        lang: window.AMP_pickLang ? window.AMP_pickLang() : (localStorage.getItem('amp_lang') || 'en'),
+        i18nRev: 0,
         theme: localStorage.getItem('amp_theme') || 'dark',
         bannerDismissKey: localStorage.getItem('amp_banner_dismissed') || '',
         envMode: 'docker',
@@ -119,7 +120,21 @@
           { id: 'docker', labelKey: 'tabDocker' },
         ],
 
-        t(key) { return (dict[this.lang] || dict.en)[key] || key; },
+        // i18nRev: đổi khi tải xong file ngôn ngữ -> Alpine vẽ lại các chữ
+        t(key) { this.i18nRev; const d = dict[this.lang]; return (d && d[key]) || dict.en[key] || key; },
+        tf(key, vars = {}) { let s = this.t(key); for (const [k, v] of Object.entries(vars)) s = s.split('{' + k + '}').join(v ?? ''); return s; },
+        _langInfo(code) { return (window.AMP_LANGS || []).find(l => l.code === code) || { code, name: code, english: code, locale: code, coverage: 100 }; },
+        langName(code) { return this._langInfo(code).name; },
+        locale() { return this._langInfo(this.lang).locale || 'en-US'; },
+        langs() {
+          return (window.AMP_LANGS || []).map(l => ({ id: l.code, code: l.code.toUpperCase(), name: l.name, sub: l.code === this.lang ? l.english : (dict[this.lang]?.['lang_' + l.code] || l.english), coverage: l.coverage, draft: l.draft }));
+        },
+        async ensureLang(code) {
+          if (dict[code]) return true;
+          const j = await window.AMP_loadLang?.(code);
+          if (j) this.i18nRev++;
+          return !!j;
+        },
 
         get showUpdateBanner() {
           if (this.summary.updates <= 0) return false;
@@ -165,7 +180,7 @@
           const app = this.updateModal.app;
           if (!app) return;
           const extra = app.target_tag
-            ? (this.lang === 'vi' ? ` và nâng tag lên ${app.target_tag}` : ` and bump tag to ${app.target_tag}`)
+            ? this.tf('bumpTagExtra', { tag: app.target_tag })
             : '';
           this.askConfirm({
             tone: app.raw_has_update ? 'update' : 'primary',
@@ -346,7 +361,7 @@
             if (event.code === 4401) { window.location.href = '/login'; return; }
             if (deployOk) {
               const name = this.deployModal.appName || '';
-              this.showToast(this.lang === 'vi' ? `Đã cài ${name} thành công ✓` : `Deployed ${name} ✓`);
+              this.showToast(this.tf('deployedToast', { name }));
               this.loadApps();
             }
           };
@@ -374,9 +389,7 @@
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || 'Prune failed');
             this.storageState.data = data.storage;
-            const msg = this.lang === 'vi'
-              ? `Đã giải phóng ${data.freed_display} dung lượng SSD ✓`
-              : `Freed ${data.freed_display} of SSD space ✓`;
+            const msg = this.tf('freedToast', { size: data.freed_display });
             this.storageState.lastFreed = msg;
             this.showToast(msg);
             if (this.pruneOpts.prune_containers) await this.loadApps();
@@ -388,6 +401,9 @@
         },
 
         async init() {
+          if (!dict[this.lang]) await this.ensureLang(this.lang);
+          if (!dict[this.lang]) this.lang = 'en';
+          document.documentElement.lang = this.lang;
           this.$watch(() => [this.confirmModal, this.actionSheet, this.logModal, this.batchModal, this.deployModal, this.updateModal,
                              this.editModal, this.uninstallModal, this.taskModal, this.settingsModal, this.restorePicker, this.restoreRun, this.updateAllPicker, this.versionPicker, this.dupPopup, this.dataSetup, this.dataFolders, this.tokenState.form, this.apiDocs, this.srv.form, this.remoteJob, this.composeHint, this.runCmd, this.usersState.form, this.vuln.modal].some(m => m && m.open), (open) => {
             const b = document.body, h = document.documentElement;
@@ -639,13 +655,18 @@
         formatRelativeTime(iso) {
           if (!iso) return '';
           const mins = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
-          if (mins < 1) return this.lang === 'vi' ? 'vừa xong' : 'just now';
+          if (mins < 1) return this.t('justNow');
           if (mins < 60) return `${mins}m`;
           const hrs = Math.floor(mins / 60);
           return `${hrs}h ${mins % 60}m`;
         },
 
-        setLang(code) { this.lang = code; localStorage.setItem('amp_lang', code); },
+        async setLang(code) {
+          if (!(await this.ensureLang(code)) && !dict[code]) { this.showToast('Cannot load language file'); return; }
+          this.lang = code;
+          try { localStorage.setItem('amp_lang', code); } catch (_) {}
+          document.documentElement.lang = code;
+        },
 
         // Xoá bộ nhớ đệm giao diện (PWA / Safari đôi khi giữ bản cũ): xoá Cache Storage, tải lại các file giao diện
         // bỏ qua bộ nhớ đệm HTTP, cập nhật Service Worker (KHÔNG gỡ — Web Push cần nó), rồi tải lại trang.
@@ -834,7 +855,7 @@
             const res = await fetch('/api/updates/check', { method: 'POST' });
             const body = await res.clone().json().catch(() => ({}));
             if (body.already_running) {
-              if (!silent) this.showToast(this.lang === 'vi' ? 'Đang kiểm tra cập nhật, vui lòng đợi…' : 'An update check is already running…');
+              if (!silent) this.showToast(this.t('checkAlreadyRunning'));
               await new Promise(r => setTimeout(r, 4000));
             }
             await this.loadApps();
@@ -842,7 +863,7 @@
               const found = this.summary.updates;
               this.showToast(found > 0
                 ? `${found} ${this.t('updatesAvailable')}`
-                : (this.lang === 'vi' ? 'Tất cả ứng dụng đều đang ở bản mới nhất ✓' : 'All apps are up to date ✓'));
+                : this.t('allUpToDateToast'));
             }
           } catch (err) { if (!silent) this.error = err.message; }
           finally { this.checkingUpdates = false; }
@@ -922,9 +943,7 @@
             if (cleaned) {
               this.updateModal.changelogHtml = this._renderMarkdown(cleaned);
             } else if (data.changelog) {
-              const msg = this.lang === 'vi'
-                ? 'Bản phát hành này chỉ có mã checksum, không có ghi chú thay đổi. Xem chi tiết trên GitHub ↗'
-                : 'This release only lists checksums and has no release notes. See GitHub ↗';
+              const msg = this.t('checksumOnlyNotes');
               this.updateModal.changelogHtml = `<p>${msg}</p>`;
             } else {
               this.updateModal.changelogHtml = '';
@@ -1055,7 +1074,7 @@
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ auto_update: this.updateModal.autoUpdate })
           });
-          this.showToast(this.lang === 'vi' ? 'Đã lưu Auto-Update' : 'Auto-Update saved');
+          this.showToast(this.t('autoUpdateSavedToast'));
           await this.loadApps();
         },
 
@@ -1100,8 +1119,8 @@
             body: JSON.stringify({ skipped_digest: nextToken })
           });
           this.showToast(nextToken
-            ? (this.lang === 'vi' ? 'Đã bỏ qua bản cập nhật này' : 'Version skipped')
-            : (this.lang === 'vi' ? 'Đã hiện lại thông báo cập nhật' : 'Version unskipped'));
+            ? this.t('versionSkippedToast')
+            : this.t('versionUnskippedToast'));
           await this._fetchAppDetails(app.name, false);
           await this.loadApps();
         },
@@ -1116,7 +1135,7 @@
             if (!res.ok) throw new Error(data.detail || 'Failed to save repository');
             await this._fetchAppDetails(name, false);
             await this.loadApps();
-            this.showToast(this.lang === 'vi' ? 'Đã lưu nguồn GitHub' : 'Repository saved');
+            this.showToast(this.t('repoSavedToast'));
           } catch (err) {
             this.showToast(err.message);
           } finally {
@@ -1155,7 +1174,7 @@
 
         // Sau self-update: chờ container khởi động lại rồi tải lại trang
         async _waitAndReload() {
-          this.showToast(this.lang === 'vi' ? 'AppManager Pro đang khởi động lại...' : 'AppManager Pro is restarting...');
+          this.showToast(this.t('restartingToast'));
           await new Promise(r => setTimeout(r, 8000));
           for (let i = 0; i < 40; i++) {
             try {
@@ -1419,7 +1438,7 @@
           if (ch.version) return ch.version;
           if (ch.updated) {
             const d = new Date(ch.updated.replace(' ', 'T') + (ch.updated.endsWith('Z') ? '' : 'Z'));
-            if (!isNaN(d)) return `build ${d.toLocaleDateString(this.lang === 'vi' ? 'vi-VN' : 'en-US', { day: '2-digit', month: '2-digit' })}`;
+            if (!isNaN(d)) return `build ${d.toLocaleDateString(this.locale(), { day: '2-digit', month: '2-digit' })}`;
           }
           return ch.tag;
         },
@@ -2116,7 +2135,7 @@
             }
             if (data.backups) m.backups = data.backups;
             m.feedbackOk = true;
-            m.feedback = this.lang === 'vi' ? 'Đã lưu & áp dụng cấu hình ✓' : 'Configuration saved & applied ✓';
+            m.feedback = this.t('configAppliedToast');
             this.showToast(m.feedback);
             if (data.self_update) { this._waitAndReload(); return; }
             await this.loadApps();
@@ -2124,7 +2143,7 @@
             if (fresh) m.app = fresh;
             await this._loadCompose(m.app.name, m.lastService);
             m.feedbackOk = true;
-            m.feedback = this.lang === 'vi' ? 'Đã lưu & áp dụng cấu hình ✓' : 'Configuration saved & applied ✓';
+            m.feedback = this.t('configAppliedToast');
           } catch (err) {
             m.feedbackOk = false; m.feedback = err.message;
           } finally {
@@ -2142,13 +2161,13 @@
               { filename }
             );
             if (!res.ok) throw new Error(data.detail || 'Rollback failed');
-            this.showToast(this.lang === 'vi' ? 'Đã khôi phục cấu hình ✓' : 'Configuration restored ✓');
+            this.showToast(this.t('configRestoredToast'));
             if (data.self_update) { this._waitAndReload(); return; }
             await this.loadApps();
             await this._loadCompose(m.app.name, m.lastService);
             m.tab = 'ui';
             m.feedbackOk = true;
-            m.feedback = this.lang === 'vi' ? `Đã khôi phục từ ${filename} ✓` : `Restored from ${filename} ✓`;
+            m.feedback = this.tf('restoredFromToast', { file: filename });
           } catch (err) {
             m.feedbackOk = false; m.feedback = err.message;
           } finally {
@@ -2173,28 +2192,22 @@
         // Danh sách việc sẽ làm + ảnh hưởng (hiện trong cửa sổ gỡ trước khi bấm)
         uninstallPlan() {
           const u = this.uninstallModal, c = u.check || {}, a = u.app || {};
-          const vi = this.lang === 'vi', out = [];
-          const users = c.image_users || [];
-          out.push({ tone: 'danger', text: vi ? `Dừng và xoá container ${a.name}. App sẽ ngừng hoạt động.` : `Stop and delete the container ${a.name}. The app stops working.` });
-          if ((c.stack_others || []).length) out.push({ tone: 'info', text: vi
-            ? `Chỉ gỡ service này. ${c.stack_others.length} service khác của stack "${c.project}" (${c.stack_others.join(', ')}) vẫn chạy.`
-            : `Only this service is removed. ${c.stack_others.length} other service(s) of stack "${c.project}" (${c.stack_others.join(', ')}) keep running.` });
+          const out = [], tf = (k, o) => this.tf(k, o);
+          const users = c.image_users || [], names = users.map(x => x.name).join(', ');
+          out.push({ tone: 'danger', text: tf('upStop', { name: a.name }) });
+          if ((c.stack_others || []).length) out.push({ tone: 'info', text: tf('upStackOthers', { n: c.stack_others.length, project: c.project, list: c.stack_others.join(', ') }) });
           if (a.source === 'casaos') out.push(u.removeCompose
-            ? { tone: 'warn', text: vi ? 'Xoá thư mục app của CasaOS (docker-compose.yml). App biến mất khỏi CasaOS.' : 'Delete the CasaOS app folder (docker-compose.yml). The app disappears from CasaOS.' }
-            : { tone: 'ok', text: vi ? 'Giữ docker-compose.yml của CasaOS.' : 'Keep the CasaOS docker-compose.yml.' });
-          if (!u.removeImages) out.push({ tone: 'ok', text: vi ? `Giữ image ${c.image || ''} trên ổ đĩa (cài lại nhanh, không tải lại).` : `Keep the image ${c.image || ''} on disk (fast reinstall, no download).` });
-          else if (!users.length) out.push({ tone: 'warn', text: vi ? `Xoá image ${c.image || ''} để giải phóng dung lượng. Cài lại sẽ phải tải lại.` : `Delete the image ${c.image || ''} to free disk space. A reinstall downloads it again.` });
-          else if (u.imageChoice === 'keep') out.push({ tone: 'ok', text: vi
-            ? `Giữ image: nó vẫn đang được ${users.map(x => x.name).join(', ')} dùng (xoá sẽ làm hỏng các app đó).`
-            : `Keep the image: it is still used by ${users.map(x => x.name).join(', ')} (deleting it would break those apps).` });
-          else out.push({ tone: 'danger', text: vi
-            ? `Gỡ luôn ${users.map(x => x.name).join(', ')} (chỉ container; AppData của các app đó được giữ), rồi xoá image.`
-            : `Also uninstall ${users.map(x => x.name).join(', ')} (containers only; their AppData is kept), then delete the image.` });
+            ? { tone: 'warn', text: tf('upCasaDelete') }
+            : { tone: 'ok', text: tf('upCasaKeep') });
+          if (!u.removeImages) out.push({ tone: 'ok', text: tf('upImageKeep', { image: c.image || '' }) });
+          else if (!users.length) out.push({ tone: 'warn', text: tf('upImageDelete', { image: c.image || '' }) });
+          else if (u.imageChoice === 'keep') out.push({ tone: 'ok', text: tf('upImageKeepUsed', { list: names }) });
+          else out.push({ tone: 'danger', text: tf('upImageRemoveUsers', { list: names }) });
           if (a.appdata_path) out.push(u.removeAppdata
-            ? { tone: 'danger', text: (vi ? `XOÁ VĨNH VIỄN dữ liệu trong ${a.appdata_path}. Không thể khôi phục.` : `PERMANENTLY delete the data in ${a.appdata_path}. This cannot be undone.`)
-                + ((c.appdata_users || []).length ? (vi ? ` Thư mục này cũng đang được ${c.appdata_users.join(', ')} dùng: các app đó sẽ mất dữ liệu.` : ` This folder is also used by ${c.appdata_users.join(', ')}: those apps will lose data.`) : '') }
-            : { tone: 'ok', text: vi ? `Giữ dữ liệu trong ${a.appdata_path} (cài lại app sẽ dùng lại dữ liệu này).` : `Keep the data in ${a.appdata_path} (a reinstall reuses it).` });
-          out.push({ tone: 'info', text: vi ? 'Các bản sao lưu của AppManager cho app này vẫn được giữ trong Cài đặt.' : "AppManager's backups of this app are kept (Settings)." });
+            ? { tone: 'danger', text: tf('upDataDelete', { path: a.appdata_path })
+                + ((c.appdata_users || []).length ? ' ' + tf('upDataShared', { list: c.appdata_users.join(', ') }) : '') }
+            : { tone: 'ok', text: tf('upDataKeep', { path: a.appdata_path }) });
+          out.push({ tone: 'info', text: tf('upBackupsKept') });
           return out;
         },
 
@@ -2224,7 +2237,7 @@
             );
             if (!res.ok) throw new Error(data.detail || 'Uninstall failed');
             const title = u.app.title;
-            this.showToast(this.lang === 'vi' ? `Đã gỡ ${title} ✓` : `${title} uninstalled ✓`);
+            this.showToast(this.tf('uninstalledToast', { title }));
             // Hiện kết quả từng bước (vd image được giữ vì app khác đang dùng) thay vì đóng ngay
             u.resultLogs = data.logs || '';
             if (!u.resultLogs) u.open = false;
@@ -2703,7 +2716,7 @@
           const menu = [
             { id: 'pref', label: this.t('grpPersonal'), items: [
               { tab: 'appearance', title: this.t('appearance'), desc: this.uiSummary(), icon: I.swatch, color: c('violet') },
-              { tab: 'language', title: this.t('language'), desc: this.lang === 'vi' ? 'Tiếng Việt' : 'English', icon: I.globe, color: c('sky') },
+              { tab: 'language', title: this.t('language'), desc: this.langName(this.lang), icon: I.globe, color: c('sky') },
             ] },
             { id: 'main', label: this.t('grpGeneral'), items: [
               { tab: 'schedule', title: this.t('setGeneral'), desc: this.settingsBase ? general : this.t('setGeneralDesc'), icon: I.gear, color: c('sky') },
@@ -2993,7 +3006,7 @@
 
         apiTime(ts) {
           if (!ts) return '';
-          return new Date(ts * 1000).toLocaleTimeString(this.lang === 'vi' ? 'vi-VN' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+          return new Date(ts * 1000).toLocaleTimeString(this.locale(), { hour: '2-digit', minute: '2-digit' });
         },
 
         async saveRegistryLogin() {
@@ -3068,7 +3081,7 @@
           if (this.uiChanges()) {
             try { localStorage.setItem('amp_ui', JSON.stringify(this.ui)); } catch (_) {}
             this.uiBase = { ...this.ui };
-            if (!this.serverSettingsChanges()) { this.showToast(this.lang === 'vi' ? 'Đã lưu giao diện' : 'Appearance saved'); return; }
+            if (!this.serverSettingsChanges()) { this.showToast(this.t('appearanceSavedToast')); return; }
           }
           const f = this.settingsForm;
           const payload = this._settingsPayload();
@@ -3078,7 +3091,7 @@
             if (!res.ok) throw new Error(data.detail || 'Failed to save settings');
             this.settingsForm = { ...data.settings, github_token: '' };
             this._snapSettings();
-            this.showToast(this.lang === 'vi' ? 'Đã lưu cài đặt' : 'Settings saved');
+            this.showToast(this.t('settingsSavedToast'));
           } catch (err) { this.showToast(err.message); }
         },
 
@@ -3188,13 +3201,13 @@
 
         formatTs(epoch) {
           if (!epoch) return '';
-          return new Date(epoch * 1000).toLocaleString(this.lang === 'vi' ? 'vi-VN' : 'en-US', { dateStyle: 'short', timeStyle: 'short' });
+          return new Date(epoch * 1000).toLocaleString(this.locale(), { dateStyle: 'short', timeStyle: 'short' });
         },
 
         utcToLocal(ts) {
           if (!ts) return '';
           const d = new Date(String(ts).replace(' ', 'T') + (String(ts).endsWith('Z') ? '' : 'Z'));
-          return isNaN(d) ? ts : d.toLocaleString(this.lang === 'vi' ? 'vi-VN' : 'en-US', { dateStyle: 'short', timeStyle: 'short' });
+          return isNaN(d) ? ts : d.toLocaleString(this.locale(), { dateStyle: 'short', timeStyle: 'short' });
         },
 
         actionLabel(a) {

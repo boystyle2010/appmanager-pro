@@ -438,9 +438,7 @@ def scan_apps(names: Optional[list[str]] = None, force: bool = False, notify_new
 
 def _notify(news: list[dict[str, Any]]) -> None:
     from app.core import notify
-    vi = notify._lang() == "vi"
-    lab = {"CRITICAL": "nghiêm trọng" if vi else "critical", "HIGH": "cao" if vi else "high", "MEDIUM": "trung bình" if vi else "medium",
-           "LOW": "thấp" if vi else "low", "UNKNOWN": "chưa rõ" if vi else "unknown"}
+    lab = {s: notify.tr("sev_" + s) for s in SEVERITIES}
     lines = []
     for n in news[:20]:
         parts = [f"{c} {lab[s]}" for s, c in n["by_severity"].items() if c]

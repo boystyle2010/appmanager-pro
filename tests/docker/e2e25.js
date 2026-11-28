@@ -5,7 +5,7 @@ const { chromium } = require('playwright');
 const OUT = process.argv[2], B = process.argv[3] || 'http://localhost:8771';
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 (async () => {
-  const b = await chromium.launch(); const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const b = await chromium.launch(); const ctx = await b.newContext({ locale: 'vi-VN', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.goto(B + '/login'); await sleep(1200);
   await p.screenshot({ path: OUT + '/l1-off.png' });
@@ -32,7 +32,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const p2 = await ctx.newPage(); await ctx.clearCookies(); await p2.goto(B + '/login'); await sleep(1300);
   const vis2 = await p2.evaluate(() => getComputedStyle(document.querySelector('.lp-card')).visibility);
   // máy tính
-  const ctx3 = await b.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+  const ctx3 = await b.newContext({ locale: 'vi-VN', viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
   const p3 = await ctx3.newPage(); await p3.goto(B + '/login'); await sleep(800);
   await p3.locator('.lp-power').click(); await sleep(1400);
   await p3.locator('.lp-dot').nth(1).click(); await sleep(600);
@@ -42,14 +42,14 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const fit = await p3.evaluate(() => ({ sh: document.documentElement.scrollHeight, room: Math.ceil(document.querySelector('.lp-room').getBoundingClientRect().height) }));
   const bm = await p3.evaluate(() => { const r = document.querySelector('[x-ref=mouth]').getBoundingClientRect(); return { y: r.top + r.height / 2 + window.scrollY, cy: Alpine.$data(document.body).beam.cy, sy: window.scrollY }; });
   // không có JS -> ô đăng nhập vẫn hiện
-  const ctx4 = await b.newContext({ viewport: { width: 390, height: 844 }, javaScriptEnabled: false });
+  const ctx4 = await b.newContext({ locale: 'vi-VN', viewport: { width: 390, height: 844 }, javaScriptEnabled: false });
   const p4 = await ctx4.newPage(); await p4.goto(B + '/login'); await sleep(500);
     const cardVisibleNoJs = await p4.locator('.lp-card').isVisible();
   // Lần đầu (máy chưa có tài khoản, argv[4]): trang vẫn là Đăng nhập; tạo Quản trị ở tab Đăng ký
   let first = null;
   if (process.argv[4]) {
     const F = process.argv[4];
-    const c5 = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+    const c5 = await b.newContext({ locale: 'vi-VN', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
     const f = await c5.newPage(); f.on('pageerror', e => errs.push(e.message));
     await f.goto(F + '/login'); await sleep(1500);
     const tabs = await f.getByRole('tab').count();

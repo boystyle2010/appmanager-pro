@@ -3,7 +3,7 @@ const OUT = process.argv[2]; const B = 'http://localhost:8798';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 (async () => {
   const b = await chromium.launch();
-  const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const ctx = await b.newContext({ locale: 'vi-VN', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await ctx.request.post(B + '/api/auth/login', { data: { username: 'admin', password: 'Test-Passw0rd!x' }, headers: { Origin: B } });
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   const D = (code) => p.evaluate((c) => { const d = Alpine.$data(document.body); return (new Function('d', c))(d); }, code);

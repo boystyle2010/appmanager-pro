@@ -3,7 +3,7 @@ const OUT = process.argv[2]; const B = 'http://localhost:8796'; const fs = requi
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 (async () => {
   const b = await chromium.launch();
-  const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const ctx = await b.newContext({ locale: 'vi-VN', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await ctx.request.post(B + '/api/auth/login', { data: { username: 'admin', password: 'Test-Passw0rd!x' }, headers: { Origin: B } });
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   const D = (code) => p.evaluate((c) => { const d = Alpine.$data(document.body); return (new Function('d', c))(d); }, code);
@@ -24,7 +24,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await D("d.notifyState.settings.quiet_enabled = true"); await sleep(300);
   await p.screenshot({ path: OUT + '/o4-quiet.png' });
   // 5 lần đăng nhập sai từ một context khác -> khoá IP -> tin bảo mật
-  const c2 = await b.newContext();
+  const c2 = await b.newContext({ locale: 'vi-VN' });
   for (let i = 0; i < 5; i++) await c2.request.post(B + '/api/auth/login', { data: { username: 'admin', password: 'wrong' + i }, headers: { Origin: B } });
   await sleep(4000);
   const lines = fs.readFileSync(process.argv[3], 'utf8').trim().split('\n').map(l => JSON.parse(l));

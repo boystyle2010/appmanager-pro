@@ -86,6 +86,16 @@ for tpl in sorted((APP / "templates").glob("*.html")):
         if not (APP / ref.lstrip("/")).exists():
             errors.append(f"{tpl.relative_to(ROOT)}: tham chiếu {ref} nhưng file không tồn tại")
 
+# 4) bản dịch (0.27): en.json mới nhất, file ngôn ngữ hợp lệ, đủ {chỗ trống}; cần Node.js để đọc i18n.js
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
+if shutil.which("node"):
+    r = subprocess.run([sys.executable, str(ROOT / "scripts" / "i18n.py"), "check"], capture_output=True, text=True)
+    if r.returncode:
+        errors += [f"bản dịch: {x}" for x in (r.stdout + r.stderr).strip().splitlines()]
+else:
+    print("Bỏ qua kiểm tra bản dịch (chưa có Node.js)")
+
 if errors:
     print("PHÁT HIỆN LỖI:")
     for e in errors:

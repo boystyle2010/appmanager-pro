@@ -9,7 +9,7 @@ const results = []; const check = (n, c, d = '') => { results.push(!!c); console
 (async () => {
   const b = await chromium.launch();
   const page = async (user, pw = PW) => {
-    const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+    const ctx = await b.newContext({ locale: 'vi-VN', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
     await ctx.request.post(B + '/api/auth/login', { data: { username: user, password: pw }, headers: { Origin: B } });
     const p = await ctx.newPage(); p._errs = []; p.on('pageerror', e => p._errs.push(e.message));
     await p.goto(B + '/'); await sleep(2500);

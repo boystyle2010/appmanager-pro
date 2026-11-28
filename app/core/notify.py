@@ -62,6 +62,11 @@ T = {
         "n_avail": "Update available: {v}", "n_update_many": "{n} updates available", "n_and_more": "{names} and {n} more",
         "n_updated": "Updated to {v}", "n_updated_ch": "Updated to the latest {ch} build", "n_failed": "Update failed", "n_rolled": "Update failed, back on {v}",
         "n_test": "Notifications are on", "n_test_body": "You'll get alerts on this device.",
+        "sec_ip_locked": "IP {ip} was locked for 15 minutes after repeated failed logins (user: {user}).",
+        "sec_2fa_off": "Two-factor authentication was DISABLED for {user} (IP {ip}).",
+        "sec_pw_changed": "The password of {user} was changed (IP {ip}).",
+        "sec_token_new": "A new API token \"{name}\" ({scope}) was created by {user} (IP {ip}).",
+        "sev_CRITICAL": "critical", "sev_HIGH": "high", "sev_MEDIUM": "medium", "sev_LOW": "low", "sev_UNKNOWN": "unknown",
     },
     "vi": {
         "update_available": "🆕 Có bản cập nhật mới", "update_success": "✅ Đã cập nhật", "update_failed": "❌ Cập nhật thất bại",
@@ -75,16 +80,41 @@ T = {
         "n_avail": "Có bản cập nhật: {v}", "n_update_many": "{n} bản cập nhật mới", "n_and_more": "{names} và {n} app khác",
         "n_updated": "Đã cập nhật lên {v}", "n_updated_ch": "Đã cập nhật bản {ch} mới nhất", "n_failed": "Cập nhật thất bại", "n_rolled": "Cập nhật lỗi, đã quay về {v}",
         "n_test": "Thông báo đã bật", "n_test_body": "Thiết bị này sẽ nhận thông báo.",
+        "sec_ip_locked": "IP {ip} bị khoá 15 phút sau nhiều lần đăng nhập sai (tài khoản: {user}).",
+        "sec_2fa_off": "Xác thực 2 lớp (2FA) đã bị TẮT cho tài khoản {user} (IP {ip}).",
+        "sec_pw_changed": "Mật khẩu của {user} vừa được đổi (IP {ip}).",
+        "sec_token_new": "API token mới \"{name}\" (quyền {scope}) vừa được tạo bởi {user} (IP {ip}).",
+        "sev_CRITICAL": "nghiêm trọng", "sev_HIGH": "cao", "sev_MEDIUM": "trung bình", "sev_LOW": "thấp", "sev_UNKNOWN": "chưa rõ",
     },
 }
 
 
 def _lang() -> str:
-    return "vi" if get_setting("notify_lang", "en") == "vi" else "en"
+    """Ngôn ngữ tin nhắn: en / vi có sẵn; ngôn ngữ khác (0.27) đọc từ app/static/i18n/<mã>.json (phần "notify")."""
+    from app.core import i18n
+    v = get_setting("notify_lang", "en") or "en"
+    return v if v in T or v in i18n.codes() else "en"
+
+
+def _table(lang: str) -> dict[str, str]:
+    """Bảng câu của 1 ngôn ngữ; câu chưa dịch dùng tiếng Anh."""
+    if lang in T:
+        return {**T["en"], **T[lang]}
+    from app.core import i18n
+    extra = {k: v for k, v in (i18n.pack(lang).get("notify") or {}).items() if isinstance(v, str) and v}
+    return {**T["en"], **extra}
 
 
 def tr(key: str) -> str:
-    return T[_lang()].get(key, T["en"].get(key, key))
+    return _table(_lang()).get(key, key)
+
+
+def trf(key: str, **kw: Any) -> str:
+    """tr() + thay {chỗ trống} (giữ nguyên chỗ trống lạ để bản dịch thiếu / sai không làm lỗi)."""
+    s = tr(key)
+    for k, v in kw.items():
+        s = s.replace("{" + k + "}", str(v))
+    return s
 
 
 # ---------------------------------------------------------------- cấu hình
@@ -208,7 +238,8 @@ def save_settings(data: dict[str, Any]) -> None:
             set_setting(f"notify_{key}", v)
     if data.get("disk_pct"):
         set_setting("notify_disk_pct", str(max(50, min(99, int(data["disk_pct"])))))
-    if data.get("lang") in ("vi", "en"):
+    from app.core import i18n
+    if data.get("lang") in i18n.codes():
         set_setting("notify_lang", data["lang"])
 
 
@@ -275,7 +306,7 @@ def _ver(v: Any) -> str:
 def native(event: str, title: str, body: str, data: dict[str, Any]) -> tuple[str, str]:
     """Thông báo kiểu app điện thoại (giống App Store, Nhà…): tiêu đề ngắn là TÊN APP, nội dung MỘT dòng nói việc gì
     xảy ra; không emoji, không dấu "•", không xuống dòng. Thiếu dữ liệu thì chỉ bỏ emoji / dấu đầu dòng của tin gốc."""
-    L = T[_lang()]
+    L = _table(_lang())
     try:
         if event == "test":
             return L["n_test"], L["n_test_body"]

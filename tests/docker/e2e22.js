@@ -8,7 +8,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const check = (n, c, d = '') => { results.push(!!c); console.log((c ? 'PASS ' : 'FAIL ') + n + (c ? '' : ' :: ' + d)); };
 (async () => {
   const b = await chromium.launch();
-  const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const ctx = await b.newContext({ locale: 'vi-VN', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await ctx.request.post(B + '/api/auth/login', { data: { username: 'admin', password: PW }, headers: { Origin: B } });
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   const D = (code) => p.evaluate((c) => (new Function('d', c))(Alpine.$data(document.body)), code);
@@ -33,7 +33,7 @@ const results = []; const check = (n, c, d = '') => { results.push(!!c); console
   await p.screenshot({ path: OUT + '/s3-sso-saved.png' });
 
   // trang đăng nhập (trình duyệt khác, chưa đăng nhập)
-  const ctx2 = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  const ctx2 = await b.newContext({ locale: 'vi-VN', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   const q = await ctx2.newPage(); q.on('pageerror', e => errs.push(e.message));
   await q.goto(B + '/login'); await sleep(1500);
   await q.locator('.lp-power').click(); await sleep(1200);  // trang đăng nhập: bấm nút nguồn để hiện ô đăng nhập

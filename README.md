@@ -72,7 +72,7 @@ It runs as a single container, ships a mobile-first "liquid glass" UI in English
 - **Password change** from the UI (signs out other devices).
 - **Activity log** — sign-ins, failed attempts, updates, uninstalls, compose edits, cleanups and settings changes with user and IP.
 - **Hardened HTTP** — Content-Security-Policy, clickjacking protection, `nosniff`, and Origin checks on every API write and WebSocket (CSRF protection).
-- **Glassmorphic, mobile-first UI**, dark/light theme, English & Vietnamese, installable as a PWA.
+- **Glassmorphic, mobile-first UI**, dark/light theme, **7 languages** (English, Tiếng Việt, 简体中文, Español, Deutsch, Français, 日本語 — picked from the browser language, changeable in Settings → Language and on the sign-in page; notifications in the same languages), installable as a PWA. [Help translate](TRANSLATING.md).
 - **No runtime CDN dependency** — Tailwind CSS v4 is compiled into a static stylesheet when the image is built, and Alpine.js, marked, DOMPurify and fonts are bundled too, with automatic CDN fallback. Requires a modern browser (Safari 16.4+, Chrome 111+, Firefox 128+).
 
 ## 🚀 Installation
@@ -418,7 +418,7 @@ The changelog lists **component updates** plus your own notes: write bullet line
 
 ## 🤝 Contributing
 
-Bug reports, ideas, translations and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Security problems: please report them privately as described in [SECURITY.md](SECURITY.md).
+Bug reports, ideas, translations and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Translations: [TRANSLATING.md](TRANSLATING.md) (one JSON file per language; the new languages are a machine-assisted first draft that native speakers can improve). Security problems: please report them privately as described in [SECURITY.md](SECURITY.md).
 
 ## 🗂️ Project structure
 

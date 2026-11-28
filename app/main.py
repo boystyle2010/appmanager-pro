@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
+from app.core import i18n as i18n_mod
 from app.core import api_tokens, config_backup, jobs, logs as app_logs, oidc, servers, users as users_mod, vulnscan, webpush
 from app.core.app_backup import delete_backup, list_backups, restore_backup
 from app.core.auth import (
@@ -159,7 +160,7 @@ def _build_id() -> str:
     -> dùng cho ?v= của file tĩnh và để trang đang mở biết mình đã cũ (tự tải lại)."""
     import hashlib
     h = hashlib.sha1(APP_VERSION.encode())
-    for sub, pat in (("static/js", "*.js"), ("static/css", "*.css"), ("templates", "*.html")):
+    for sub, pat in (("static/js", "*.js"), ("static/css", "*.css"), ("templates", "*.html"), ("static/i18n", "*.json")):
         for f in sorted((BASE_DIR / sub).glob(pat)):
             try:
                 h.update(f.name.encode()); h.update(f.read_bytes())
@@ -170,6 +171,8 @@ def _build_id() -> str:
 
 BUILD_ID = _build_id()
 templates.env.globals["build"] = BUILD_ID
+# 0.27: danh sách ngôn ngữ (en / vi có sẵn + mỗi file app/static/i18n/<mã>.json) cho index.html / auth.html
+templates.env.globals["languages"] = i18n_mod.languages
 
 # ---------------- Security headers ----------------
 _CSP = (
@@ -385,9 +388,7 @@ async def api_setup(payload: SetupPayload, request: Request, response: Response)
 
 def _notify_if_locked(ip: str, username: str) -> None:
     if is_ip_locked(ip):
-        vi = notify.settings()["lang"] == "vi"
-        notify.on_security((f"IP {ip} bị khoá 15 phút sau nhiều lần đăng nhập sai (tài khoản: {username or '?'})." if vi
-                            else f"IP {ip} was locked for 15 minutes after repeated failed logins (user: {username or '?'})."),
+        notify.on_security(notify.trf("sec_ip_locked", ip=ip, user=username or "?"),
                            {"ip": ip, "username": username, "kind": "ip_locked"})
 
 
@@ -485,8 +486,7 @@ async def api_2fa_disable(payload: TwoFactorDisablePayload, request: Request, us
         raise HTTPException(status_code=400, detail="Wrong password or code")
     update_user_fields(user, totp_secret="", totp_enabled=0, totp_last_step=0, backup_codes="[]", totp_pending="")
     audit(request, user, "2fa_disabled")
-    notify.on_security(("Xác thực 2 lớp (2FA) đã bị TẮT cho tài khoản " if notify.settings()["lang"] == "vi"
-                        else "Two-factor authentication was DISABLED for ") + user + f" (IP {get_client_ip(request)}).",
+    notify.on_security(notify.trf("sec_2fa_off", user=user, ip=get_client_ip(request)),
                        {"kind": "2fa_disabled", "user": user})
     return {"ok": True}
 
@@ -513,8 +513,7 @@ async def api_change_password(payload: PasswordChangePayload, request: Request, 
     revoke_sessions(user)  # đăng xuất mọi thiết bị khác của người này (người khác không bị ảnh hưởng)
     set_session_cookie(response, request, user, remember=True)
     audit(request, user, "password_changed")
-    notify.on_security(("Mật khẩu của " if notify.settings()["lang"] == "vi" else "The password of ") + user +
-                       (" vừa được đổi" if notify.settings()["lang"] == "vi" else " was changed") + f" (IP {get_client_ip(request)}).",
+    notify.on_security(notify.trf("sec_pw_changed", user=user, ip=get_client_ip(request)),
                        {"kind": "password_changed", "user": user})
     return {"ok": True}
 
@@ -1298,9 +1297,7 @@ async def api_tokens_create(payload: TokenCreatePayload, request: Request, user:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     audit(request, user, "token_create", rec["name"], f"{rec['scope']}, days={payload.days}, ips={','.join(rec['ips'])}"[:300])
-    vi = notify.settings()["lang"] == "vi"
-    notify.on_security((f"API token mới \"{rec['name']}\" (quyền {rec['scope']}) vừa được tạo bởi {user} (IP {get_client_ip(request)})." if vi
-                        else f"A new API token \"{rec['name']}\" ({rec['scope']}) was created by {user} (IP {get_client_ip(request)})."),
+    notify.on_security(notify.trf("sec_token_new", name=rec["name"], scope=rec["scope"], user=user, ip=get_client_ip(request)),
                        {"token": rec["name"], "scope": rec["scope"]})
     return {"token": plain, "info": rec}
 
@@ -1832,7 +1829,7 @@ async def api_webpush_test(payload: WebPushIdPayload, _: str = Depends(require_u
 
 @app.post("/api/notify/channels")
 async def api_notify_save(payload: NotifyChannelPayload, request: Request, user: str = Depends(require_user)):
-    if payload.ui_lang in ("vi", "en") and not get_setting("notify_lang", ""):
+    if payload.ui_lang in i18n_mod.codes() and not get_setting("notify_lang", ""):
         set_setting("notify_lang", payload.ui_lang)
     try:
         ch = await asyncio.to_thread(notify.upsert_channel, payload.model_dump())

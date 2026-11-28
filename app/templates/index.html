@@ -1142,13 +1142,7 @@
               <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"/>
               </svg>
-              <span x-text="updateModal.app?.manage === 'run'
-                ? (lang === 'vi'
-                  ? `App đang ghim tag cứng — khi cập nhật, container được tạo lại với image :${updateModal.app?.target_tag} và cùng cấu hình.`
-                  : `Pinned tag detected — updating recreates the container from :${updateModal.app?.target_tag} with the same settings.`)
-                : (lang === 'vi'
-                  ? `App đang ghim tag cứng — khi cập nhật sẽ tự nâng tag trong docker-compose.yml lên ${updateModal.app?.target_tag} (có sao lưu tự động).`
-                  : `Pinned tag detected — updating will bump docker-compose.yml to ${updateModal.app?.target_tag} (with automatic backup).`)"></span>
+              <span x-text="tf(updateModal.app?.manage === 'run' ? 'pinnedTagRun' : 'pinnedTagCompose', { tag: updateModal.app?.target_tag })"></span>
             </div>
 
             <div x-show="updateModal.app?.manage === 'run' && !updateModal.preview" class="rounded-2xl px-3.5 py-2.5 bg-teal-500/10 border border-teal-400/30 text-[11px] text-teal-200 leading-snug" x-text="t('runUpdateNote')"></div>
@@ -2300,13 +2294,13 @@
         <template x-if="settingsModal.tab === 'language'">
           <div class="space-y-2">
             <div class="glass-inset rounded-[20px] overflow-hidden divide-y divide-[var(--glass-border)]">
-              <template x-for="l in [{ id: 'vi', code: 'VI', name: 'Tiếng Việt', sub: 'Vietnamese' }, { id: 'en', code: 'EN', name: 'English', sub: 'Tiếng Anh' }]" :key="l.id">
+              <template x-for="l in langs()" :key="l.id">
                 <button type="button" @click="setLang(l.id)" class="w-full flex items-center gap-3 px-3.5 py-3 text-left hover:bg-white/[0.03] transition">
                   <span class="w-9 h-9 rounded-[12px] flex items-center justify-center shrink-0 text-[11px] font-bold border"
                         :class="lang === l.id ? 'bg-sky-500/20 border-sky-400/45 text-sky-300' : 'bg-white/[0.04] border-[var(--glass-border)] text-muted'" x-text="l.code"></span>
                   <span class="min-w-0 flex-1">
                     <span class="block text-[13.5px] font-semibold" x-text="l.name"></span>
-                    <span class="block text-[11.5px] text-muted" x-text="l.sub"></span>
+                    <span class="block text-[11.5px] text-muted" x-text="l.sub + (l.coverage < 100 ? ' · ' + tf('langCoverage', { p: l.coverage }) : '') + (l.draft ? ' · ' + t('langAiDraft') : '')"></span>
                   </span>
                   <span x-show="lang === l.id" class="w-5 h-5 rounded-full bg-sky-500 text-white flex items-center justify-center shrink-0">
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
@@ -2315,6 +2309,17 @@
               </template>
             </div>
             <p class="px-3.5 text-[11px] text-subtle" x-text="t('langPageNote')"></p>
+            <a href="https://github.com/boystyle2010/appmanager-pro/blob/main/TRANSLATING.md" target="_blank" rel="noopener" data-lang-help
+               class="glass-inset rounded-[20px] flex items-center gap-3 px-3.5 py-3 hover:bg-white/[0.03] transition">
+              <span class="w-9 h-9 rounded-[12px] flex items-center justify-center shrink-0 bg-emerald-500/15 text-emerald-300">
+                <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 21l5.25-11.25L21 21m-9-3h7.5M3 5.621a48.474 48.474 0 016-.371m0 0c1.12 0 2.233.038 3.334.114M9 5.25V3m3.334 2.364C11.176 10.658 7.69 15.08 3 17.502m9.334-12.138c.896.061 1.785.147 2.666.257m-4.589 8.495a18.023 18.023 0 01-3.827-5.802"/></svg>
+              </span>
+              <span class="min-w-0 flex-1">
+                <span class="block text-[13.5px] font-semibold" x-text="t('langHelp')"></span>
+                <span class="block text-[11.5px] text-muted leading-snug" x-text="t('langHelpDesc')"></span>
+              </span>
+              <svg class="w-4 h-4 text-subtle shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/></svg>
+            </a>
           </div>
         </template>
 
@@ -3419,8 +3424,7 @@
               <div class="flex items-center justify-between gap-3">
                 <span class="text-[11.5px]" x-text="t('notifyLang')"></span>
                 <select x-model="notifyState.settings.lang" class="glass-input w-auto rounded-xl pl-3 py-2 text-xs">
-                  <option value="vi">Tiếng Việt</option>
-                  <option value="en">English</option>
+                  <template x-for="l in langs()" :key="l.id"><option :value="l.id" x-text="l.name" :selected="notifyState.settings.lang === l.id"></option></template>
                 </select>
               </div>
               <button @click="saveNotifySettings()" class="glass-btn-primary w-full py-2.5 rounded-xl text-xs font-semibold" x-text="t('save')"></button>
@@ -4892,6 +4896,7 @@
     <span x-text="toast.message"></span>
   </div>
 
+  <script>window.AMP_LANGS = {{ languages()|tojson }};</script>
   <script src="/static/js/i18n.js?v={{ build }}"></script>
   <script src="/static/js/notify-icons.js?v={{ build }}"></script>
   <script src="/static/js/app.js?v={{ build }}"></script>

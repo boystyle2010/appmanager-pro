@@ -43,7 +43,7 @@ GitHub Actions runs the same checks and Docker scenarios on every pull request.
 - Add or update a scenario in `tests/docker/` for behaviour changes (updates, rollback, notifications, API).
 
 ## Translations
-Add a new language block to `app/static/js/i18n.js` with the same keys as `en`. Untranslated keys fall back to English. Open a pull request even if only part of it is done.
+See **[TRANSLATING.md](TRANSLATING.md)**: each language is one JSON file in `app/static/i18n/` — improve an existing one right on GitHub (pencil icon) or copy `en.json` to add your language. Untranslated texts fall back to English, so a partial translation is welcome. You can also send corrections with the *Translation* issue template.
 
 ## License
 By contributing you agree that your contributions are licensed under the [MIT License](LICENSE).

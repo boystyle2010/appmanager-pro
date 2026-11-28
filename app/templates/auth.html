@@ -119,9 +119,14 @@
                 :aria-label="c" @click="setColor(c)"></button>
       </template>
     </div>
-    <button @click="toggleLang()" type="button" class="lp-pill px-3 py-1.5 rounded-full text-xs font-semibold text-[#c9cdd8]">
-      <span x-text="lang === 'vi' ? 'VN' : 'EN'"></span>
-    </button>
+    <label class="lp-pill relative flex items-center gap-1.5 pl-2.5 pr-2 py-1.5 rounded-full text-xs font-semibold text-[#c9cdd8] cursor-pointer" :aria-label="t('language')">
+      <svg class="w-3.5 h-3.5 opacity-80" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418"/></svg>
+      <span x-text="lang.toUpperCase()"></span>
+      <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+      <select class="lp-lang absolute inset-0 opacity-0 cursor-pointer" data-lang-select :value="lang" @change="setLang($event.target.value)">
+        <template x-for="l in langs" :key="l.code"><option :value="l.code" :selected="l.code === lang" x-text="l.name"></option></template>
+      </select>
+    </label>
   </div>
 
   <div x-ref="room" class="lp-room min-h-[100lvh] flex flex-col md:flex-row items-center justify-center gap-2 md:gap-32 lg:gap-60 xl:gap-80 px-5 pb-10 safe-bottom"
@@ -345,10 +350,17 @@
     </div>
   </div>
 
+  <script>window.AMP_LANGS = {{ languages()|tojson }};</script>
   <script>
     function authApp(isSetup) {
       const dict = {
         en: {
+          language: 'Language', accountDisabled: 'This account is disabled. Ask an administrator to enable it again.',
+          ssoErrGroup: '{user} is not in a group allowed to use AppManager (groups: {groups}). Ask an administrator.',
+          ssoErrExists: 'An AppManager account named {user} already exists. An administrator can turn on "Link existing accounts with the same name" in the SSO settings.',
+          ssoErrNoAccount: 'There is no AppManager account for {user} (automatic account creation is off). Ask an administrator.',
+          ssoErrOff: 'SSO is turned off.', ssoErrExpired: 'Sign-in expired or was started in another tab — please try again.',
+          ssoErrRefused: 'The provider refused: {msg}', ssoErrConnect: 'Cannot connect to {host}: check the address and the network of AppManager.',
           firstRunBadge: 'First-Time Setup', secureBadge: 'Docker Control Center',
           setupSubtitle: 'Create an administrator account to protect your Docker engine',
           loginSubtitle: 'Sign in to manage containers, compose files & updates',
@@ -362,7 +374,7 @@
           tabSignIn: 'Sign in', tabSignUp: 'Create account', signupTitle: 'Create an account', signupSubtitle: 'Get access to this AppManager',
           ssoSignup: 'Create account with {p}', ssoSignupNote: 'Your account is created the first time you sign in; your role follows your groups.',
           signupAdminTitle: 'Accounts are created by an administrator',
-          signupAdminDesc: 'This machine already has an administrator. To protect the Docker server, AppManager has no open password sign-up: ask the administrator to create your account (Settings → Accounts & roles).',
+          signupAdminDesc: 'This machine already has an administrator. To protect the Docker server, AppManager has no open password sign-up: ask the administrator to create your account (Settings → Accounts & Permissions).',
           otherMachineTitle: 'Want to manage another machine?', otherMachineDesc: 'Each machine running AppManager has its own accounts. Ask the administrator of that machine for an account, or for an API Token so you can add it under Settings → Servers here.',
           setupTitle: 'Create the administrator account', setupNote: 'This machine has no account yet. The first account is the administrator (full access): it can add other accounts, give them roles and turn on single sign-on.',
           noAccountYet: 'This machine has no account yet — create the administrator account in the Create account tab.',
@@ -371,6 +383,12 @@
           ssoOffHint: 'Google, Authentik, Keycloak, Authelia… can be turned on by an administrator in Settings → Single sign-on.'
         },
         vi: {
+          language: 'Ngôn ngữ', accountDisabled: 'Tài khoản này đã bị khoá. Hãy nhờ Quản trị mở lại.',
+          ssoErrGroup: '{user} không thuộc nhóm nào được dùng AppManager (nhóm: {groups}). Hãy nhờ Quản trị.',
+          ssoErrExists: 'Đã có tài khoản AppManager tên {user}. Quản trị có thể bật "Gắn tài khoản có sẵn cùng tên" trong cài đặt SSO.',
+          ssoErrNoAccount: 'Chưa có tài khoản AppManager cho {user} (đang tắt tự tạo tài khoản). Hãy nhờ Quản trị.',
+          ssoErrOff: 'SSO đang tắt.', ssoErrExpired: 'Phiên đăng nhập đã hết hạn hoặc bắt đầu ở tab khác — hãy thử lại.',
+          ssoErrRefused: 'Nhà cung cấp từ chối: {msg}', ssoErrConnect: 'Không kết nối được {host}: kiểm tra địa chỉ và mạng của AppManager.',
           firstRunBadge: 'Thiết lập lần đầu', secureBadge: 'Trung tâm điều khiển Docker',
           setupSubtitle: 'Tạo tài khoản Quản trị viên để bảo vệ quyền truy cập Docker',
           loginSubtitle: 'Đăng nhập để quản lý ứng dụng, Compose và cập nhật',
@@ -395,7 +413,17 @@
       };
 
       return {
-        isSetup, lang: localStorage.getItem('amp_lang') || 'vi',
+        isSetup, lang: (() => {  // đã chọn > ngôn ngữ trình duyệt > tiếng Anh (giống trang chính)
+          const codes = (window.AMP_LANGS || []).map(l => l.code);
+          let v = null; try { v = localStorage.getItem('amp_lang'); } catch (_) {}
+          if (v && codes.includes(v)) return v;
+          for (const n of (navigator.languages || [navigator.language || ''])) {
+            const c = String(n || '').toLowerCase(), hit = codes.find(x => c === x || c.startsWith(x + '-'));
+            if (hit) return hit;
+          }
+          return 'en';
+        })(),
+        langs: window.AMP_LANGS || [], rev: 0,
         // Máy chủ + máy chiếu: bật / tắt + màu nhớ trong trình duyệt (lần sau mở trang tự bật)
         lampColors: { amber: '245 181 74', cyan: '94 224 240', pink: '244 114 182', green: '74 222 128', white: '242 244 248' },
         color: 'white', lampOn: false, ready: false,
@@ -408,17 +436,17 @@
         providerIcons: {"google": "M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z", "authentik": "M13.96 9.01h-.84V7.492h-1.234v3.663H5.722c.34.517.538.982.538 1.152 0 .46-1.445 3.059-3.197 3.059C.8 15.427-.745 12.8.372 10.855a3.062 3.062 0 0 1 2.691-1.606c1.04 0 1.971.915 2.557 1.755V6.577a3.773 3.773 0 0 1 3.77-3.769h10.84C22.31 2.808 24 4.5 24 6.577v10.845a3.773 3.773 0 0 1-3.77 3.769h-1.6V17.5h-7.64v3.692h-1.6a3.773 3.773 0 0 1-3.77-3.769v-3.41h12.114v-6.52h-1.59v.893h-.84v-.893H13.96v1.516Zm-9.956 1.845c-.662-.703-1.578-.544-2.209 0-2.105 2.054 1.338 5.553 3.302 1.447a5.395 5.395 0 0 0-1.093-1.447Z", "keycloak": "m18.742 1.182-12.493.002C4.155 4.784 2.079 8.393 0 12.002c2.071 3.612 4.162 7.214 6.252 10.816l12.49-.004 3.089-5.404h2.158v-.002H24L23.996 6.59h-2.168zM8.327 4.792h2.081l1.04 1.8-3.12 5.413 3.117 5.403-1.035 1.81H8.327a2047.566 2047.566 0 0 0-4.168-7.204C5.547 9.606 6.937 7.2 8.327 4.792Zm6.241 0 2.086.003c1.393 2.405 2.78 4.813 4.166 7.222l-4.167 7.2h-2.08c-.382-.562-1.038-1.808-1.038-1.808l3.123-5.405-3.124-5.413z", "authelia": "M10.624.191c-.324.023-.655.011-.97.073-2.883.568-5.244 2.01-7.074 4.3C1.42 6.014.624 7.652.243 9.48c-.25 1.2-.294 2.402-.191 3.627.237 2.832 1.377 5.233 3.345 7.26.332.341.775.348 1.1.055.39-.35.442-.735.124-1.149-.271-.353-.588-.671-.85-1.03-1.625-2.208-2.343-4.674-2.04-7.411.305-2.773 1.6-5.022 3.723-6.795 1.517-1.267 3.288-1.983 5.248-2.24.272-.037.552-.083.803-.186.32-.132.478-.564.4-.923-.085-.384-.355-.483-.702-.477-.194.004-.387 0-.58 0v-.02zm4.639 3.41c-.312-.008-.582.197-.722.512-.176.4-.027.854.367 1.096.123.075.256.134.385.199 1.485.737 2.619 1.834 3.319 3.342.257.554.423 1.15.636 1.726.162.441.509.656.92.579.425-.08.67-.392.668-.952-.016-.081-.035-.261-.082-.435-.535-1.97-1.579-3.616-3.21-4.847-.598-.453-1.28-.812-1.958-1.14a.782.782 0 0 0-.323-.08zm-6.939.23a.903.903 0 0 0-.492.144c-.648.388-1.325.764-1.88 1.266-2.323 2.098-3.262 4.755-2.905 7.84.55 4.74 4.6 8.021 8.9 7.904l.868-.001a.99.99 0 0 0 .109-.007c2.491-.312 4.58-1.387 6.146-3.36.488-.615.86-1.336 1.2-2.049.248-.523-.032-.982-.56-1.12-.38-.1-.72.112-.974.509-.473.737-.89 1.54-1.491 2.16-1.479 1.52-3.322 2.28-5.466 2.199-2.405-.091-4.337-1.127-5.758-3.056-1.088-1.475-1.49-3.168-1.32-4.984.184-1.987 1.038-3.644 2.57-4.927.423-.354.908-.633 1.365-.946.458-.314.568-.715.314-1.15-.153-.262-.371-.413-.626-.422zm3.417 2.167C8.724 6.056 6.02 8.625 6 12 5.98 15.29 8.712 18.017 12 18.02c3.339.005 6.078-2.618 6.062-6.025C18.048 8.45 15.192 5.911 12.034 6a5.726 5.726 0 0 0-.293-.002zm10.752 1.164a.91.91 0 0 0-.137.002c-.404.033-.642.295-.74.646-.053.187-.01.432.064.62a9.546 9.546 0 0 1 .648 3.753 9.994 9.994 0 0 1-1.32 4.76c-1.617 2.84-4.04 4.53-7.243 5.12-.343.063-.694.095-1.033.174-.434.103-.688.473-.641.882.044.38.34.646.769.684.132.012.265.002.398.002l-.001-.003c.145 0 .29.005.434-.002.084-.004.167-.028.25-.04 1.847-.282 3.518-.99 5.037-2.068 1.708-1.213 3.001-2.78 3.897-4.665 1.1-2.317 1.375-4.752.906-7.264-.13-.694-.354-1.376-.584-2.046-.125-.362-.389-.537-.704-.555zm-10.449.862c.13 0 .261.016.392.05.708.18 1.16.787 1.158 1.553.027.504-.211.888-.588 1.183-.207.163-.236.32-.176.558.264 1.052.52 2.107.763 3.164.13.568-.019.872-.522 1.174-.675.404-1.666.354-2.29-.13-.315-.244-.427-.573-.331-.966.252-1.031.494-2.064.762-3.09.086-.33.041-.554-.225-.794-.581-.523-.682-1.253-.317-1.903a1.57 1.57 0 0 1 1.374-.8z", "gitlab": "m23.6004 9.5927-.0337-.0862L20.3.9814a.851.851 0 0 0-.3362-.405.8748.8748 0 0 0-.9997.0539.8748.8748 0 0 0-.29.4399l-2.2055 6.748H7.5375l-2.2057-6.748a.8573.8573 0 0 0-.29-.4412.8748.8748 0 0 0-.9997-.0537.8585.8585 0 0 0-.3362.4049L.4332 9.5015l-.0325.0862a6.0657 6.0657 0 0 0 2.0119 7.0105l.0113.0087.03.0213 4.976 3.7264 2.462 1.8633 1.4995 1.1321a1.0085 1.0085 0 0 0 1.2197 0l1.4995-1.1321 2.4619-1.8633 5.006-3.7489.0125-.01a6.0682 6.0682 0 0 0 2.0094-7.003z", "okta": "M12 0C5.389 0 0 5.35 0 12s5.35 12 12 12 12-5.35 12-12S18.611 0 12 0zm0 18c-3.325 0-6-2.675-6-6s2.675-6 6-6 6 2.675 6 6-2.675 6-6 6z", "auth0": "M21.98 7.448L19.62 0H4.347L2.02 7.448c-1.352 4.312.03 9.206 3.815 12.015L12.007 24l6.157-4.552c3.755-2.81 5.182-7.688 3.815-12.015l-6.16 4.58 2.343 7.45-6.157-4.597-6.158 4.58 2.358-7.433-6.188-4.55 7.63-.045L12.008 0l2.356 7.404 7.615.044z", "cloudflare": "M16.5088 16.8447c.1475-.5068.0908-.9707-.1553-1.3154-.2246-.3164-.6045-.499-1.0615-.5205l-8.6592-.1123a.1559.1559 0 0 1-.1333-.0713c-.0283-.042-.0351-.0986-.021-.1553.0278-.084.1123-.1484.2036-.1562l8.7359-.1123c1.0351-.0489 2.1601-.8868 2.5537-1.9136l.499-1.3013c.0215-.0561.0293-.1128.0147-.168-.5625-2.5463-2.835-4.4453-5.5499-4.4453-2.5039 0-4.6284 1.6177-5.3876 3.8614-.4927-.3658-1.1187-.5625-1.794-.499-1.2026.119-2.1665 1.083-2.2861 2.2856-.0283.31-.0069.6128.0635.894C1.5683 13.171 0 14.7754 0 16.752c0 .1748.0142.3515.0352.5273.0141.083.0844.1475.1689.1475h15.9814c.0909 0 .1758-.0645.2032-.1553l.12-.4268zm2.7568-5.5634c-.0771 0-.1611 0-.2383.0112-.0566 0-.1054.0415-.127.0976l-.3378 1.1744c-.1475.5068-.0918.9707.1543 1.3164.2256.3164.6055.498 1.0625.5195l1.8437.1133c.0557 0 .1055.0263.1329.0703.0283.043.0351.1074.0214.1562-.0283.084-.1132.1485-.204.1553l-1.921.1123c-1.041.0488-2.1582.8867-2.5527 1.914l-.1406.3585c-.0283.0713.0215.1416.0986.1416h6.5977c.0771 0 .1474-.0489.169-.126.1122-.4082.1757-.837.1757-1.2803 0-2.6025-2.125-4.727-4.7344-4.727", "nextcloud": "M12.018 6.537c-2.5 0-4.6 1.712-5.241 4.015-.56-1.232-1.793-2.105-3.225-2.105A3.569 3.569 0 0 0 0 12a3.569 3.569 0 0 0 3.552 3.553c1.432 0 2.664-.874 3.224-2.106.641 2.304 2.742 4.016 5.242 4.016 2.487 0 4.576-1.693 5.231-3.977.569 1.21 1.783 2.067 3.198 2.067A3.568 3.568 0 0 0 24 12a3.569 3.569 0 0 0-3.553-3.553c-1.416 0-2.63.858-3.199 2.067-.654-2.284-2.743-3.978-5.23-3.977zm0 2.085c1.878 0 3.378 1.5 3.378 3.378 0 1.878-1.5 3.378-3.378 3.378A3.362 3.362 0 0 1 8.641 12c0-1.878 1.5-3.378 3.377-3.378zm-8.466 1.91c.822 0 1.467.645 1.467 1.468s-.644 1.467-1.467 1.468A1.452 1.452 0 0 1 2.085 12c0-.823.644-1.467 1.467-1.467zm16.895 0c.823 0 1.468.645 1.468 1.468s-.645 1.468-1.468 1.468A1.452 1.452 0 0 1 18.98 12c0-.823.644-1.467 1.467-1.467z", "openid": "M14.54.889l-3.63 1.773v18.17c-4.15-.52-7.27-2.78-7.27-5.5 0-2.58 2.8-4.75 6.63-5.41v-2.31C4.42 8.322 0 11.502 0 15.332c0 3.96 4.74 7.24 10.91 7.78l3.63-1.71V.888m.64 6.724v2.31c1.43.25 2.71.7 3.76 1.31l-1.97 1.11 7.03 1.53-.5-5.21-1.87 1.06c-1.74-1.06-3.96-1.81-6.45-2.11z"},
         providerIcon() { return this.providerIcons[this.sso.provider] || this.providerIcons.openid; },
         // Lỗi SSO hay gặp -> tiếng Việt (máy chủ trả tiếng Anh; lỗi khác giữ nguyên để dễ tra)
-        ssoMsg(m) {
-          if (this.lang !== 'vi') return m;
+        ssoMsg(m) {  // lỗi SSO hay gặp -> câu dịch được (máy chủ trả tiếng Anh; lỗi khác giữ nguyên để dễ tra)
+          const f = (k, o = {}) => Object.entries(o).reduce((s, [a, b]) => s.split('{' + a + '}').join(b), this.t(k));
           const rules = [
-            [/^(.+) is not in a group allowed to use AppManager \(groups: (.*)\)/, (x) => `${x[1]} không thuộc nhóm nào được dùng AppManager (nhóm: ${x[2]}). Hãy nhờ Quản trị.`],
-            [/^An AppManager account named (\S+) already exists/, (x) => `Đã có tài khoản AppManager tên ${x[1]}. Quản trị có thể bật "Gắn tài khoản có sẵn cùng tên" trong cài đặt SSO.`],
-            [/^There is no AppManager account for (.+?) \(automatic/, (x) => `Chưa có tài khoản AppManager cho ${x[1]} (đang tắt tự tạo tài khoản). Hãy nhờ Quản trị.`],
-            [/^This account is disabled/, () => 'Tài khoản này đã bị khoá. Hãy nhờ Quản trị mở lại.'],
-            [/^SSO is turned off/, () => 'SSO đang tắt.'],
-            [/^Sign-in expired or was started elsewhere/, () => 'Phiên đăng nhập đã hết hạn hoặc bắt đầu ở tab khác — hãy thử lại.'],
-            [/^The provider refused: (.*)/, (x) => `Nhà cung cấp từ chối: ${x[1]}`],
-            [/^Cannot connect to (\S+?):/, (x) => `Không kết nối được ${x[1]}: kiểm tra địa chỉ và mạng của AppManager.`],
+            [/^(.+) is not in a group allowed to use AppManager \(groups: (.*)\)/, (x) => f('ssoErrGroup', { user: x[1], groups: x[2] })],
+            [/^An AppManager account named (\S+) already exists/, (x) => f('ssoErrExists', { user: x[1] })],
+            [/^There is no AppManager account for (.+?) \(automatic/, (x) => f('ssoErrNoAccount', { user: x[1] })],
+            [/^This account is disabled/, () => this.t('accountDisabled')],
+            [/^SSO is turned off/, () => this.t('ssoErrOff')],
+            [/^Sign-in expired or was started elsewhere/, () => this.t('ssoErrExpired')],
+            [/^The provider refused: (.*)/, (x) => f('ssoErrRefused', { msg: x[1] })],
+            [/^Cannot connect to (\S+?):/, (x) => f('ssoErrConnect', { host: x[1] })],
           ];
           for (const [re, fn] of rules) { const x = m.match(re); if (x) return fn(x); }
           return m;
@@ -491,6 +519,8 @@
                         kx: C.left + C.width / 2 + X, ky: C.top + C.height / 2 + Y, cw: C.width, ch: C.height };
         },
         async init() {
+          if (!dict[this.lang] && !(await this.loadLang(this.lang))) this.lang = 'en';
+          document.documentElement.lang = this.lang;
           // Lỗi SSO quay về trang đăng nhập dạng ?sso_error=... (máy chủ đã ghi nhật ký)
           const q = new URLSearchParams(location.search).get('sso_error');
           if (q) { this.error = this.t('ssoFailed') + ': ' + this.ssoMsg(q); history.replaceState(null, '', '/login'); }
@@ -501,10 +531,22 @@
           }
         },
 
-        t(key) { return (dict[this.lang] || dict.en)[key] || key; },
-        toggleLang() {
-          this.lang = this.lang === 'vi' ? 'en' : 'vi';
-          localStorage.setItem('amp_lang', this.lang);
+        t(key) { this.rev; const d = dict[this.lang]; return (d && d[key]) || dict.en[key] || key; },
+        // Ngôn ngữ ngoài EN/VI: tải phần "login" của /static/i18n/<mã>.json (chữ chưa dịch dùng tiếng Anh)
+        async loadLang(code) {
+          if (dict[code]) return true;
+          try {
+            const r = await fetch(`/static/i18n/${encodeURIComponent(code)}.json?v={{ build }}`);
+            if (!r.ok) return false;
+            dict[code] = (await r.json()).login || {}; this.rev++;
+            return true;
+          } catch (_) { return false; }
+        },
+        async setLang(code) {
+          if (!(await this.loadLang(code))) return;
+          this.lang = code; document.documentElement.lang = code;
+          try { localStorage.setItem('amp_lang', code); } catch (_) {}
+          this.$nextTick(() => this.calcBeam());
         },
         // Đang tạo tài khoản Quản trị đầu tiên (máy chưa có tài khoản, tab Đăng ký)
         creating() { return this.isSetup && this.mode === 'signup'; },
@@ -530,7 +572,7 @@
               this.isSetup = false; this.mode = 'signup'; this.password = this.confirmPassword = '';
               throw new Error(this.t('adminExists'));
             }
-            if (!res.ok) throw new Error(res.status === 403 && this.lang === 'vi' && /disabled/.test(data.detail || '') ? 'Tài khoản này đã bị khoá. Hãy nhờ Quản trị mở lại.' : (data.detail || 'Authentication failed'));
+            if (!res.ok) throw new Error(res.status === 403 && /disabled/.test(data.detail || '') ? this.t('accountDisabled') : (data.detail || 'Authentication failed'));
             if (data.otp_required) {
               this.otpStep = true;
               this.$nextTick(() => this.$refs.otpInput && this.$refs.otpInput.focus());
